@@ -1,5 +1,5 @@
 import {
-  EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, LOOT_COMMON, LOOT_RARE, RANDOM_FOES, TERRAINS,
+  EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
@@ -213,7 +213,8 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       }
       case 'fight':
       case 'fightRandom': {
-        const enemies = o.do === 'fight' ? o.enemies : [RANDOM_FOES[rng.int(RANDOM_FOES.length)]!];
+        const pool = randomFoesFor(c.level);
+        const enemies = o.do === 'fight' ? o.enemies : [pool[rng.int(pool.length)]!];
         player.combat = startCombat(world, enemies, o.do === 'fight' ? o.onWin ?? [] : []);
         if (card !== undefined) player.combat.card = card;
         log(state, { type: 'combatStarted', player: player.id, foes: enemies });

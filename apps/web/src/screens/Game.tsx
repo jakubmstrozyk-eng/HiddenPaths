@@ -128,7 +128,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     if (sheet) return [];
     const out: TipId[] = ['move'];
     if (inTown) out.push('town');
-    if (me.speedLeft === 0) out.push('endTurn');
+    if (!actions.some((a) => a.type === 'move')) out.push('endTurn');
     return out;
   };
   const lastNote = last.map((e) => describe(e, T)).filter(Boolean).slice(-3).join(' · ');

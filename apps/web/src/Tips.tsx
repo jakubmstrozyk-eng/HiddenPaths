@@ -7,24 +7,24 @@ export type TipId = 'move' | 'event' | 'combat' | 'town' | 'endTurn';
 
 const TIPS: Record<TipId, { pl: string; en: string }> = {
   move: {
-    pl: 'Dotknij sąsiedni fragment, by tam wyruszyć. Każdy krok kosztuje Szybkość. Ciemne fragmenty odsłaniają się, gdy na nie wejdziesz.',
-    en: 'Tap a neighbouring fragment to travel there. Each step costs Speed. Dark fragments are revealed when you enter them.',
+    pl: 'Dotknij sąsiedni fragment, by tam wyruszyć. Każdy krok kosztuje Szybkość i 1 Wytrzymałość. Ciemne fragmenty odsłaniają się, gdy na nie wejdziesz.',
+    en: 'Tap a neighbouring fragment to travel there. Each step costs Speed and 1 Stamina. Dark fragments are revealed when you enter them.',
   },
   event: {
     pl: 'Zdarzenie! Opcje z testem pokazują szansę powodzenia. Niektóre kosztują Wytrzymałość albo złoto.',
     en: 'An event! Options with a test show your chance of success. Some cost Stamina or gold.',
   },
   combat: {
-    pl: 'Walka. Atak rzuca na Walkę, parowanie blokuje cios, skupienie daje +10 w następnej rundzie, a ucieczka to przeciwstawny test Zręczności. Pasek szansy podpowie, kiedy lepiej uciec.',
-    en: 'A fight. Attack tests Combat, parry blocks a blow, focus gives +10 next round, and fleeing is an opposed Dexterity test. The odds line tells you when running is wiser.',
+    pl: 'Walka. Po walce runda się kończy. Atak rzuca na Walkę, parowanie blokuje cios, skupienie daje +10 w następnej rundzie, a ucieczka to przeciwstawny test Zręczności. Pasek szansy podpowie, kiedy lepiej uciec.',
+    en: 'A fight. When it ends, so does your round. Attack tests Combat, parry blocks a blow, focus gives +10 next round, and fleeing is an opposed Dexterity test. The odds line tells you when running is wiser.',
   },
   town: {
     pl: 'Jesteś w osadzie. Otwórz „Osada”, by kupić, sprzedać albo skorzystać z usług.',
     en: 'You are in a settlement. Open "Town" to buy, sell or use its services.',
   },
   endTurn: {
-    pl: 'Nie masz już Szybkości. Rozbij obóz, by odpocząć, albo zakończ turę. Nowa tura przywraca Szybkość i Wytrzymałość.',
-    en: 'You are out of Speed. Camp to rest, or end your turn. A new turn restores Speed and Stamina.',
+    pl: 'Nie możesz już iść dalej. Rozbij obóz, jeśli masz Wytrzymałość, albo zakończ turę. Nowa tura przywraca Szybkość i Wytrzymałość.',
+    en: 'You cannot travel further. Camp if you have Stamina left, or end your turn. A new turn restores Speed and Stamina.',
   },
 };
 
