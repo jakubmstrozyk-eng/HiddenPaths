@@ -36,6 +36,8 @@ export interface ActionCard {
   level: 1 | 3 | 5 | 7 | 9;
   name: Text;
   summary: Text;
+  /** Used in or about fights; the app shows these cards more strongly. */
+  combat?: boolean;
 }
 
 export interface Profession {

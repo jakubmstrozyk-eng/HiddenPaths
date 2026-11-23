@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { EVENT_BY_ID, TERRAINS, type TerrainAction } from '@hp/content';
 import {
@@ -9,9 +9,12 @@ import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
 import { combatLine, describe, diceOf, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
-import { CombatPanel, EventPanel, StoryPanel } from './Panels';
+import { EventPanel, StoryPanel } from './Panels';
+import { Duel } from './Duel';
 import { BagSheet, TownSheet } from './Sheets';
 import { Tip, type TipId } from '../Tips';
+import { Icon, type IconName } from '../Icons';
+import { SkillHand } from '../SkillCards';
 
 /** Placeholder terrain colours; pixel-art tiles replace them in a later milestone. */
 const TERRAIN_STYLE: Record<string, string> = {
@@ -19,6 +22,9 @@ const TERRAIN_STYLE: Record<string, string> = {
   desert: '#b8934a', inn: '#7a4f2a', monument: '#6b5a8a', cave: '#3a3438', village: '#8a6a3a',
   city: '#a08850', core: '#120c22',
 };
+
+/** How long the hero takes to walk to the next fragment. */
+const WALK_MS = 750;
 
 const TERRAIN_ACTIONS = ['hunt', 'gather', 'herbalism', 'mine', 'swim', 'meditate'] as const satisfies TerrainAction[];
 
@@ -66,6 +72,25 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
   const [sheet, setSheet] = useState<'town' | 'bag' | null>(null);
   const [storyTitle, setStoryTitle] = useState('');
+  const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
+  const endReplay = useCallback(() => setReplay(null), []);
+
+  // The hero walks to a new fragment instead of jumping: legs move while the sprite slides across.
+  const [walking, setWalking] = useState(false);
+  const [facing, setFacing] = useState<1 | -1>(1);
+  const lastPos = useRef(me.position);
+  useEffect(() => {
+    const from = lastPos.current;
+    lastPos.current = me.position;
+    if (from === me.position) return;
+    const dx = (me.position % width) - (from % width);
+    if (dx !== 0) setFacing(dx > 0 ? 1 : -1);
+    setWalking(true);
+    const timer = setTimeout(() => setWalking(false), WALK_MS);
+    return () => clearTimeout(timer);
+  }, [me.position, width]);
+  // True from the very render in which the hero changes fragment, before the effect above runs.
+  const onTheWay = walking || lastPos.current !== me.position;
 
   const act = useCallback((a: Action) => {
     if (currentPlayer(game).id !== me.id) return;
@@ -73,8 +98,12 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     const next = applyAction(game, me.id, a);
     const entries = newEntries(game, next);
     setLast(entries);
-    const rolls = diceOf(entries, T);
-    if (rolls.length) setDice(rolls);
+    // Fight rounds play back throw by throw on the duel screen; other rolls use the dice tray.
+    if (me.combat) setReplay({ before: game, entries });
+    else {
+      const rolls = diceOf(entries, T);
+      if (rolls.length) setDice(rolls);
+    }
 
     const nextMe = next.players.find((p) => p.id === me.id)!;
     const inScene = !!(me.pendingEvent || me.combat);
@@ -136,7 +165,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   return (
     <div className="game">
       <header className="hud">
-        <button className="ghost small" onClick={onMenu}>{t('menu')}</button>
+        <button className="ghost small with-icon" onClick={onMenu}><Icon name="menu" />{t('menu')}</button>
         <div className="who">
           <PixelHero race={c.race} size={28} />
           <span>
@@ -144,12 +173,12 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           </span>
         </div>
         <div className="stats">
-          <Stat label={t('speed')} value={`${me.speedLeft}/${c.speed}`} />
-          <Stat label={t('stamina')} value={`${me.staminaLeft}/${c.stamina}`} />
-          <Stat label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} />
-          <Stat label={t('food')} value={c.food} warn={c.food === 0} />
-          <Stat label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
-          <Stat label={t('xp')} value={Math.floor(c.xp)} />
+          <Stat icon="speed" label={t('speed')} value={`${me.speedLeft}/${c.speed}`} />
+          <Stat icon="stamina" label={t('stamina')} value={`${me.staminaLeft}/${c.stamina}`} />
+          <Stat icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} />
+          <Stat icon="food" label={t('food')} value={c.food} warn={c.food === 0} />
+          <Stat icon="gold" label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
+          <Stat icon="xp" label={t('xp')} value={Math.floor(c.xp)} />
         </div>
       </header>
 
@@ -205,10 +234,10 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               left: `${((me.position % width) / width) * 100}%`,
               top: `${(Math.floor(me.position / width) / height) * 100}%`,
             }}
-            transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+            transition={{ duration: WALK_MS / 1000, ease: 'linear' }}
             style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
           >
-            <PixelHero race={c.race} size={40} />
+            <PixelHero race={c.race} size={40} walking={walking} facing={facing} />
           </motion.div>
         </div>
       </div>
@@ -220,8 +249,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             {hoursLeft !== null ? (locale === 'pl' ? ` · zostało ok. ${hoursLeft} h` : ` · about ${hoursLeft} h left`) : ''}
           </p>
         )}
+        <SkillHand profession={c.profession} owned={c.cards} />
         <p className="here">
-          <b>{hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
+          <Icon name="map" size={14} /> <b>{hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
           {me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
         </p>
         <div className="dock-actions">
@@ -230,19 +260,28 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               {t(a)}{a !== 'meditate' && <small className="odds"> {Math.round(actionChance(game, me, a) * 100)}%</small>}
             </button>
           ))}
-          {inTown && quiet && <button className="ghost" onClick={() => setSheet('town')}>{t('town')}</button>}
-          <button className={`ghost ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('bag')}>{t('bag')}</button>
+          {inTown && quiet && <button className="ghost with-icon" onClick={() => setSheet('town')}><Icon name="town" />{t('town')}</button>}
+          <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
           {myTurn && actions.some((a) => a.type === 'camp') && (
-            <button className="ghost" onClick={() => act({ type: 'camp' })}>{t('camp')}</button>
+            <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
           )}
           <button className="primary" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>{t('endTurn')}</button>
         </div>
       </footer>
 
       <AnimatePresence>
-        {me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} act={act} />}
-        {me.combat && <CombatPanel key="combat" game={game} me={me} lines={lines} act={act} />}
-        {story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
+        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} act={act} />}
+        {!onTheWay && (replay || me.combat) && (
+          <Duel
+            key="combat"
+            game={replay ? replay.before : game}
+            me={(replay ? replay.before : game).players.find((p) => p.id === me.id)!}
+            entries={replay?.entries ?? null}
+            act={act}
+            onReplayDone={endReplay}
+          />
+        )}
+        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {game.winner && !story && (
@@ -264,11 +303,11 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   );
 }
 
-function Stat({ label, value, warn }: { label: string; value: string | number; warn?: boolean }) {
+function Stat({ icon, label, value, warn }: { icon: IconName; label: string; value: string | number; warn?: boolean }) {
   return (
     <span className={`stat ${warn ? 'warn' : ''}`}>
       <small>{label}</small>
-      <b>{value}</b>
+      <b><Icon name={icon} size={14} /> {value}</b>
     </span>
   );
 }

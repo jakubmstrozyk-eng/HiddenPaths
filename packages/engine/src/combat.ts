@@ -133,8 +133,9 @@ export function combatTurn(
   const attrs = actor.character.attributes;
   const focus = combat.focus ? 10 : 0;
   combat.focus = false;
-  let parrying = false;
-  let fleeing = false;
+  // A parry or a flight is declared for the whole round, so it also covers foes that strike before the hero.
+  const parrying = move.move === 'parry' && !combat.heroStunned;
+  const fleeing = move.move === 'flee' && !combat.heroStunned;
   let fled = false;
   let enthralled = false;
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
@@ -156,7 +157,6 @@ export function combatTurn(
     }
     switch (move.move) {
       case 'parry':
-        parrying = true;
         break;
       case 'focus':
         combat.focus = true;
@@ -169,7 +169,6 @@ export function combatTurn(
         break;
       }
       case 'flee': {
-        fleeing = true;
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
         const hero = test(rng, attrs.dex, testModifier(world, actor, 'dex', focus + harried));
