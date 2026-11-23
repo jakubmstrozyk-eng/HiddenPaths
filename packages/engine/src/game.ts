@@ -1,9 +1,10 @@
-import { TERRAINS } from '@hp/content';
+import { TERRAINS, type TerrainAction } from '@hp/content';
 import { createCharacter, levelForXp, type Character, type CharacterInput } from './character';
 import { DIFFICULTIES, dangerLevel, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { generateMap, neighbours, startCell, type GameMap } from './mapgen';
 import { Rng, seedFromString } from './rng';
+import { availableTerrainActions, runTerrainAction, type Effect, type Inventory, type TerrainOutcome, type WorldView } from './terrain';
 
 export interface PlayerState {
   id: string;
@@ -18,6 +19,11 @@ export interface PlayerState {
   cameFrom: number | null;
   roundsWithoutFood: number;
   actionsSinceCamp: number;
+  inventory: Inventory;
+  effects: Effect[];
+  /** Achievement and rule counters: successful hunts, meditations per monument, and so on. */
+  counters: Record<string, number>;
+  crossedRiver: boolean;
 }
 
 export type LogEntry =
@@ -29,7 +35,8 @@ export type LogEntry =
   | { type: 'hungry'; player: string; rounds: number; vitalityLost: number }
   | { type: 'respawned'; player: string; cell: number }
   | { type: 'levelUp'; player: string; level: number }
-  | { type: 'turnEnded'; player: string; next: string; round: number };
+  | { type: 'turnEnded'; player: string; next: string; round: number }
+  | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
   seed: string;
@@ -54,6 +61,7 @@ export interface NewPlayer {
 export type Action =
   | { type: 'move'; to: number }
   | { type: 'camp' }
+  | { type: 'terrain'; action: TerrainAction }
   | { type: 'endTurn' };
 
 export function createGame(seed: string, config: GameConfig, newPlayers: NewPlayer[]): GameState {
@@ -78,6 +86,10 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
       cameFrom: null,
       roundsWithoutFood: 0,
       actionsSinceCamp: 0,
+      inventory: { materials: {}, herbs: {} },
+      effects: [],
+      counters: {},
+      crossedRiver: false,
     };
   });
   // Initiative: higher Dexterity acts first; seat order breaks ties.
@@ -91,6 +103,23 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
 export function currentPlayer(state: GameState): PlayerState {
   const id = state.turnOrder[state.turnIndex]!;
   return state.players.find((p) => p.id === id)!;
+}
+
+export function worldView(state: GameState): WorldView {
+  return {
+    round: state.round,
+    difficulty: state.config.difficulty,
+    terrainAt: (cell) => state.map.cells[cell]!.terrain,
+    ringAt: (cell) => state.map.cells[cell]!.ring,
+    maxRing: state.map.maxRing,
+  };
+}
+
+/** A river blocks onward travel until the hero swims across; going back the way they came is always allowed. */
+function blockedByRiver(state: GameState, player: PlayerState, to: number): boolean {
+  if (state.map.cells[player.position]!.terrain !== 'river' || player.crossedRiver) return false;
+  if (to === player.cameFrom || player.cameFrom === null) return false;
+  return state.map.cells[to]!.terrain !== 'river';
 }
 
 function moveCost(state: GameState, to: number): number {
@@ -111,8 +140,9 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   if (player.id !== playerId) return [];
   const actions: Action[] = [];
   for (const n of neighbours(state.map, player.position)) {
-    if (moveCost(state, n) <= player.speedLeft) actions.push({ type: 'move', to: n });
+    if (moveCost(state, n) <= player.speedLeft && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
+  for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
   if (canCamp(state, player).ok) actions.push({ type: 'camp' });
   actions.push({ type: 'endTurn' });
   return actions;
@@ -135,6 +165,8 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       }
       const cost = moveCost(state, action.to);
       if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
+      if (blockedByRiver(state, player, action.to)) throw new EngineError('move.river', 'Swim across the river first.');
+      player.crossedRiver = false;
       state.log.push({ type: 'moved', player: player.id, from: player.position, to: action.to, cost });
       player.speedLeft -= cost;
       player.cameFrom = player.position;
@@ -164,6 +196,11 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       endTurn(state, player);
       break;
     }
+    case 'terrain': {
+      const outcome = runTerrainAction(worldView(state), player, action.action, rng);
+      state.log.push({ player: player.id, ...outcome });
+      break;
+    }
     case 'endTurn':
       endTurn(state, player);
       break;
@@ -191,9 +228,11 @@ function endTurn(state: GameState, player: PlayerState) {
   const c = player.character;
   // Sunborn need food only every second round.
   const needsFood = c.race !== 'sunborn' || state.round % 2 === 1;
+  // Staying in the desert costs double food.
+  const meals = state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
   if (needsFood) {
-    if (c.food > 0) {
-      c.food--;
+    if (c.food >= meals) {
+      c.food -= meals;
       player.roundsWithoutFood = 0;
       state.log.push({ type: 'ate', player: player.id, foodLeft: c.food });
     } else {
@@ -216,6 +255,7 @@ function endTurn(state: GameState, player: PlayerState) {
   if (state.turnIndex >= state.turnOrder.length) {
     state.turnIndex = 0;
     state.round++;
+    for (const p of state.players) p.effects = p.effects.filter((e) => e.untilRound >= state.round);
   }
   const next = currentPlayer(state);
   next.speedLeft = next.character.speed;

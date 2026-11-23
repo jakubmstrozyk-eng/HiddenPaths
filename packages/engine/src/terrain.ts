@@ -1,0 +1,193 @@
+import {
+  COMMON_ORES, HERB_IDS, RARE_ORES, TERRAINS,
+  type Attribute, type HerbId, type MaterialId, type TerrainAction,
+} from '@hp/content';
+import { DIFFICULTIES, dangerLevel } from './config';
+import { test, type TestResult } from './dice';
+import { EngineError } from './errors';
+import type { Rng } from './rng';
+
+/** A timed bonus or penalty. `attribute: 'all'` applies to every base attribute. */
+export interface Effect {
+  id: string;
+  attribute: Attribute | 'all';
+  amount: number;
+  /** Last round (inclusive) the effect applies. */
+  untilRound: number;
+}
+
+export interface Inventory {
+  materials: Partial<Record<MaterialId, number>>;
+  herbs: Partial<Record<HerbId, number>>;
+}
+
+/** The parts of a player's state that terrain actions read and change. */
+export interface ActorState {
+  id: string;
+  position: number;
+  cameFrom: number | null;
+  staminaLeft: number;
+  actionsSinceCamp: number;
+  inventory: Inventory;
+  effects: Effect[];
+  counters: Record<string, number>;
+  /** Set by a successful swim; lets the hero leave a river fragment onwards. */
+  crossedRiver: boolean;
+  character: {
+    attributes: Record<Attribute, number>;
+    vitality: number;
+    maxVitality: number;
+    food: number;
+    gold: number;
+  };
+}
+
+export interface WorldView {
+  round: number;
+  difficulty: keyof typeof DIFFICULTIES;
+  terrainAt: (cell: number) => string;
+  ringAt: (cell: number) => number;
+  maxRing: number;
+}
+
+export type TerrainOutcome =
+  | { type: 'test'; action: TerrainAction; attribute: Attribute; result: TestResult; gained: string[]; lost?: string[] };
+
+/** Stamina cost of each terrain action that the engine runs in the MVP. */
+export const ACTION_COST: Partial<Record<TerrainAction, number>> = {
+  hunt: 1, gather: 1, herbalism: 1, mine: 1, swim: 2, meditate: 0,
+};
+
+/** Fatigue from the rules: 6 actions without camping = -10, 12 actions = -20. */
+export function fatiguePenalty(actionsSinceCamp: number): number {
+  if (actionsSinceCamp >= 12) return -20;
+  if (actionsSinceCamp >= 6) return -10;
+  return 0;
+}
+
+/** Every modifier on a test right now: difficulty, danger rings, fatigue and timed effects. */
+export function testModifier(world: WorldView, actor: ActorState, attribute: Attribute, extra = 0): number {
+  const settings = DIFFICULTIES[world.difficulty];
+  const danger = dangerLevel(world.ringAt(actor.position), world.maxRing, settings);
+  const effects = actor.effects
+    .filter((e) => e.untilRound >= world.round && (e.attribute === attribute || e.attribute === 'all'))
+    .reduce((sum, e) => sum + e.amount, 0);
+  return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp) + effects + extra;
+}
+
+/** The terrain actions available on the hero's fragment right now (camping is handled separately). */
+export function availableTerrainActions(world: WorldView, actor: ActorState): TerrainAction[] {
+  const terrain = world.terrainAt(actor.position);
+  if (terrain === 'core') return [];
+  const t = TERRAINS[terrain as keyof typeof TERRAINS];
+  return t.actions.filter((a) => {
+    const cost = ACTION_COST[a];
+    if (cost === undefined) return false; // not in the engine yet (towns, building)
+    if (a === 'swim' && actor.crossedRiver) return false;
+    if (a === 'meditate' && actor.counters[`meditated:${actor.position}`]) return false;
+    return actor.staminaLeft >= cost;
+  });
+}
+
+const add = <K extends string>(bag: Partial<Record<K, number>>, key: K, n = 1) => {
+  bag[key] = (bag[key] ?? 0) + n;
+};
+
+/** Runs one terrain action, changing `actor` in place. Returns what happened for the log. */
+export function runTerrainAction(world: WorldView, actor: ActorState, action: TerrainAction, rng: Rng): TerrainOutcome {
+  if (!availableTerrainActions(world, actor).includes(action)) {
+    throw new EngineError('terrain.notHere', `You cannot ${action} here.`);
+  }
+  const terrain = world.terrainAt(actor.position);
+  const attrs = actor.character.attributes;
+  actor.staminaLeft -= ACTION_COST[action]!;
+  if (ACTION_COST[action]! > 0) actor.actionsSinceCamp++;
+  const gained: string[] = [];
+  const roll = (attribute: Attribute, extra = 0) =>
+    test(rng, attrs[attribute], testModifier(world, actor, attribute, extra));
+
+  switch (action) {
+    case 'hunt': {
+      const result = roll('dex');
+      if (result.success) {
+        const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
+        actor.character.food += food;
+        gained.push(`food:${food}`);
+        add(actor.counters, 'hunts');
+      }
+      return { type: 'test', action, attribute: 'dex', result, gained };
+    }
+    case 'gather': {
+      const result = roll('int', 10);
+      if (result.success) {
+        actor.character.food += 1;
+        gained.push('food:1');
+        add(actor.counters, 'gathered');
+      }
+      return { type: 'test', action, attribute: 'int', result, gained };
+    }
+    case 'herbalism': {
+      const result = roll('int');
+      if (result.success) {
+        const herb = HERB_IDS[rng.int(HERB_IDS.length)]!;
+        add(actor.inventory.herbs, herb);
+        gained.push(`herb:${herb}`);
+        add(actor.counters, 'gathered');
+      }
+      return { type: 'test', action, attribute: 'int', result, gained };
+    }
+    case 'mine': {
+      if (terrain === 'forest') {
+        const result = roll('dex');
+        if (result.success) {
+          add(actor.inventory.materials, 'wood');
+          gained.push('material:wood');
+        }
+        return { type: 'test', action, attribute: 'dex', result, gained };
+      }
+      // Mountains and caves: common ores on a Dexterity test, plus one rare find on a harder Intelligence test.
+      const common = terrain === 'cave' ? 1 : 2;
+      const result = roll('dex');
+      if (result.success) {
+        for (let i = 0; i < common; i++) {
+          const ore = COMMON_ORES[rng.int(COMMON_ORES.length)]!;
+          add(actor.inventory.materials, ore);
+          gained.push(`material:${ore}`);
+        }
+        if (terrain === 'cave') {
+          actor.character.food += 1; // a mushroom
+          gained.push('food:1');
+        } else if (test(rng, attrs.int, testModifier(world, actor, 'int', -10)).success) {
+          const rare = RARE_ORES[rng.int(RARE_ORES.length)]!;
+          add(actor.inventory.materials, rare);
+          gained.push(`material:${rare}`);
+        }
+        add(actor.counters, 'gathered');
+      }
+      return { type: 'test', action, attribute: 'dex', result, gained };
+    }
+    case 'swim': {
+      const dex = roll('dex');
+      const str = roll('str');
+      const result = dex.success && str.success ? dex : dex.success ? str : dex;
+      if (dex.success && str.success) {
+        actor.crossedRiver = true;
+        gained.push('crossed');
+        return { type: 'test', action, attribute: 'dex', result, gained };
+      }
+      actor.character.vitality -= 6;
+      return { type: 'test', action, attribute: dex.success ? 'str' : 'dex', result, gained, lost: ['vitality:6'] };
+    }
+    case 'meditate': {
+      // Monument: +20 to a random base attribute for 3 rounds (k6 table in the rules).
+      const table: Attribute[] = ['com', 'cha', 'str', 'wil', 'int', 'dex'];
+      const attribute = table[rng.die(6) - 1]!;
+      actor.effects.push({ id: 'monument', attribute, amount: 20, untilRound: world.round + 2 });
+      actor.counters[`meditated:${actor.position}`] = 1;
+      gained.push(`effect:${attribute}:20`);
+      return { type: 'test', action, attribute, result: { roll: 0, target: 0, success: true, margin: 0 }, gained };
+    }
+    default:
+      throw new EngineError('terrain.notHere', `You cannot ${action} here.`);
+  }
+}

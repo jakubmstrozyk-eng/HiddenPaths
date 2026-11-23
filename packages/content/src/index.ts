@@ -3,3 +3,4 @@ export * from './races';
 export * from './professions';
 export * from './terrains';
 export * from './missions';
+export * from './items';
