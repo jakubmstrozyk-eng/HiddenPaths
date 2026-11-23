@@ -1,0 +1,60 @@
+import type { ArmourSlot, EnemyKind } from './equipment';
+import type { Text } from './types';
+
+/**
+ * Special rules on an enemy's attack or body.
+ * - poison: a hit poisons, -1 Vitality each turn until a Strength test passes
+ * - rot: a hit poisons, -2 Vitality each turn until a Dexterity test passes (mummy)
+ * - ethereal: only half of weapon damage gets through (the rules say only magic or runes hurt it)
+ * - stun: a hit forces a Willpower test, or the hero loses the next combat turn
+ * - drain: a hit takes 1 Stamina; at 0 the hero falls under the enemy's control
+ * - penetrating: a damage die of 3 or less is rolled again
+ * - stinger: every third attack is a sting with +1 damage that poisons
+ * - harrying: -10 to the hero's opposed tests (fleeing)
+ */
+export type EnemyTrait = 'poison' | 'rot' | 'ethereal' | 'stun' | 'drain' | 'penetrating' | 'stinger' | 'harrying';
+
+export interface Enemy {
+  id: string;
+  name: Text;
+  kind: EnemyKind;
+  dex: number;
+  str: number;
+  wil: number;
+  int: number;
+  com: number;
+  vitality: number;
+  weapon: { name: Text; power: number };
+  armour: Partial<Record<ArmourSlot, number>>;
+  xp: number;
+  traits: EnemyTrait[];
+}
+
+const t = (pl: string, en: string): Text => ({ pl, en });
+const all = (v: number) => ({ head: v, arms: v, torso: v, legs: v });
+
+const list: Enemy[] = [
+  { id: 'giantSpider', name: t('Wielki pająk', 'Giant spider'), kind: 'beast', dex: 20, str: 40, wil: 30, int: 10, com: 30, vitality: 16, weapon: { name: t('Kolce jadowe', 'Venom spines'), power: 0 }, armour: all(1), xp: 5, traits: ['poison'] },
+  { id: 'wolf', name: t('Wilk', 'Wolf'), kind: 'beast', dex: 30, str: 20, wil: 20, int: 20, com: 20, vitality: 8, weapon: { name: t('Kły i szpony', 'Fangs and claws'), power: -1 }, armour: {}, xp: 2, traits: [] },
+  { id: 'youngVoidDemon', name: t('Młody demon pustki', 'Young void demon'), kind: 'demon', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 12, weapon: { name: t('Miecz', 'Sword'), power: 0 }, armour: { torso: 2, arms: 2 }, xp: 4, traits: [] },
+  { id: 'bandit', name: t('Bandyta', 'Bandit'), kind: 'thug', dex: 30, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Miecz', 'Sword'), power: 0 }, armour: {}, xp: 4, traits: [] },
+  { id: 'banshee', name: t('Banshee', 'Banshee'), kind: 'wraith', dex: 40, str: 20, wil: 40, int: 20, com: 40, vitality: 8, weapon: { name: t('Porażenie', 'Shriek'), power: -2 }, armour: {}, xp: 7, traits: ['stun', 'ethereal'] },
+  { id: 'mummy', name: t('Mumia', 'Mummy'), kind: 'wraith', dex: 20, str: 30, wil: 20, int: 10, com: 30, vitality: 10, weapon: { name: t('Szpony', 'Claws'), power: -1 }, armour: {}, xp: 5, traits: ['rot'] },
+  { id: 'voidDemon', name: t('Demon pustki', 'Void demon'), kind: 'demon', dex: 40, str: 40, wil: 30, int: 30, com: 40, vitality: 16, weapon: { name: t('Dwuręczny topór', 'Great axe'), power: 1 }, armour: all(2), xp: 7, traits: [] },
+  { id: 'witch', name: t('Czarownica', 'Witch'), kind: 'thug', dex: 20, str: 20, wil: 40, int: 40, com: 20, vitality: 12, weapon: { name: t('Błyskawica', 'Lightning'), power: 1 }, armour: {}, xp: 5, traits: ['drain'] },
+  { id: 'minotaur', name: t('Minotaur', 'Minotaur'), kind: 'beast', dex: 30, str: 50, wil: 40, int: 30, com: 40, vitality: 20, weapon: { name: t('Topór', 'Axe'), power: 0 }, armour: { torso: 3, head: 2 }, xp: 9, traits: ['penetrating'] },
+  { id: 'imp', name: t('Chochlik', 'Imp'), kind: 'demon', dex: 50, str: 10, wil: 10, int: 10, com: 20, vitality: 4, weapon: { name: t('Sztylet', 'Dagger'), power: -2 }, armour: {}, xp: 1, traits: [] },
+  { id: 'beastman', name: t('Zwierzoludź', 'Beastman'), kind: 'beast', dex: 30, str: 40, wil: 30, int: 20, com: 35, vitality: 16, weapon: { name: t('Miecz', 'Sword'), power: 0 }, armour: all(1), xp: 5, traits: [] },
+  { id: 'raven', name: t('Kruk', 'Raven'), kind: 'beast', dex: 30, str: 20, wil: 20, int: 10, com: 20, vitality: 6, weapon: { name: t('Pazury', 'Talons'), power: -1 }, armour: {}, xp: 2, traits: ['harrying'] },
+  { id: 'bear', name: t('Niedźwiedź', 'Bear'), kind: 'beast', dex: 30, str: 60, wil: 40, int: 0, com: 30, vitality: 24, weapon: { name: t('Łapa', 'Paw'), power: -1 }, armour: {}, xp: 5, traits: [] },
+  { id: 'manticore', name: t('Mantikora', 'Manticore'), kind: 'beast', dex: 60, str: 50, wil: 40, int: 0, com: 50, vitality: 36, weapon: { name: t('Szpony', 'Claws'), power: 0 }, armour: {}, xp: 16, traits: ['stinger'] },
+  // Foes that appear only in event cards.
+  { id: 'honeybadger', name: t('Honeybadger', 'Honeybadger'), kind: 'beast', dex: 30, str: 60, wil: 30, int: 10, com: 30, vitality: 24, weapon: { name: t('Łapa', 'Paw'), power: -1 }, armour: {}, xp: 8, traits: [] },
+  { id: 'nomadWarrior', name: t('Nomada', 'Nomad'), kind: 'human', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Długi łuk', 'Longbow'), power: 1 }, armour: {}, xp: 2, traits: [] },
+  { id: 'caravanDriver', name: t('Woźnica', 'Caravan driver'), kind: 'human', dex: 30, str: 40, wil: 30, int: 30, com: 40, vitality: 15, weapon: { name: t('Kusza', 'Crossbow'), power: 1 }, armour: {}, xp: 3, traits: [] },
+];
+
+export const ENEMIES: Record<string, Enemy> = Object.fromEntries(list.map((e) => [e.id, e]));
+
+/** The bestiary foes a "fight a random enemy" result picks from. */
+export const RANDOM_FOES = ['wolf', 'bandit', 'giantSpider', 'mummy', 'beastman', 'raven', 'bear', 'imp'];

@@ -151,6 +151,106 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .here b { color: var(--ink); }
 .dock-actions { display: flex; gap: 8px; margin-left: auto; }
 
+
+.stat.warn b { color: #ff9a8a; }
+.odds { opacity: 0.6; font-size: 11px; }
+.badge { position: relative; }
+.badge::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; background: var(--glow); box-shadow: 0 0 8px var(--glow); }
+
+/* Overlays: event cards, fights, sheets */
+.overlay {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(circle at 50% 60%, rgba(30, 20, 60, 0.55), rgba(0, 0, 0, 0.78));
+  backdrop-filter: blur(2px);
+}
+.card {
+  width: min(100%, 520px); max-height: calc(100dvh - 32px); overflow: auto;
+  background: #f6f3ea; color: #15101f; padding: 20px 20px 18px;
+  box-shadow: 0 0 0 3px #15101f, 0 0 0 5px #f6f3ea, 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 80px rgba(143, 123, 255, 0.35);
+}
+.card-head small { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.55; }
+.card-head h2 { font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 26px; margin: 2px 0 10px; }
+.card-text { line-height: 1.55; margin: 0 0 14px; }
+.card-lines { list-style: none; padding: 10px 12px; margin: 0 0 14px; background: rgba(21, 16, 31, 0.07); font-size: 14px; display: grid; gap: 4px; }
+.card-lines li::before { content: '› '; opacity: 0.5; }
+.card-options { display: grid; gap: 8px; }
+.card .choice { background: #fff; color: #15101f; border: 2px solid #15101f; min-height: 0; }
+.card .choice:hover:not(:disabled) { background: #15101f; color: #fff; }
+.card .primary { background: #15101f; color: #fff; width: 100%; }
+.card .ghost { border-color: rgba(21, 16, 31, 0.3); color: #15101f; }
+.card.victory { text-align: center; }
+
+.arena {
+  width: min(100%, 640px); max-height: calc(100dvh - 32px); overflow: auto;
+  background: rgba(8, 6, 16, 0.92); border: 1px solid var(--line); padding: 18px;
+  box-shadow: 0 0 60px rgba(160, 40, 60, 0.25);
+}
+.foes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.foe {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px;
+  background: var(--panel); border: 1px solid var(--line); text-align: center;
+}
+.foe.chosen { border-color: #ff8a7a; box-shadow: 0 0 18px rgba(255, 120, 100, 0.35); }
+.foe small { font-size: 11px; color: var(--muted); }
+.foe-sprite {
+  width: 36px; height: 36px; image-rendering: pixelated;
+  box-shadow: inset -6px -6px 0 rgba(0,0,0,.35), inset 6px 6px 0 rgba(255,255,255,.15);
+  clip-path: polygon(20% 0, 80% 0, 100% 30%, 100% 100%, 0 100%, 0 30%);
+}
+.bar { display: block; width: 100%; height: 6px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: linear-gradient(90deg, #ff6a5a, #ffb36a); }
+.hero-bar > span { background: linear-gradient(90deg, #5ad08a, #b6f06a); }
+.hero-row { display: flex; align-items: center; gap: 12px; margin: 14px 0 10px; }
+.hero-row > div { flex: 1; display: grid; gap: 4px; }
+.hero-row small { color: var(--muted); font-size: 12px; }
+.combat-lines { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+.combat-moves { display: flex; flex-wrap: wrap; gap: 8px; }
+.combat-moves button { flex: 1 1 22%; }
+
+.sheet-overlay { place-items: end center; padding: 0; }
+.sheet {
+  width: min(100%, 760px); max-height: 86dvh; overflow: auto; padding: 16px 16px 28px;
+  background: #0b0916; border: 1px solid var(--line); border-bottom: 0;
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet-head h2 { font-family: 'Pixelify Sans', Inter, sans-serif; margin: 0; }
+.sheet h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 22px 0 8px; }
+.kit { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.kit li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; flex-wrap: wrap; }
+.kit li > span:first-child { color: var(--muted); }
+.kit-actions { display: flex; gap: 6px; }
+
+/* Dice */
+.dice-tray {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: rgba(0, 0, 0, 0.35); cursor: pointer; overflow: hidden;
+}
+.dice-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px 28px; padding: 0 16px; max-width: 720px; }
+.dice-group { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 96px; }
+.dice-pair { display: flex; gap: 8px; }
+.die {
+  width: 54px; height: 54px; display: grid; place-items: center;
+  font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 24px; font-weight: 700;
+  background: #fff; color: #15101f;
+  box-shadow: inset -5px -5px 0 #c9c2dd, inset 5px 5px 0 #ffffff, 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 24px rgba(143, 123, 255, 0.45);
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+.die.tens { background: #ffd86a; box-shadow: inset -5px -5px 0 #d1a640, inset 5px 5px 0 #fff1b8, 0 8px 18px rgba(0,0,0,.45); }
+.die.d6, .die.d3 { clip-path: none; border-radius: 6px; }
+.dice-label { color: var(--ink); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; text-shadow: 0 1px 3px #000; }
+.dice-verdict { font-size: 13px; padding: 3px 8px; background: #fff; color: #15101f; }
+.dice-verdict.ok { background: #6ef0a0; }
+.dice-verdict.bad { background: #ff8a7a; }
+.dice-more { align-self: center; color: var(--muted); }
+.dice-skip { color: var(--muted); font-size: 11px; }
+
+@media (max-width: 560px) {
+  .dock-actions { flex-wrap: wrap; }
+  .dock-actions button { flex: 1 1 30%; }
+  .die { width: 44px; height: 44px; font-size: 20px; }
+  .card { padding: 16px; }
+}
+
 @media (max-width: 560px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 340px; }
   .stats { margin-left: 0; }

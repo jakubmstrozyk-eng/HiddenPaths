@@ -19,7 +19,9 @@ const SAVE_KEY = 'hidden-paths.save';
 function loadSave(): GameState | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? (JSON.parse(raw) as GameState) : null;
+    const game = raw ? (JSON.parse(raw) as GameState) : null;
+    // Saves from before event cards and combat lack the newer fields; start fresh.
+    return game && Array.isArray(game.eventDeck) && typeof game.logSeq === 'number' ? game : null;
   } catch {
     return null;
   }
@@ -92,6 +94,7 @@ export function App() {
                     setScreen({ name: 'game', game: g });
                   }}
                   onMenu={() => setScreen({ name: 'menu' })}
+                  onNew={() => setScreen({ name: 'setup' })}
                 />
               </Opened>
             )}

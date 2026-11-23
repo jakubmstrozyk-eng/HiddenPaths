@@ -1,9 +1,10 @@
 import {
-  ATTRIBUTES, MISSIONS, PROFESSIONS, RACES,
-  type Attributes, type ProfessionId, type RaceId,
+  ATTRIBUTES, MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  type Attributes, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
 import type { Rng } from './rng';
+import type { Equipment } from './terrain';
 
 export const BONUS_POINTS = 20;
 export const MISSIONS_DRAWN = 4;
@@ -34,7 +35,10 @@ export interface Character {
   food: number;
   cards: string[];
   missions: string[];
-  equipment: { weapon: string; armour: { torso: number; legs: number } };
+  equipment: Equipment;
+  skills: Partial<Record<SkillId, number>>;
+  /** Attribute points from levelling up, not spent yet. */
+  unspentPoints: number;
 }
 
 /** Draws the 4 mission cards a new character chooses from. */
@@ -85,7 +89,9 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     food: startFood,
     cards: PROFESSIONS[input.profession].cards.filter((c) => c.level === 1).map((c) => c.id),
     missions: [...input.missions],
-    equipment: { weapon: 'one-handed', armour: { torso: 1, legs: 1 } },
+    equipment: { weapon: STARTING_KIT.weapon, armour: [...STARTING_KIT.armour], shield: false, rune: null },
+    skills: {},
+    unspentPoints: 0,
   };
 }
 
@@ -96,4 +102,29 @@ export function levelForXp(xp: number): number {
   let level = 1;
   for (let l = 2; l < LEVEL_XP.length; l++) if (xp >= LEVEL_XP[l]!) level = l;
   return level;
+}
+
+/** What each new level gives, from the "Doświadczenie" rules. */
+export const LEVEL_UP = { points: 20, vitality: 2, staminaAt: [4, 8] };
+
+/** Applies the rewards of reaching `level` to a character. */
+export function levelUp(c: Character, level: number): void {
+  c.level = level;
+  c.unspentPoints += LEVEL_UP.points;
+  c.maxVitality += LEVEL_UP.vitality;
+  c.vitality += LEVEL_UP.vitality;
+  if (LEVEL_UP.staminaAt.includes(level)) c.stamina += 1;
+}
+
+/** Spends level-up points on base attributes. */
+export function spendPoints(c: Character, bonus: Partial<Attributes>): void {
+  let total = 0;
+  for (const [key, value] of Object.entries(bonus)) {
+    if (!(ATTRIBUTES as readonly string[]).includes(key)) throw new EngineError('character.bonus', `Unknown attribute ${key}.`);
+    if (!Number.isInteger(value) || value! < 0) throw new EngineError('character.bonus', 'Points must be whole and not negative.');
+    total += value!;
+  }
+  if (total === 0 || total > c.unspentPoints) throw new EngineError('character.points', 'Not that many points to spend.');
+  for (const a of ATTRIBUTES) c.attributes[a] += bonus[a] ?? 0;
+  c.unspentPoints -= total;
 }

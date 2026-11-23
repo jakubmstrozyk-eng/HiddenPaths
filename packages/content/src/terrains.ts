@@ -35,7 +35,7 @@ export const TERRAINS: Record<TerrainId, Terrain> = {
     actions: ['meditate'], regions: [],
   },
   cave: {
-    id: 'cave', name: { pl: 'Jaskinia', en: 'Cave' }, deckCount: 6, hard: true, drawsEvent: false,
+    id: 'cave', name: { pl: 'Jaskinia', en: 'Cave' }, deckCount: 6, hard: true, drawsEvent: true,
     actions: ['mine', 'camp'], regions: ['NW', 'N'],
   },
   village: {
