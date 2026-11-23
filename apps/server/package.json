@@ -3,7 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts" },
-  "dependencies": { "@hp/content": "workspace:*", "@hp/engine": "workspace:*", "fastify": "^5.12.8" },
-  "devDependencies": { "tsx": "^4.23.15" }
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "8.2.0",
+    "@hp/content": "workspace:*",
+    "@hp/engine": "workspace:*",
+    "fastify": "^5.12.8",
+    "postgres": "3.4.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "tsx": "^4.23.15"
+  }
 }

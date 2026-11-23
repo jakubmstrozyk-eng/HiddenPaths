@@ -367,6 +367,50 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   if (next.character.vitality <= 0) respawn(state, next);
 }
 
+/**
+ * The 12-hour deadline passed: the hero's turn ends for them. A pending event is walked away from
+ * (or its first free choice taken) and a fight is fled, so the game never waits on an absent player.
+ */
+export function timeoutTurn(prev: GameState): GameState {
+  if (prev.winner) return prev;
+  const state = structuredClone(prev);
+  const rng = new Rng(state.rng);
+  const player = currentPlayer(state);
+  if (player.combat) {
+    log(state, { type: 'combatEnded', player: player.id, result: 'fled', xp: 0 });
+    player.combat = null;
+  }
+  if (player.pendingEvent) {
+    const free = eventOptions(state, player).filter((o) => !o.option.cost);
+    // Prefer a choice that does nothing (walking on); otherwise the last free one.
+    const pick = free.find((o) => o.option.then.length === 0) ?? free[free.length - 1];
+    if (pick && pick.option.then.length === 0) {
+      log(state, { type: 'eventEnded', player: player.id, card: player.pendingEvent.card });
+      player.pendingEvent = null;
+    } else if (pick) {
+      chooseEventOption(state, player, rng, pick.index);
+      player.combat = null;
+      player.pendingEvent = null;
+    }
+  }
+  log(state, { type: 'timedOut', player: player.id });
+  afterAction(state, player);
+  endTurn(state, player, rng);
+  state.rng = rng.state;
+  state.version++;
+  return state;
+}
+
+/** Adds XP from outside the rules (quick-reply rewards in multiplayer). */
+export function grantXp(prev: GameState, playerId: string, xp: number): GameState {
+  const state = structuredClone(prev);
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new EngineError('game.player', 'No such player.');
+  gainXp(state, player, xp);
+  state.version++;
+  return state;
+}
+
 /** True once the hero has a reason to stop: no Speed for any move. */
 export function isStuck(state: GameState): boolean {
   return !legalActions(state, currentPlayer(state).id).some((a) => a.type === 'move');
