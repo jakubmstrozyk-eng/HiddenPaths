@@ -85,14 +85,17 @@ export function generateMap(size: SizePreset, rng: Rng): GameMap {
         y,
         terrain: 'core',
         region: regionOf(x, y, width, height),
-        ring: Math.max(Math.abs(x - cx), Math.abs(y - cy)),
+        // Whole rings on any size: the 1 (odd) or 4 (even) middle fragments are ring 0.
+        ring: Math.floor(Math.max(Math.abs(x - cx), Math.abs(y - cy))),
       });
     }
   }
-  const map: GameMap = { width, height, cells, maxRing: Math.max(cx, cy) };
+  for (const c of cells) if (c.ring === 0) c.region = 'C';
+  const map: GameMap = { width, height, cells, maxRing: Math.floor(Math.max(cx, cy)) };
   const pool = terrainPool(cells.length - 1);
   const placed = new Set<number>();
-  const centre = cy * width + cx;
+  const middle = cells.filter((c) => c.ring === 0);
+  const centre = middle[rng.int(middle.length)]!.index;
   placed.add(centre);
 
   // Outer cells first so regional terrain settles at the edges where the races live.

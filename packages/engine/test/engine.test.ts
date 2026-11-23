@@ -51,8 +51,9 @@ describe('map generator', () => {
       const map = generateMap(size, new Rng(seedFromString(`map-${size}`)));
       const { width, height } = SIZE_PRESETS[size];
       expect(map.cells).toHaveLength(width * height);
-      const centre = map.cells.find((c) => c.ring === 0)!;
-      expect(centre.terrain).toBe('core');
+      expect(width).toBe(height);
+      const centre = map.cells.find((c) => c.terrain === 'core')!;
+      expect(centre.ring).toBe(0);
       expect(centre.region).toBe('C');
       expect(map.cells.filter((c) => c.terrain === 'core')).toHaveLength(1);
       expect(map.cells.filter((c) => c.terrain === 'city').length).toBeGreaterThanOrEqual(1);
@@ -61,7 +62,7 @@ describe('map generator', () => {
   }
 
   it('scales the deck to the map size', () => {
-    for (const slots of [24, 34, 48, 62]) {
+    for (const slots of [24, 35, 48, 63]) {
       const pool = terrainPool(slots);
       expect(Object.values(pool).reduce((a, b) => a + b, 0)).toBe(slots);
       expect(pool.forest).toBeGreaterThan(pool.desert);

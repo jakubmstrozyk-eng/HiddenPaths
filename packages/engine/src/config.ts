@@ -4,12 +4,12 @@ export type SizePreset = 'short' | 'medium' | 'long' | 'epic';
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
 export type WinMode = 'stone' | 'exploration';
 
-/** Odd sides so there is always a centre fragment. */
+/** Square maps. On even sides the Stone of Beginnings sits on one of the 4 middle fragments. */
 export const SIZE_PRESETS: Record<SizePreset, { width: number; height: number }> = {
   short: { width: 5, height: 5 }, // 25
-  medium: { width: 7, height: 5 }, // 35
+  medium: { width: 6, height: 6 }, // 36
   long: { width: 7, height: 7 }, // 49
-  epic: { width: 9, height: 7 }, // 63
+  epic: { width: 8, height: 8 }, // 64
 };
 
 export interface DifficultySettings {
