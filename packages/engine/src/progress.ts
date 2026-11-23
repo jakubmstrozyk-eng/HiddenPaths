@@ -5,6 +5,7 @@ import type { WorldView } from './terrain';
 
 export function log(state: GameState, entry: LogEntry) {
   state.log.push(entry);
+  state.logSeq++;
 }
 
 export function worldView(state: GameState): WorldView {

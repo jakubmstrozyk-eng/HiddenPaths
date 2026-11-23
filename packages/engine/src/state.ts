@@ -88,7 +88,10 @@ export interface GameState {
   winner: string | null;
   /** Increases with every applied action; the server uses it to reject stale or double submits. */
   version: number;
+  /** The most recent log entries (the server keeps the full history). */
   log: LogEntry[];
+  /** Log entries written since the game began, so the app can tell which ones an action added. */
+  logSeq: number;
 }
 
 /** Town services that cost gold or Stamina. */

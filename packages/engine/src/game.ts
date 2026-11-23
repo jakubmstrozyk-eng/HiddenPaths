@@ -62,7 +62,7 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
     .sort((a, b) => b.dex - a.dex || a.seat - b.seat)
     .map((p) => p.id);
   const eventDeck = rng.shuffle(ALL_EVENT_IDS);
-  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [] };
+  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [], logSeq: 0 };
 }
 
 export function currentPlayer(state: GameState): PlayerState {
@@ -373,3 +373,9 @@ export function isStuck(state: GameState): boolean {
 }
 
 export { giveItem };
+
+/** The log entries that the last action added. */
+export function newEntries(prev: GameState, next: GameState): GameState['log'] {
+  const added = next.logSeq - prev.logSeq;
+  return added > 0 ? next.log.slice(-Math.min(added, next.log.length)) : [];
+}
