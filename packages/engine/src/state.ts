@@ -69,6 +69,7 @@ export type LogEntry =
   | { type: 'traded'; player: string; item: string; gold: number; bought: boolean }
   | { type: 'stoneTaken'; player: string; cell: number }
   | { type: 'won'; player: string; mode: string; xp: number }
+  | { type: 'timedOut'; player: string }
   | { type: 'turnEnded'; player: string; next: string; round: number }
   | ({ player: string } & TerrainOutcome);
 

@@ -1,0 +1,24 @@
+# Render blueprint: one free web service that serves the game and its API on the same address.
+# Secrets (DATABASE_URL, RESEND_API_KEY) are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: hidden-paths
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @hp/web build
+    startCommand: pnpm --filter @hp/server start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false

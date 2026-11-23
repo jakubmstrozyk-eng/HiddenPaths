@@ -37,15 +37,23 @@ function actionChance(game: GameState, me: PlayerState, action: TerrainAction): 
   }
 }
 
-export function GameScreen({ game, onChange, onMenu, onNew }: {
+export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names = {}, deadline }: {
   game: GameState;
   onChange: (g: GameState) => void;
   onMenu: () => void;
   onNew: () => void;
+  /** The signed-in player in a server game; a local game plays as whoever's turn it is. */
+  meId?: string;
+  /** Sends the action to the server. The state is already updated locally; the server's copy replaces it. */
+  submit?: (prev: GameState, action: Action) => Promise<void>;
+  names?: Record<string, string>;
+  deadline?: string | null;
 }) {
   const T = useT();
-  const { t, tx } = T;
-  const me = currentPlayer(game);
+  const { t, tx, locale } = T;
+  const turnOf = currentPlayer(game);
+  const me = (meId && game.players.find((p) => p.id === meId)) || turnOf;
+  const myTurn = turnOf.id === me.id;
   const c = me.character;
   const { width, height, cells } = game.map;
   const actions = useMemo(() => legalActions(game, me.id), [game, me.id]);
@@ -59,6 +67,8 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
   const [storyTitle, setStoryTitle] = useState('');
 
   const act = useCallback((a: Action) => {
+    if (currentPlayer(game).id !== me.id) return;
+    // The engine is deterministic, so playing the action here gives the same result the server will save.
     const next = applyAction(game, me.id, a);
     const entries = newEntries(game, next);
     setLast(entries);
@@ -92,7 +102,8 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
     }
     setStoryTitle(title);
     onChange(next);
-  }, [game, me, lines, storyTitle, T, t, tx, cells, onChange]);
+    void submit?.(game, a);
+  }, [game, me, lines, storyTitle, T, t, tx, cells, onChange, submit]);
 
   // Fragments revealed by the last action dissolve from the side the hero came in.
   const revealedNow = new Set(last.flatMap((e) => (e.type === 'revealed' ? [e.cell] : [])));
@@ -107,7 +118,9 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
   const hereTerrain = here.terrain === 'core' ? null : TERRAINS[here.terrain];
   const terrainActs = actions.flatMap((a) => (a.type === 'terrain' ? [a.action] : []));
   const inTown = here.terrain === 'inn' || here.terrain === 'village' || here.terrain === 'city';
-  const quiet = !me.pendingEvent && !me.combat && !game.winner;
+  const quiet = myTurn && !me.pendingEvent && !me.combat && !game.winner;
+  const others = game.players.filter((p) => p.id !== me.id);
+  const hoursLeft = deadline ? Math.max(0, Math.round((new Date(deadline).getTime() - Date.now()) / 3_600_000)) : null;
   const lastNote = last.map((e) => describe(e, T)).filter(Boolean).slice(-3).join(' · ');
 
   return (
@@ -161,6 +174,20 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
               </button>
             );
           })}
+          {others.map((p) => (
+            <motion.div
+              key={p.id}
+              className="hero other"
+              initial={false}
+              animate={{ left: `${((p.position % width) / width) * 100}%`, top: `${(Math.floor(p.position / width) / height) * 100}%` }}
+              transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+              style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
+              title={names[p.id] ?? p.character.name}
+            >
+              <PixelHero race={p.character.race} size={28} />
+              <small className="hero-tag">{p.character.name}</small>
+            </motion.div>
+          ))}
           <motion.div
             className="hero"
             initial={false}
@@ -177,6 +204,12 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
       </div>
 
       <footer className="dock">
+        {!myTurn && !game.winner && (
+          <p className="waiting">
+            {locale === 'pl' ? `Ruch gracza ${names[turnOf.id] ?? turnOf.character.name}` : `${names[turnOf.id] ?? turnOf.character.name} is playing`}
+            {hoursLeft !== null ? (locale === 'pl' ? ` · zostało ok. ${hoursLeft} h` : ` · about ${hoursLeft} h left`) : ''}
+          </p>
+        )}
         <p className="here">
           <b>{hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
           {me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
@@ -189,7 +222,7 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
           ))}
           {inTown && quiet && <button className="ghost" onClick={() => setSheet('town')}>{t('town')}</button>}
           <button className={`ghost ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('bag')}>{t('bag')}</button>
-          {actions.some((a) => a.type === 'camp') && (
+          {myTurn && actions.some((a) => a.type === 'camp') && (
             <button className="ghost" onClick={() => act({ type: 'camp' })}>{t('camp')}</button>
           )}
           <button className="primary" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>{t('endTurn')}</button>
@@ -205,7 +238,7 @@ export function GameScreen({ game, onChange, onMenu, onNew }: {
         {game.winner && !story && (
           <div className="overlay" key="won">
             <motion.article className="card victory" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-              <h2>{t('victory')}</h2>
+              <h2>{game.winner === me.id ? t('victory') : `${names[game.winner] ?? game.players.find((p) => p.id === game.winner)?.character.name} ${locale === 'pl' ? 'wygrywa' : 'wins'}`}</h2>
               <p className="card-text">{game.config.winMode === 'stone' ? t('victoryStone') : t('victoryExploration')}</p>
               <div className="card-options">
                 <button className="primary" onClick={onNew}>{t('newGameShort')}</button>

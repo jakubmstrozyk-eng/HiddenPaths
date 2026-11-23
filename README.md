@@ -9,16 +9,31 @@ A turn-based web RPG set in a shattered world. Players explore hidden map fragme
 | `packages/content` | Game data in Polish and English: races, professions, terrains, missions |
 | `packages/engine` | The rules engine: seeded dice, d100 tests, map generator, characters, turns |
 | `apps/web` | React web app (main menu, game setup, character creation, map) |
-| `apps/server` | Fastify server skeleton (in-memory games for now) |
+| `apps/server` | Fastify game server: email sign-in, Postgres storage, 3 game slots, async multiplayer turns |
 
 ## Run it
 
 ```bash
 pnpm install
-pnpm test        # engine tests
-pnpm dev         # web app on http://localhost:5173
-pnpm dev:server  # API on http://localhost:8787
+pnpm test        # engine and server tests (server tests use in-memory Postgres)
+pnpm dev:server  # game server on http://localhost:8787 (in-memory database, sign-in links printed to the log)
+pnpm dev         # web app on http://localhost:5173, sending /api to the server
 ```
+
+Without a server the web app still plays solo games on the device. Set `DATABASE_URL` to use a real Postgres.
+
+## Deploy (Render + Neon + Resend, free tiers)
+
+`render.yaml` describes one web service that builds the web app and serves it with the API on the same address. In Render, choose **New > Blueprint**, pick this repository, and fill in:
+
+| Setting | Value |
+| --- | --- |
+| `DATABASE_URL` | Neon connection string (pooled, with `sslmode=require`) |
+| `APP_URL` | The service address, e.g. `https://hidden-paths.onrender.com` |
+| `RESEND_API_KEY` | Resend API key, for sign-in and turn emails |
+| `MAIL_FROM` | Sender, e.g. `Hidden Paths <onboarding@resend.dev>` until a domain is verified |
+
+The database tables are created on first start. A free Render service sleeps after 15 minutes without visits; the first visit wakes it in about a minute, and turns that ran out while it slept are closed then.
 
 ## Rules engine in one paragraph
 
