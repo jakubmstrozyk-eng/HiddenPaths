@@ -1,0 +1,16 @@
+{
+  "name": "hidden-paths",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @hp/web dev",
+    "dev:server": "pnpm --filter @hp/server dev",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1",
+    "@types/node": "^26.6.6"
+  }
+}

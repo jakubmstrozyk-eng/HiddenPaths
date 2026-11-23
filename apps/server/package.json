@@ -1,0 +1,9 @@
+{
+  "name": "@hp/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts" },
+  "dependencies": { "@hp/content": "workspace:*", "@hp/engine": "workspace:*", "fastify": "^5.12.8" },
+  "devDependencies": { "tsx": "^4.23.15" }
+}
