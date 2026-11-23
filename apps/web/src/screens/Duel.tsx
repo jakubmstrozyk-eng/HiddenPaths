@@ -1,0 +1,299 @@
+import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ENEMIES, ITEMS, PROFESSIONS } from '@hp/content';
+import {
+  attacksPerTurn, fightOdds, foeDamage, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
+} from '@hp/engine';
+import { useT, type UiKey } from '../i18n';
+import { Icon } from '../Icons';
+import { PixelFoe, PixelHero } from '../PixelHero';
+import { foeName, itemName } from '../logText';
+import { SkillHand } from '../SkillCards';
+
+/**
+ * A fight shown one throw at a time. The player picks a move; an attack or a flight first shows
+ * the test and the number to beat, and the dice roll only when the player taps the die. The engine
+ * settles the whole round at once, then every throw of it is played back in order: the hero on the
+ * left, the foes on the right, each roll and each blow on its own.
+ */
+
+type Step =
+  | { kind: 'roll'; who: string; test: UiKey; result: TestResult; vs?: string }
+  | { kind: 'hit'; who: string; target: string; damage: number; location?: string }
+  | { kind: 'note'; who: string; text: string };
+
+const HERO = 'hero';
+const ROLL_MS = 1100;
+const PAUSE_MS = 650;
+
+function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
+  const { t, locale } = T;
+  const pl = locale === 'pl';
+  const out: Step[] = [];
+  for (const e of entries) {
+    if (e.type !== 'combat') continue;
+    const ev = e.event;
+    switch (ev.type) {
+      case 'strike': {
+        out.push({ kind: 'roll', who: ev.by, test: ev.by === HERO ? 'testCombat' : 'foeAttack', result: ev.result, vs: ev.target });
+        if (ev.parry) out.push({ kind: 'roll', who: HERO, test: 'parry', result: ev.parry, vs: ev.by });
+        if (ev.parried) out.push({ kind: 'note', who: HERO, text: t('parried') });
+        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location });
+        break;
+      }
+      case 'flee':
+        out.push({ kind: 'roll', who: HERO, test: 'testFlee', result: ev.hero });
+        out.push({ kind: 'roll', who: 'foe', test: 'foeChase', result: ev.foe });
+        out.push({ kind: 'note', who: HERO, text: ev.success ? t('fled') : `${t('flee')}: ${t('failure')}` });
+        break;
+      case 'focus': out.push({ kind: 'note', who: HERO, text: `${t('focus')}: +10` }); break;
+      case 'stunned': out.push({ kind: 'note', who: ev.who, text: pl ? 'Ogłuszony!' : 'Stunned!' }); break;
+      case 'drink': out.push({ kind: 'note', who: HERO, text: itemName(ev.item, locale) }); break;
+      case 'reload': out.push({ kind: 'note', who: HERO, text: pl ? 'Ładujesz kuszę' : 'Reloading' }); break;
+      case 'foeDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Pokonany!' : 'Down!' }); break;
+      case 'poisoned': out.push({ kind: 'note', who: ev.who, text: pl ? 'Trucizna!' : 'Poisoned!' }); break;
+      case 'bleed': out.push({ kind: 'hit', who: 'venom', target: ev.uid, damage: ev.damage }); break;
+    }
+  }
+  return out;
+}
+
+export function Duel({ game, me, entries, act, onReplayDone }: {
+  game: GameState;
+  me: PlayerState;
+  /** The throws of the round just played; null while the player chooses a move. */
+  entries: LogEntry[] | null;
+  act: (a: Action) => void;
+  onReplayDone: () => void;
+}) {
+  const T = useT();
+  const { t, locale } = T;
+  const combat = me.combat!;
+  const c = me.character;
+  const world = worldView(game);
+  const alive = combat.foes.filter((f) => f.vitality > 0);
+  const [target, setTarget] = useState<string | null>(null);
+  const chosen = alive.find((f) => f.uid === target) ?? alive[0];
+  const [prompt, setPrompt] = useState<'attack' | 'flee' | null>(null);
+
+  // Playback of the round: which step is showing and whether its die has landed.
+  const steps = useMemo(() => (entries ? stepsOf(entries, T) : []), [entries]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [at, setAt] = useState(0);
+  const [rolled, setRolled] = useState(false);
+  useEffect(() => {
+    setAt(0);
+    setRolled(false);
+  }, [entries]);
+  const step = entries ? steps[at] : undefined;
+  // The tap that chose the move throws the first die; every later throw of the hero waits for its own tap.
+  const waitingForTap = step?.kind === 'roll' && step.who === HERO && at > 0 && !rolled;
+
+  useEffect(() => {
+    if (!entries) return;
+    if (at >= steps.length) {
+      const done = setTimeout(onReplayDone, 500);
+      return () => clearTimeout(done);
+    }
+    if (waitingForTap) return;
+    if (step?.kind === 'roll' && !rolled) {
+      setRolled(true);
+      return;
+    }
+    const wait = step?.kind === 'roll' ? ROLL_MS + PAUSE_MS : step?.kind === 'hit' ? 900 : 800;
+    const next = setTimeout(() => { setAt((i) => i + 1); setRolled(false); }, wait);
+    return () => clearTimeout(next);
+  }, [entries, at, steps.length, step, rolled, waitingForTap, onReplayDone]);
+
+  // Vitality as it stands at this point of the playback.
+  const lost = (who: string) => steps.slice(0, entries ? at + (step?.kind === 'hit' ? 1 : 0) : 0)
+    .reduce((sum, s) => sum + (s.kind === 'hit' && s.target === who ? s.damage : 0), 0);
+  const heroVit = Math.max(0, c.vitality - lost(HERO));
+
+  const odds = useMemo(() => fightOdds(world, me, combat), [combat.turn, c.vitality, alive.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const oddsPct = Math.round(odds.win * 100);
+  const focus = combat.focus ? 10 : 0;
+  const hitTarget = chosen ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + (c.equipment.rune === 'precise' ? 5 : 0), ENEMIES[chosen.enemy]!.kind))) : 0;
+  const fleeTarget = Math.round(successChance(c.attributes.dex, testModifier(world, me, 'dex', focus)) * 100);
+  const weapon = heroWeapon(me);
+  const potions = [...new Set(me.inventory.items.filter((i) => ITEMS[i]?.kind === 'potion'))];
+  const busy = !!entries;
+  const active = step?.who;
+
+  const throwDie = () => {
+    if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid } });
+    if (prompt === 'flee') act({ type: 'combat', move: { move: 'flee' } });
+    setPrompt(null);
+  };
+
+  return (
+    <div className="overlay combat">
+      <motion.section className="arena duel" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}>
+        <header className="card-head">
+          <small>{t('round')} {combat.turn}</small>
+          <h2>{t('fight')}</h2>
+        </header>
+
+        <div className="duel-field">
+          <div className={`side hero-side ${active === HERO ? 'active' : ''}`}>
+            <motion.div className="avatar" animate={step?.kind === 'hit' && step.target === HERO ? { x: [0, -10, 8, -4, 0] } : { x: 0 }}>
+              <PixelHero race={c.race} size={72} />
+            </motion.div>
+            <b>{c.name}</b>
+            <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
+            <small><Icon name="vitality" size={12} /> {heroVit}/{c.maxVitality}</small>
+            <small><Icon name="sword" size={12} /> {itemName(weapon.id, locale)} S{signed(strengthStep(c.attributes.str) + weapon.power)}+k6</small>
+            <AnimatePresence>{step?.kind === 'hit' && step.target === HERO && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
+          </div>
+
+          <div className={`duel-centre ${busy || prompt ? '' : 'empty'}`}>
+            <AnimatePresence mode="wait">
+              {step?.kind === 'roll' && (
+                <motion.div key={`roll-${at}`} className={`throw ${step.who === HERO ? 'mine' : 'theirs'}`} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                  <TestTitle test={step.test} target={step.result.target} who={step.who === HERO ? c.name : step.who === 'foe' ? t('foe') : foeName(step.who, locale)} />
+                  <BigDie result={step.result} rolling={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} />
+                </motion.div>
+              )}
+              {step?.kind === 'note' && (
+                <motion.p key={`note-${at}`} className="duel-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>{step.text}</motion.p>
+              )}
+              {!busy && prompt && (
+                <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                  <TestTitle test={prompt === 'attack' ? 'testCombat' : 'testFlee'} target={prompt === 'attack' ? hitTarget : fleeTarget} who={c.name} />
+                  <BigDie onTap={throwDie} />
+                  <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="side foe-side">
+            {combat.foes.map((f) => {
+              const enemy = ENEMIES[f.enemy]!;
+              const vit = Math.max(0, f.vitality - lost(f.uid));
+              const down = vit <= 0;
+              return (
+                <motion.button
+                  key={f.uid}
+                  className={`foe-card ${chosen?.uid === f.uid ? 'chosen' : ''} ${active === f.uid ? 'active' : ''} ${down ? 'down' : ''}`}
+                  disabled={down || busy}
+                  onClick={() => setTarget(f.uid)}
+                  animate={down ? { opacity: 0.3, scale: 0.9 } : step?.kind === 'hit' && step.target === f.uid ? { x: [0, 10, -8, 4, 0] } : { opacity: 1, scale: 1, x: 0 }}
+                >
+                  <PixelFoe kind={enemy.kind} size={combat.foes.length > 1 ? 48 : 72} />
+                  <b>{foeName(f.uid, locale)}</b>
+                  <span className="bar"><motion.span animate={{ width: `${(vit / f.maxVitality) * 100}%` }} /></span>
+                  <small><Icon name="vitality" size={12} /> {vit}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
+                  <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+
+        {!busy && !prompt && (
+          <>
+            <p className={`odds ${oddsPct < 50 ? 'grim' : ''}`}>
+              {t('winOdds')} ~{oddsPct}%{oddsPct < 50 ? ` · ${t('fleeHint')}` : ''} · {attacksPerTurn(me)} {t('attacksPerTurn')}
+            </p>
+            <div className="combat-moves">
+              <button className="primary with-icon" disabled={!chosen} onClick={() => setPrompt('attack')}><Icon name="sword" />{t('attack')}</button>
+              <button className="ghost with-icon" onClick={() => act({ type: 'combat', move: { move: 'parry' } })}><Icon name="shield" />{t('parry')}</button>
+              <button className="ghost" onClick={() => act({ type: 'combat', move: { move: 'focus' } })}>{t('focus')}</button>
+              <button className="ghost" onClick={() => setPrompt('flee')}>{t('flee')}</button>
+              {potions.map((p) => (
+                <button key={p} className="ghost small" onClick={() => act({ type: 'combat', move: { move: 'potion', item: p } })}>{itemName(p, locale)}</button>
+              ))}
+            </div>
+            <SkillHand profession={c.profession} owned={PROFESSIONS[c.profession].cards.filter((card) => card.combat && c.cards.includes(card.id)).map((card) => card.id)} compact />
+          </>
+        )}
+        {busy && <p className="duel-hint">{waitingForTap ? t('tapDie') : ' '}</p>}
+      </motion.section>
+    </div>
+  );
+}
+
+const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
+
+/** "Combat test" with the number to roll at or under on a shield. */
+function TestTitle({ test, target, who }: { test: UiKey; target: number; who: string }) {
+  const { t } = useT();
+  return (
+    <div className="test-title">
+      <small>{who}</small>
+      <b>{t(test)}</b>
+      <span className="target-shield" title={t('rollUnder')}>
+        <svg viewBox="0 0 40 46" aria-hidden="true"><path d="M20 2 L37 8 V22 C37 34 29 41 20 44 C11 41 3 34 3 22 V8 Z" /></svg>
+        <span>{target}</span>
+      </span>
+      <small>{t('rollUnder')}</small>
+    </div>
+  );
+}
+
+/** A big d100 die. Before the throw it waits for a tap; then it tumbles and lands on the result. */
+function BigDie({ result, rolling = false, onTap }: { result?: TestResult; rolling?: boolean; onTap?: () => void }) {
+  const { t } = useT();
+  const [face, setFace] = useState('?');
+  const [landed, setLanded] = useState(false);
+  useEffect(() => {
+    if (!rolling || !result) {
+      setFace('?');
+      setLanded(false);
+      return;
+    }
+    let alive = true;
+    let wait = 35;
+    let timer: ReturnType<typeof setTimeout>;
+    const start = performance.now();
+    const tick = () => {
+      if (!alive) return;
+      if (performance.now() - start > ROLL_MS - 100) {
+        setFace(String(result.roll));
+        setLanded(true);
+        return;
+      }
+      setFace(String(1 + Math.floor(Math.random() * 100)));
+      wait *= 1.17;
+      timer = setTimeout(tick, wait);
+    };
+    tick();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [rolling, result]);
+
+  return (
+    <div className="big-die-wrap">
+      <motion.button
+        className={`big-die ${onTap ? 'ready' : ''} ${landed ? (result!.success ? 'ok' : 'bad') : ''}`}
+        disabled={!onTap}
+        onClick={onTap}
+        animate={rolling && !landed ? { rotate: [0, 200, 340, 380, 360], y: [0, -40, 0, -14, 0] } : onTap ? { scale: [1, 1.06, 1] } : { rotate: 0, y: 0 }}
+        transition={rolling && !landed ? { duration: ROLL_MS / 1000, ease: 'easeOut' } : onTap ? { duration: 1.1, repeat: Infinity } : { duration: 0.2 }}
+        aria-label={onTap ? t('roll') : face}
+      >
+        <span>{onTap ? t('roll') : face}</span>
+        <small>k100</small>
+      </motion.button>
+      <AnimatePresence>
+        {landed && result && (
+          <motion.b className={`dice-verdict ${result.success ? 'ok' : 'bad'}`} initial={{ scale: 1.8, opacity: 0, rotate: -8 }} animate={{ scale: 1, opacity: 1, rotate: -4 }} transition={{ type: 'spring', stiffness: 420, damping: 14 }}>
+            {result.roll} / {result.target} · {result.success ? t('success') : t('failure')}
+          </motion.b>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function DamagePop({ damage, location }: { damage: number; location?: string }) {
+  const { t } = useT();
+  return (
+    <motion.span className="damage-pop" initial={{ y: 0, opacity: 0, scale: 0.6 }} animate={{ y: -34, opacity: 1, scale: 1.2 }} exit={{ opacity: 0, y: -50 }} transition={{ duration: 0.45 }}>
+      −{damage}{location ? <small> {t(location as UiKey)}</small> : null}
+    </motion.span>
+  );
+}

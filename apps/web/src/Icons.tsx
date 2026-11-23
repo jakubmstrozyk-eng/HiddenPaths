@@ -1,0 +1,175 @@
+/**
+ * Small pixel icons in the same retro style as the heroes. Each is a 9×9 grid:
+ * '.' empty, 'o' outline, 'm' main colour, 'l' light, 'd' dark.
+ */
+export type IconName = 'speed' | 'stamina' | 'vitality' | 'food' | 'gold' | 'xp' | 'bag' | 'map' | 'cards' | 'sword' | 'shield' | 'camp' | 'town' | 'menu';
+
+const ICONS: Record<IconName, { rows: string[]; main: string; light: string; dark: string }> = {
+  speed: { main: '#7fd3ff', light: '#d8f3ff', dark: '#2a6f9a', rows: [
+    '.........',
+    '....oooo.',
+    '...ommmo.',
+    '..ommmo..',
+    '.ommmmoo.',
+    '.oooommo.',
+    '...ommo..',
+    '..omo....',
+    '..oo.....',
+  ] },
+  stamina: { main: '#ffd34d', light: '#fff1b0', dark: '#a8781a', rows: [
+    '.....oo..',
+    '....omo..',
+    '...omo...',
+    '..ommooo.',
+    '.ooommmo.',
+    '...omoo..',
+    '..omo....',
+    '..oo.....',
+    '.........',
+  ] },
+  vitality: { main: '#ff5a6e', light: '#ffc2c9', dark: '#9a2236', rows: [
+    '.........',
+    '.oo...oo.',
+    'omlo.ommo',
+    'omlmommmo',
+    'ommmmmmmo',
+    '.ommmmmo.',
+    '..ommmo..',
+    '...omo...',
+    '....o....',
+  ] },
+  food: { main: '#d98a4a', light: '#ffd9a8', dark: '#7a4a1a', rows: [
+    '.........',
+    '..ooooo..',
+    '.ollllmo.',
+    'olmmmmmmo',
+    'ommmmmmmo',
+    'oddddddo.',
+    '.oooooo..',
+    '.........',
+    '.........',
+  ] },
+  gold: { main: '#f0c040', light: '#fff0a0', dark: '#9a7010', rows: [
+    '.........',
+    '..ooooo..',
+    '.ommmmmo.',
+    'omllmmmdo',
+    'omlmodmdo',
+    'ommmmmddo',
+    '.oddddo..',
+    '..ooooo..',
+    '.........',
+  ] },
+  xp: { main: '#c9a7ff', light: '#efe3ff', dark: '#6a4aa8', rows: [
+    '....o....',
+    '...omo...',
+    'oooomoooo',
+    'ommmlmmmo',
+    '.ommmmmo.',
+    '..ommmo..',
+    '.ommdmmo.',
+    '.omo.omo.',
+    '.oo...oo.',
+  ] },
+  bag: { main: '#b07a4a', light: '#e0b080', dark: '#6a4220', rows: [
+    '...ooo...',
+    '..o.o.o..',
+    '...ooo...',
+    '..ommmo..',
+    '.ommlmmo.',
+    'ommllmmmo',
+    'ommmmmmdo',
+    'ommmmmddo',
+    '.ooooooo.',
+  ] },
+  map: { main: '#e6d6a8', light: '#fff6dc', dark: '#a08850', rows: [
+    '.........',
+    'oooooooo.',
+    'omdmmdmo.',
+    'omdmmdmmo',
+    'odmmdmdmo',
+    'omdmmdmmo',
+    'omdmdmmo.',
+    'oooooooo.',
+    '.........',
+  ] },
+  cards: { main: '#f4f1ff', light: '#ffffff', dark: '#8f7bff', rows: [
+    '..oooooo.',
+    '..olllmo.',
+    'oooooomo.',
+    'olllmomo.',
+    'omddmomo.',
+    'omddmomo.',
+    'ommmmoo..',
+    'ommmmo...',
+    'oooooo...',
+  ] },
+  sword: { main: '#d8dde6', light: '#ffffff', dark: '#6a7080', rows: [
+    '.......oo',
+    '......olo',
+    '.....olo.',
+    '....olo..',
+    '.o.olo...',
+    '.oomo....',
+    '..oo.....',
+    '.oddo....',
+    'oo.oo....',
+  ] },
+  shield: { main: '#8f7bff', light: '#d6ccff', dark: '#4a3aa8', rows: [
+    'ooooooooo',
+    'omlllmmmo',
+    'omlmmmmdo',
+    'omlmmmmdo',
+    'ommmmmmdo',
+    '.ommmmdo.',
+    '.ommmddo.',
+    '..ommdo..',
+    '...ooo...',
+  ] },
+  camp: { main: '#ff9a3a', light: '#ffe08a', dark: '#7a4a1a', rows: [
+    '....o....',
+    '...omo...',
+    '...olmo..',
+    '..ollmo..',
+    '..omlmo..',
+    '...ooo...',
+    '.dd...dd.',
+    '..ddddd..',
+    '.dd...dd.',
+  ] },
+  town: { main: '#c0a070', light: '#f0d8a8', dark: '#6a5030', rows: [
+    '....o....',
+    '...omo...',
+    '..ommmo..',
+    '.ommmmmo.',
+    'ooooooooo',
+    '.olldllo.',
+    '.olldllo.',
+    '.ommdmmo.',
+    '.ooooooo.',
+  ] },
+  menu: { main: '#f4f1ff', light: '#ffffff', dark: '#9a94b8', rows: [
+    '.........',
+    '.ooooooo.',
+    '.........',
+    '.........',
+    '.ooooooo.',
+    '.........',
+    '.........',
+    '.ooooooo.',
+    '.........',
+  ] },
+};
+
+export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
+  const icon = ICONS[name];
+  const fill: Record<string, string> = { o: '#0b0b10', m: icon.main, l: icon.light, d: icon.dark };
+  if (name === 'menu') fill.o = icon.main;
+  return (
+    <svg className="icon" width={size} height={size} viewBox="0 0 9 9" shapeRendering="crispEdges" aria-hidden="true">
+      {icon.rows.flatMap((row, y) =>
+        [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={fill[ch]} />)),
+      )}
+    </svg>
+  );
+}
