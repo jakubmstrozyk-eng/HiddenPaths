@@ -148,7 +148,8 @@ describe('combat', () => {
     const state = game();
     currentPlayer(state).combat = startCombat(worldView(state), ['wolf', 'wolf']);
     const kinds = new Set(legalActions(state, 'p1').map((a) => (a.type === 'combat' ? a.move.move : a.type)));
-    expect([...kinds].sort()).toEqual(['attack', 'flee', 'focus', 'parry']);
+    // 'card': the hero's fight skill cards are combat moves too.
+    expect([...kinds].sort()).toEqual(['attack', 'card', 'flee', 'focus', 'parry']);
   });
 
   it('losing a fight sends the hero back to the start with half Vitality', () => {

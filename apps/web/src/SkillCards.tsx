@@ -1,21 +1,58 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { PROFESSIONS, type ActionCard, type ProfessionId } from '@hp/content';
-import { useT } from './i18n';
+import { CARDS_PER_GAME, isSpent, usesLeft, type ActorState } from '@hp/engine';
+import { useT, type UiKey } from './i18n';
 import { Icon } from './Icons';
 
-/** The hero's skill cards, held like a hand of real cards. Tap one to look at it closely. */
-export function SkillHand({ profession, owned, compact = false }: { profession: ProfessionId; owned: string[]; compact?: boolean }) {
+/** Cards the player plays on the map and in a fight. Every other card works on its own. */
+const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap'];
+const FIGHT_PLAY = ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves'];
+
+type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'map' | 'fight' | 'notNow' | 'passive';
+const NOTE: Record<Exclude<Status, 'play'>, UiKey> = {
+  usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp',
+  map: 'cardOnMap', fight: 'cardInFight', notNow: 'cardNotNow', passive: 'cardPassive',
+};
+
+function statusOf(card: string, actor: Pick<ActorState, 'counters'>, playable: string[], inFight: boolean): Status {
+  if (playable.includes(card)) return 'play';
+  if (usesLeft(actor, card) === 0) return 'usedUp';
+  if (isSpent(actor, card)) return 'spent';
+  if (card === 'cavedelver-craftsman') return 'later';
+  if (card === 'mystic-researcher') return 'camp';
+  if (inFight && MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card)) return 'map';
+  if (!inFight && FIGHT_PLAY.includes(card) && !MAP_PLAY.includes(card)) return 'fight';
+  if (MAP_PLAY.includes(card) || FIGHT_PLAY.includes(card)) return 'notNow';
+  return 'passive';
+}
+
+/**
+ * The hero's skill cards, held like a hand of real cards. Tap one to look at it closely; a card
+ * that can be played right now glows and its close-up has a button to play it.
+ */
+export function SkillHand({ profession, owned, actor, playable = [], onPlay, inFight = false, compact = false }: {
+  profession: ProfessionId;
+  owned: string[];
+  actor: Pick<ActorState, 'counters'>;
+  playable?: string[];
+  onPlay?: (card: string) => void;
+  inFight?: boolean;
+  compact?: boolean;
+}) {
   const { t } = useT();
   const cards = PROFESSIONS[profession].cards.filter((card) => owned.includes(card.id));
   const [open, setOpen] = useState<ActionCard | null>(null);
   if (!cards.length) return null;
   const mid = (cards.length - 1) / 2;
+  const status = (card: string) => statusOf(card, actor, onPlay ? playable : [], inFight);
+  const uses = (card: string) => (CARDS_PER_GAME[card] ? `${usesLeft(actor, card)}/${CARDS_PER_GAME[card]}` : null);
+  const openStatus = open ? status(open.id) : null;
   return (
     <>
       <div className={`hand ${compact ? 'compact' : ''}`} aria-label={t('skillCards')}>
         {cards.map((card, i) => (
-          <HandCard key={card.id} card={card} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} onOpen={() => setOpen(card)} />
+          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} onOpen={() => setOpen(card)} />
         ))}
       </div>
       <AnimatePresence>
@@ -29,9 +66,20 @@ export function SkillHand({ profession, owned, compact = false }: { profession: 
               style={{ transformPerspective: 900 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <CardFace card={open} profession={profession} large />
-              <p className="card-zoom-note">{t('cardNotActive')}</p>
-              <button className="primary" onClick={() => setOpen(null)}>{t('close')}</button>
+              <CardFace card={open} profession={profession} uses={uses(open.id)} large />
+              {openStatus === 'play' ? (
+                <div className="card-zoom-actions">
+                  <button className="primary with-icon" onClick={() => { const id = open.id; setOpen(null); onPlay!(id); }}>
+                    <Icon name={open.combat ? 'sword' : 'cards'} />{t('playCard')}
+                  </button>
+                  <button className="ghost" onClick={() => setOpen(null)}>{t('close')}</button>
+                </div>
+              ) : (
+                <>
+                  <p className="card-zoom-note">{t(NOTE[openStatus!])}</p>
+                  <button className="primary" onClick={() => setOpen(null)}>{t('close')}</button>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -40,19 +88,22 @@ export function SkillHand({ profession, owned, compact = false }: { profession: 
   );
 }
 
-function HandCard({ card, tilt, lift, onOpen }: { card: ActionCard; tilt: number; lift: number; onOpen: () => void }) {
+function HandCard({ card, status, uses, tilt, lift, onOpen }: { card: ActionCard; status: Status; uses: string | null; tilt: number; lift: number; onOpen: () => void }) {
   const { tx } = useT();
   // The card leans toward the pointer while it hovers, like one picked up from the table.
   const px = useMotionValue(0);
   const py = useMotionValue(0);
   const rotateY = useSpring(useTransform(px, [-0.5, 0.5], [-16, 16]), { stiffness: 300, damping: 20 });
   const rotateX = useSpring(useTransform(py, [-0.5, 0.5], [14, -14]), { stiffness: 300, damping: 20 });
+  // A card used until the next camp lies turned sideways, as on the table; a used-up one is greyed.
+  const sideways = status === 'spent';
+  const rest = tilt + (sideways ? 90 : 0);
   return (
     <motion.button
-      className={`hand-card ${card.combat ? 'combat' : ''}`}
+      className={`hand-card ${card.combat ? 'combat' : ''} ${status === 'play' ? 'playable' : ''} ${status === 'usedUp' || sideways ? 'spent' : ''}`}
       style={{ rotateX, rotateY, transformPerspective: 600 }}
-      initial={{ y: 80, opacity: 0, rotate: tilt }}
-      animate={{ y: lift, opacity: 1, rotate: tilt }}
+      initial={{ y: 80, opacity: 0, rotate: rest }}
+      animate={{ y: lift + (status === 'play' ? -8 : 0), opacity: 1, rotate: rest }}
       whileHover={{ y: -18, rotate: 0, scale: 1.12, zIndex: 3 }}
       whileTap={{ scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 260, damping: 20 }}
@@ -65,12 +116,12 @@ function HandCard({ card, tilt, lift, onOpen }: { card: ActionCard; tilt: number
       onClick={onOpen}
       aria-label={tx(card.name)}
     >
-      <CardFace card={card} />
+      <CardFace card={card} uses={uses} />
     </motion.button>
   );
 }
 
-function CardFace({ card, profession, large = false }: { card: ActionCard; profession?: ProfessionId; large?: boolean }) {
+function CardFace({ card, profession, uses, large = false }: { card: ActionCard; profession?: ProfessionId; uses?: string | null; large?: boolean }) {
   const { t, tx } = useT();
   return (
     <div className={`card-face ${card.combat ? 'combat' : ''} ${large ? 'large' : ''}`}>
@@ -78,6 +129,7 @@ function CardFace({ card, profession, large = false }: { card: ActionCard; profe
       {card.combat && <span className="card-tag">{t('combatCard')}</span>}
       <span className="card-art"><Icon name={card.combat ? 'sword' : 'cards'} size={large ? 72 : 26} /></span>
       <b className="card-name">{tx(card.name)}</b>
+      {uses && <span className="card-uses">{uses}</span>}
       {large && profession && <small className="card-prof">{tx(PROFESSIONS[profession].name)} · {t('level')} {card.level}</small>}
       {large && <p className="card-text-face">{tx(card.summary)}</p>}
     </div>

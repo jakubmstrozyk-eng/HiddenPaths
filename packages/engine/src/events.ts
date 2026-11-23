@@ -1,3 +1,4 @@
+import { springTrap } from './cards';
 import {
   EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
@@ -79,6 +80,10 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
   const xp = combatXp(worldView(state), combat);
   log(state, { type: 'combatEnded', player: player.id, result: 'won', xp });
   gainXp(state, player, xp);
+  if (player.character.cards.includes('warrior-veteran')) {
+    gainXp(state, player, 1);
+    log(state, { type: 'card', player: player.id, card: 'warrior-veteran', ok: true, amount: 1 });
+  }
   if (player.inventory.items.includes('luckyCoin')) change(state, player, 'gold', 1);
   runOutcomes(state, player, rng, combat.onWin, combat.card);
   if (combat.card !== undefined && !player.pendingEvent && !player.combat) log(state, { type: 'eventEnded', player: player.id, card: combat.card });
@@ -218,6 +223,8 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         player.combat = startCombat(world, enemies, o.do === 'fight' ? o.onWin ?? [] : []);
         if (card !== undefined) player.combat.card = card;
         log(state, { type: 'combatStarted', player: player.id, foes: enemies });
+        springTrap(state, player, rng);
+        if (player.combat.foes.every((f) => f.vitality <= 0)) winCombat(state, player, rng);
         return;
       }
       case 'test': {

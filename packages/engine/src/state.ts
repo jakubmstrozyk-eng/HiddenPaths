@@ -70,6 +70,8 @@ export type LogEntry =
   | { type: 'stoneTaken'; player: string; cell: number }
   | { type: 'won'; player: string; mode: string; xp: number }
   | { type: 'timedOut'; player: string }
+  /** A skill card was used or fired: `ok` says whether it worked, `roll` is its d6 or test roll. */
+  | { type: 'card'; player: string; card: string; ok?: boolean; roll?: number; amount?: number }
   | { type: 'turnEnded'; player: string; next: string; round: number }
   | ({ player: string } & TerrainOutcome);
 
@@ -100,7 +102,10 @@ export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen';
 
 export type Action =
   | { type: 'move'; to: number }
-  | { type: 'camp' }
+  /** `research`: the Mystic's Researcher card, 1 more Stamina for a permanent +1 Intelligence. */
+  | { type: 'camp'; research?: boolean }
+  /** Play a skill card outside a fight. */
+  | { type: 'card'; card: string }
   | { type: 'terrain'; action: TerrainAction }
   | { type: 'event'; option: number }
   | { type: 'combat'; move: CombatMove }

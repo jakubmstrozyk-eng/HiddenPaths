@@ -6,6 +6,7 @@ export * from './mapgen';
 export * from './character';
 export * from './terrain';
 export * from './combat';
+export * from './cards';
 export * from './towns';
 export { eventOptions, drawEvent, ALL_EVENT_IDS } from './events';
 export type { Change, Service } from './state';

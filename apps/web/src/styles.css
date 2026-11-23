@@ -338,7 +338,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .card-zoom { display: grid; place-items: center; z-index: 70; }
 .card-zoom > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .card-zoom-note { max-width: 280px; margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
-@media (prefers-reduced-motion: reduce) { .card-face.combat { animation: none; } }
+.card-zoom-actions { display: flex; gap: 10px; }
+.card-uses { position: absolute; bottom: -8px; right: -6px; background: #0b0b10; color: var(--ink); border: 1px solid var(--edge); font: 700 10px 'Pixelify Sans', Inter, sans-serif; padding: 1px 4px; }
+.card-face.large .card-uses { font-size: 14px; bottom: -12px; right: -10px; padding: 2px 8px; }
+.hand-card.playable .card-face { --edge: #ffe27a; animation: card-ready 1.6s ease-in-out infinite; }
+.hand-card.playable .card-face.combat { --edge: #ffe27a; }
+@keyframes card-ready { 50% { box-shadow: 0 0 0 2px #0b0b10, 0 0 0 3px var(--edge), 0 10px 20px rgba(0, 0, 0, 0.55), 0 0 28px rgba(255, 226, 122, 0.9); } }
+.hand-card.spent .card-face { filter: grayscale(0.85) brightness(0.6); animation: none; }
+@media (prefers-reduced-motion: reduce) { .card-face.combat, .hand-card.playable .card-face { animation: none; } }
 
 /* Duel: hero left, foes right, the throw in the middle */
 .arena.duel { width: min(860px, 100%); }

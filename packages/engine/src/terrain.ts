@@ -74,6 +74,8 @@ export interface ActorState {
     gold: number;
     skills: Partial<Record<SkillId, number>>;
     equipment: Equipment;
+    /** Skill card ids the hero holds. */
+    cards: string[];
   };
 }
 
@@ -83,10 +85,12 @@ export interface WorldView {
   terrainAt: (cell: number) => string;
   ringAt: (cell: number) => number;
   maxRing: number;
+  /** Fragments next to a cell. */
+  near: (cell: number) => number[];
 }
 
 export type TerrainOutcome =
-  | { type: 'test'; action: TerrainAction; attribute: Attribute; result: TestResult; gained: string[]; lost?: string[] };
+  | { type: 'test'; action: TerrainAction; attribute: Attribute; result: TestResult; gained: string[]; lost?: string[]; rerolled?: string };
 
 /** Stamina cost of each terrain action that the engine runs in the MVP. */
 export const ACTION_COST: Partial<Record<TerrainAction, number>> = {
@@ -124,7 +128,35 @@ export function testModifier(world: WorldView, actor: ActorState, attribute: Att
   const settings = DIFFICULTIES[world.difficulty];
   const danger = dangerLevel(world.ringAt(actor.position), world.maxRing, settings);
   return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp)
-    + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + extra;
+    + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + cardBonus(world, actor, attribute) + extra;
+}
+
+const WATER = new Set(['river', 'lake']);
+
+/** Always-on skill cards: Strongman (+10 to Strength tests) and Water-born (+10 to all next to water). */
+export function cardBonus(world: WorldView, actor: Pick<ActorState, 'position' | 'character'>, attribute: Attribute): number {
+  const cards = actor.character.cards ?? [];
+  let bonus = 0;
+  if (attribute === 'str' && cards.includes('cavedelver-strongman')) bonus += 10;
+  if (cards.includes('diver-waterborn')) {
+    const wet = (cell: number) => WATER.has(world.terrainAt(cell));
+    if (wet(actor.position) || world.near(actor.position).some(wet)) bonus += 10;
+  }
+  return bonus;
+}
+
+/**
+ * A free second try at a failed test from a skill card: Fish (hunting and swimming, every time)
+ * or Hunter (hunting, once until the next camp). Returns the card used, if any.
+ */
+export function rerollCard(actor: ActorState, action: TerrainAction): string | null {
+  const cards = actor.character.cards ?? [];
+  if ((action === 'hunt' || action === 'swim') && cards.includes('diver-fish')) return 'diver-fish';
+  if (action === 'hunt' && cards.includes('trapper-hunter') && !actor.counters['used:trapper-hunter']) {
+    actor.counters['used:trapper-hunter'] = 1;
+    return 'trapper-hunter';
+  }
+  return null;
 }
 
 /** The terrain actions available on the hero's fragment right now (camping is handled separately). */
@@ -164,14 +196,16 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
 
   switch (action) {
     case 'hunt': {
-      const result = roll('dex');
+      let result = roll('dex');
+      const rerolled = result.success ? null : rerollCard(actor, 'hunt');
+      if (rerolled) result = roll('dex');
       if (result.success) {
         const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
         actor.character.food += food;
         gained.push(`food:${food}`);
         add(actor.counters, 'hunts');
       }
-      return { type: 'test', action, attribute: 'dex', result, gained };
+      return { type: 'test', action, attribute: 'dex', result, gained, ...(rerolled ? { rerolled } : {}) };
     }
     case 'gather': {
       const result = roll('int', 10);
@@ -223,8 +257,11 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
       return { type: 'test', action, attribute: 'dex', result, gained };
     }
     case 'swim': {
-      const dex = roll('dex');
-      const str = roll('str');
+      const fish = (actor.character.cards ?? []).includes('diver-fish');
+      let dex = roll('dex');
+      if (!dex.success && fish) dex = roll('dex');
+      let str = roll('str');
+      if (!str.success && fish) str = roll('str');
       const result = dex.success && str.success ? dex : dex.success ? str : dex;
       if (dex.success && str.success) {
         actor.crossedRiver = true;

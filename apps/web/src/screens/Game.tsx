@@ -99,8 +99,15 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     const entries = newEntries(game, next);
     setLast(entries);
     // Fight rounds play back throw by throw on the duel screen; other rolls use the dice tray.
+    const nextMe0 = next.players.find((p) => p.id === me.id)!;
     if (me.combat) setReplay({ before: game, entries });
-    else {
+    else if (nextMe0.combat && entries.some((e) => e.type === 'combat' && e.event.type === 'trap')) {
+      // A trap sprang as the fight broke out: play its throws on the duel screen, from the foes' state before it.
+      const before = structuredClone(next);
+      const foes = before.players.find((p) => p.id === me.id)!.combat!.foes;
+      for (const e of entries) if (e.type === 'combat' && e.event.type === 'trap') foes.find((f) => f.uid === (e.event as { uid: string }).uid)!.vitality += (e.event as { damage: number }).damage;
+      setReplay({ before, entries: entries.filter((e) => e.type === 'combat') });
+    } else {
       const rolls = diceOf(entries, T);
       if (rolls.length) setDice(rolls);
     }
@@ -249,7 +256,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             {hoursLeft !== null ? (locale === 'pl' ? ` · zostało ok. ${hoursLeft} h` : ` · about ${hoursLeft} h left`) : ''}
           </p>
         )}
-        <SkillHand profession={c.profession} owned={c.cards} />
+        <SkillHand
+          profession={c.profession}
+          owned={c.cards}
+          actor={me}
+          playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
+          onPlay={(card) => act({ type: 'card', card })}
+        />
         <p className="here">
           <Icon name="map" size={14} /> <b>{hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
           {me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
@@ -264,6 +277,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
           {myTurn && actions.some((a) => a.type === 'camp') && (
             <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
+          )}
+          {myTurn && actions.some((a) => a.type === 'camp' && a.research) && (
+            <button className="ghost with-icon" onClick={() => act({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
           )}
           <button className="primary" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>{t('endTurn')}</button>
         </div>
