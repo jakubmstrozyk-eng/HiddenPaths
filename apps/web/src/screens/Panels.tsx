@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ENEMIES, EVENT_BY_ID, ITEMS, type EnemyKind } from '@hp/content';
 import {
-  attacksPerTurn, eventOptions, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  attacksPerTurn, eventOptions, fightOdds, foeDamage, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type PlayerState,
 } from '@hp/engine';
 import { useT } from '../i18n';
@@ -94,6 +94,10 @@ export function CombatPanel({ game, me, lines, act }: { game: GameState; me: Pla
   const weapon = heroWeapon(me);
   const potions = [...new Set(me.inventory.items.filter((i) => ITEMS[i]?.kind === 'potion'))];
   const move = (m: Extract<Action, { type: 'combat' }>['move']) => act({ type: 'combat', move: m });
+  // Re-estimated each combat round: what keeps attacking is likely to bring.
+  const odds = useMemo(() => fightOdds(world, me, combat), [combat.turn, c.vitality, alive.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const oddsPct = Math.round(odds.win * 100);
+  const fleeChance = Math.round(successChance(c.attributes.dex, testModifier(world, me, 'dex', combat.focus ? 10 : 0)) * 100);
 
   return (
     <div className="overlay combat">
@@ -117,7 +121,7 @@ export function CombatPanel({ game, me, lines, act }: { game: GameState; me: Pla
                 <span className="foe-sprite" style={{ background: FOE_COLOURS[enemy.kind] }} aria-hidden />
                 <b>{foeName(f.uid, locale)}</b>
                 <span className="bar"><motion.span animate={{ width: `${Math.max(0, f.vitality / f.maxVitality) * 100}%` }} /></span>
-                <small>{Math.max(0, f.vitality)}/{f.maxVitality} · {t('com')} {enemy.com}</small>
+                <small>{Math.max(0, f.vitality)}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
               </motion.button>
             );
           })}
@@ -132,6 +136,9 @@ export function CombatPanel({ game, me, lines, act }: { game: GameState; me: Pla
             </small>
           </div>
         </div>
+        <p className={`odds ${oddsPct < 50 ? 'grim' : ''}`}>
+          {t('winOdds')} ~{oddsPct}%{oddsPct < 50 ? ` · ${t('fleeHint')} (${t('dex')} ${fleeChance}%)` : ''}
+        </p>
         {lines.length > 0 && (
           <ul className="card-lines combat-lines">
             {lines.slice(-8).map((l, i) => <li key={`${combat.turn}-${i}`}>{l}</li>)}

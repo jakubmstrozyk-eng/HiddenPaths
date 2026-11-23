@@ -5,7 +5,7 @@ import {
 import { DIFFICULTIES } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
-import type { Rng } from './rng';
+import { Rng as RngCtor, type Rng } from './rng';
 import { effectBonus, itemBonus, testModifier, type ActorState, type WorldView } from './terrain';
 
 /** One foe in a fight. */
@@ -308,4 +308,34 @@ export function drinkPotion(world: WorldView, actor: ActorState, id: string) {
   }
   // Clears poison too: the rules end poison "until healed".
   if (item.heal) actor.conditions = actor.conditions.filter((cnd) => cnd.id !== 'poison' && cnd.id !== 'rot' && cnd.id !== 'foulAir');
+}
+
+/**
+ * Rough odds of this fight if the hero keeps attacking, from simulated fights.
+ * Uses its own dice, so the game's dice and state are untouched; the same fight always gives the same estimate.
+ */
+export function fightOdds(world: WorldView, actor: ActorState, combat: CombatState, samples = 200): { win: number; lose: number } {
+  const seed = combat.foes.reduce((s, f) => s * 31 + f.vitality * 7 + f.uid.length, combat.turn * 7919 + actor.character.vitality);
+  const rng = new RngCtor(seed | 0);
+  let win = 0;
+  let lose = 0;
+  for (let i = 0; i < samples; i++) {
+    const a = structuredClone(actor);
+    const c = structuredClone(combat);
+    for (let turn = 0; turn < 40; turn++) {
+      const target = c.foes.find((f) => f.vitality > 0);
+      if (!target) break;
+      const { result } = combatTurn(world, a, c, { move: 'attack', target: target.uid }, rng);
+      if (result === 'won') { win++; break; }
+      if (result === 'lost' || result === 'enthralled') { lose++; break; }
+    }
+  }
+  return { win: win / samples, lose: lose / samples };
+}
+
+/** Damage a foe deals with one hit before armour: lowest and highest. */
+export function foeDamage(enemyId: string): [number, number] {
+  const e = ENEMIES[enemyId]!;
+  const base = strengthStep(e.str) + e.weapon.power;
+  return [Math.max(0, base + 1), base + 6];
 }

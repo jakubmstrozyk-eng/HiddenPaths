@@ -11,6 +11,7 @@ import { combatLine, describe, diceOf, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
 import { CombatPanel, EventPanel, StoryPanel } from './Panels';
 import { BagSheet, TownSheet } from './Sheets';
+import { Tip, type TipId } from '../Tips';
 
 /** Placeholder terrain colours; pixel-art tiles replace them in a later milestone. */
 const TERRAIN_STYLE: Record<string, string> = {
@@ -121,6 +122,15 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const quiet = myTurn && !me.pendingEvent && !me.combat && !game.winner;
   const others = game.players.filter((p) => p.id !== me.id);
   const hoursLeft = deadline ? Math.max(0, Math.round((new Date(deadline).getTime() - Date.now()) / 3_600_000)) : null;
+  const tipsFor = (): TipId[] => {
+    if (me.combat) return ['combat'];
+    if (me.pendingEvent) return ['event'];
+    if (sheet) return [];
+    const out: TipId[] = ['move'];
+    if (inTown) out.push('town');
+    if (me.speedLeft === 0) out.push('endTurn');
+    return out;
+  };
   const lastNote = last.map((e) => describe(e, T)).filter(Boolean).slice(-3).join(' · ');
 
   return (
@@ -249,6 +259,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         )}
         {dice && <DiceTray key={`dice-${game.version}`} rolls={dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
+      {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
     </div>
   );
 }
