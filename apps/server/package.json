@@ -12,10 +12,10 @@
     "@hp/content": "workspace:*",
     "@hp/engine": "workspace:*",
     "fastify": "^5.12.8",
-    "postgres": "3.4.7"
+    "postgres": "3.4.7",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.3.14",
-    "tsx": "^4.23.15"
+    "@electric-sql/pglite": "0.3.14"
   }
 }

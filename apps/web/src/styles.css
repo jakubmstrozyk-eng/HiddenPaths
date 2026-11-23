@@ -157,6 +157,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .badge { position: relative; }
 .badge::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; background: var(--glow); box-shadow: 0 0 8px var(--glow); }
 
+.hero.other { z-index: 4; opacity: 0.85; filter: drop-shadow(0 0 6px rgba(143, 123, 255, 0.7)); }
+.hero.other svg { width: 45%; }
+.hero-tag { position: absolute; bottom: 2px; font-size: 10px; text-shadow: 0 1px 2px #000; }
+.waiting { width: 100%; margin: 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
+
 /* Overlays: event cards, fights, sheets */
 .overlay {
   position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px;
@@ -264,3 +269,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   .void, .frag.reachable::before { animation: none; }
   .void-wrap.dissolving .void { animation-duration: 0.01s; }
 }
+
+/* Online */
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.row .name { flex: 1 1 220px; }
+.name.code { text-transform: uppercase; letter-spacing: 0.3em; max-width: 220px; }
+.game-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.game-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); padding: 10px; }
+.game-row.hot { border-color: var(--tile); box-shadow: 0 0 18px rgba(255, 255, 255, 0.15); }
+.game-open { flex: 1 1 220px; text-align: left; background: transparent; border: 0; padding: 4px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.game-open small { color: var(--muted); }
+.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.confirm small { color: #ff8a8a; }
+.invite-code { font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 40px; letter-spacing: 0.3em; margin: 0 0 12px; }
+.lobby-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.lobby-players li { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); padding: 6px 10px; }
+.toast { position: fixed; z-index: 50; left: 50%; transform: translateX(-50%); top: 12px; max-width: calc(100% - 32px); background: #1a1020; border: 1px solid #ff8a8a; padding: 10px 14px; margin: 0; cursor: pointer; }

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ATTRIBUTES, MISSIONS, PROFESSIONS, RACES, RACE_IDS, type Attribute, type ProfessionId, type RaceId } from '@hp/content';
 import {
-  BONUS_POINTS, MISSIONS_KEPT, Rng, createGame, drawMissionChoices, seedFromString,
-  type GameConfig, type GameState,
+  BONUS_POINTS, MISSIONS_KEPT, Rng, drawMissionChoices, seedFromString, validateCharacter,
+  type CharacterInput, type GameConfig,
 } from '@hp/engine';
 import { useT } from '../i18n';
 import { PixelHero } from '../PixelHero';
@@ -11,7 +11,8 @@ import { Choice } from './Setup';
 export function CharacterScreen({ config, onBack, onStart }: {
   config: GameConfig;
   onBack: () => void;
-  onStart: (g: GameState) => void;
+  /** Creates the game (locally or on the server). A thrown error is shown under the button. */
+  onStart: (character: CharacterInput, seed: string) => void | Promise<void>;
 }) {
   const { t, tx } = useT();
   const seed = useMemo(() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, []);
@@ -42,13 +43,20 @@ export function CharacterScreen({ config, onBack, onStart }: {
     else if (missions.length < MISSIONS_KEPT) setMissions([...missions, id]);
   };
 
-  const start = () => {
+  const [busy, setBusy] = useState(false);
+  const start = async () => {
+    const character: CharacterInput = { name: name.trim(), race, profession, bonus, missions };
     try {
-      onStart(createGame(seed, config, [{ id: 'you', character: { name, race, profession, bonus, missions } }]));
+      validateCharacter(character);
+      setBusy(true);
+      await onStart(character, seed);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
+  void config;
   const ready = name.trim().length > 0 && missions.length === MISSIONS_KEPT;
   const r = RACES[race];
 
@@ -118,7 +126,7 @@ export function CharacterScreen({ config, onBack, onStart }: {
       {error && <p className="error">{error}</p>}
       <div className="actions">
         <button className="ghost" onClick={onBack}>{t('back')}</button>
-        <button className="primary" disabled={!ready} onClick={start}>{t('start')}</button>
+        <button className="primary" disabled={!ready || busy} onClick={start}>{t('start')}</button>
       </div>
     </div>
   );

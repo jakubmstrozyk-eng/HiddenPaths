@@ -35,13 +35,13 @@ importers:
       postgres:
         specifier: 3.4.7
         version: 3.4.7
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
     devDependencies:
       '@electric-sql/pglite':
         specifier: 0.3.14
         version: 0.3.14
-      tsx:
-        specifier: ^4.23.15
-        version: 4.23.15
 
   apps/web:
     dependencies:
