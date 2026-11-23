@@ -58,3 +58,10 @@ export const ENEMIES: Record<string, Enemy> = Object.fromEntries(list.map((e) =>
 
 /** The bestiary foes a "fight a random enemy" result picks from. */
 export const RANDOM_FOES = ['wolf', 'bandit', 'giantSpider', 'mummy', 'beastman', 'raven', 'bear', 'imp'];
+
+/** Foes a "random enemy" never brings before level 3 (Jacob's rule, 2026-11-23: they are too deadly for a new hero). */
+export const LATE_RANDOM_FOES = ['giantSpider', 'beastman', 'bear'];
+export const EARLY_LEVELS = 2;
+
+/** The random-enemy pool for a hero of this level. */
+export const randomFoesFor = (level: number) => (level <= EARLY_LEVELS ? RANDOM_FOES.filter((f) => !LATE_RANDOM_FOES.includes(f)) : RANDOM_FOES);

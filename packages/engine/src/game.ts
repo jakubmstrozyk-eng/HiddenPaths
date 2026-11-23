@@ -77,6 +77,9 @@ function blockedByRiver(state: GameState, player: PlayerState, to: number): bool
   return state.map.cells[to]!.terrain !== 'river';
 }
 
+/** Jacob's rule (2026-11-23): stepping onto a fragment also costs 1 Stamina, besides its Speed. */
+export const MOVE_STAMINA = 1;
+
 function moveCost(state: GameState, to: number): number {
   const terrain = state.map.cells[to]!.terrain;
   return terrain === 'core' ? 2 : TERRAINS[terrain].hard ? 2 : 1;
@@ -102,7 +105,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   }
   const actions: Action[] = [];
   for (const n of neighbours(state.map, player.position)) {
-    if (moveCost(state, n) <= player.speedLeft && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
+    if (moveCost(state, n) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
   for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
   if (canCamp(state, player).ok) actions.push({ type: 'camp' });
@@ -117,7 +120,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   for (const id of new Set(player.inventory.items)) {
     const kind = ITEMS[id]?.kind;
     if (kind === 'potion') actions.push({ type: 'use', item: id });
-    if (kind === 'weapon' || kind === 'armour' || kind === 'shield') actions.push({ type: 'equip', item: id });
+    if (kind === 'weapon' || kind === 'armour' || (kind === 'shield' && !player.character.equipment.shield)) actions.push({ type: 'equip', item: id });
     if (kind === 'book' && !player.counters[readKey(state, id)]) actions.push({ type: 'read', item: id });
   }
   if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
@@ -149,10 +152,12 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       }
       const cost = moveCost(state, action.to);
       if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
+      if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
       if (blockedByRiver(state, player, action.to)) throw new EngineError('move.river', 'Swim across the river first.');
       player.crossedRiver = false;
       log(state, { type: 'moved', player: player.id, from: player.position, to: action.to, cost });
       player.speedLeft -= cost;
+      player.staminaLeft -= MOVE_STAMINA;
       player.cameFrom = player.position;
       player.position = action.to;
       const terrain = state.map.cells[action.to]!.terrain;
@@ -230,6 +235,11 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
 function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove) {
   if (!player.combat) throw new EngineError('combat.none', 'You are not in a fight.');
   const { events, result } = combatTurn(worldView(state), player, player.combat, move, rng);
+  // Jacob's rule (2026-11-23): a fight takes the rest of the round, so the hero is left with no Speed or Stamina.
+  if (result !== 'ongoing') {
+    player.speedLeft = 0;
+    player.staminaLeft = 0;
+  }
   for (const event of events) log(state, { type: 'combat', player: player.id, event });
   switch (result) {
     case 'won':
