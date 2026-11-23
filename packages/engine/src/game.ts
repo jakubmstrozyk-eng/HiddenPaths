@@ -1,68 +1,27 @@
-import { TERRAINS, type TerrainAction } from '@hp/content';
-import { createCharacter, levelForXp, type Character, type CharacterInput } from './character';
-import { DIFFICULTIES, dangerLevel, type GameConfig } from './config';
+import { BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
+import { createCharacter, spendPoints } from './character';
+import { combatMoves, combatTurn, drinkPotion, type CombatMove } from './combat';
+import { DIFFICULTIES, type GameConfig } from './config';
+import { test } from './dice';
 import { EngineError } from './errors';
-import { generateMap, neighbours, startCell, type GameMap } from './mapgen';
+import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
+import { generateMap, neighbours, startCell } from './mapgen';
+import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
-import { availableTerrainActions, runTerrainAction, type Effect, type Inventory, type TerrainOutcome, type WorldView } from './terrain';
+import type { Action, GameState, NewPlayer, PlayerState } from './state';
+import { availableTerrainActions, effectBonus, runTerrainAction, testModifier } from './terrain';
+import {
+  availableServices, buy, buyPrice, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, useService, usePortal,
+} from './towns';
 
-export interface PlayerState {
-  id: string;
-  character: Character;
-  position: number;
-  start: number;
-  /** Fragments this player has revealed (each player has their own fog of war). */
-  revealed: number[];
-  speedLeft: number;
-  staminaLeft: number;
-  /** Fragment the hero came from, so events can say "left" or "back". */
-  cameFrom: number | null;
-  roundsWithoutFood: number;
-  actionsSinceCamp: number;
-  inventory: Inventory;
-  effects: Effect[];
-  /** Achievement and rule counters: successful hunts, meditations per monument, and so on. */
-  counters: Record<string, number>;
-  crossedRiver: boolean;
-}
+export type { Action, GameState, LogEntry, NewPlayer, PlayerState } from './state';
+export { worldView } from './progress';
 
-export type LogEntry =
-  | { type: 'moved'; player: string; from: number; to: number; cost: number }
-  | { type: 'revealed'; player: string; cell: number; xp: number }
-  | { type: 'eventDrawn'; player: string; cell: number }
-  | { type: 'camped'; player: string; cell: number; healed: number }
-  | { type: 'ate'; player: string; foodLeft: number }
-  | { type: 'hungry'; player: string; rounds: number; vitalityLost: number }
-  | { type: 'respawned'; player: string; cell: number }
-  | { type: 'levelUp'; player: string; level: number }
-  | { type: 'turnEnded'; player: string; next: string; round: number }
-  | ({ player: string } & TerrainOutcome);
+/** Log entries kept in the game state. */
+export const LOG_LIMIT = 150;
 
-export interface GameState {
-  seed: string;
-  rng: number;
-  config: GameConfig;
-  map: GameMap;
-  players: PlayerState[];
-  /** Player ids in turn order (highest Dexterity first). */
-  turnOrder: string[];
-  turnIndex: number;
-  round: number;
-  /** Increases with every applied action; the server uses it to reject stale or double submits. */
-  version: number;
-  log: LogEntry[];
-}
-
-export interface NewPlayer {
-  id: string;
-  character: CharacterInput;
-}
-
-export type Action =
-  | { type: 'move'; to: number }
-  | { type: 'camp' }
-  | { type: 'terrain'; action: TerrainAction }
-  | { type: 'endTurn' };
+/** XP for winning, from the "Tryby Gry" chapter. */
+export const WIN_XP = { stone: 40, exploration: 30 };
 
 export function createGame(seed: string, config: GameConfig, newPlayers: NewPlayer[]): GameState {
   if (newPlayers.length < 1 || newPlayers.length > 4) throw new EngineError('game.players', 'A game has 1 to 4 players.');
@@ -80,16 +39,21 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
       character,
       position: start,
       start,
+      respawnAt: start,
       revealed: [start],
       speedLeft: character.speed,
       staminaLeft: character.stamina,
       cameFrom: null,
       roundsWithoutFood: 0,
       actionsSinceCamp: 0,
-      inventory: { materials: {}, herbs: {} },
+      inventory: { materials: {}, herbs: {}, items: [] },
       effects: [],
+      conditions: [],
       counters: {},
       crossedRiver: false,
+      pendingEvent: null,
+      combat: null,
+      hasStone: false,
     };
   });
   // Initiative: higher Dexterity acts first; seat order breaks ties.
@@ -97,22 +61,13 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
     .map((p, seat) => ({ id: p.id, dex: p.character.attributes.dex, seat }))
     .sort((a, b) => b.dex - a.dex || a.seat - b.seat)
     .map((p) => p.id);
-  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, version: 0, log: [] };
+  const eventDeck = rng.shuffle(ALL_EVENT_IDS);
+  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [] };
 }
 
 export function currentPlayer(state: GameState): PlayerState {
   const id = state.turnOrder[state.turnIndex]!;
   return state.players.find((p) => p.id === id)!;
-}
-
-export function worldView(state: GameState): WorldView {
-  return {
-    round: state.round,
-    difficulty: state.config.difficulty,
-    terrainAt: (cell) => state.map.cells[cell]!.terrain,
-    ringAt: (cell) => state.map.cells[cell]!.ring,
-    maxRing: state.map.maxRing,
-  };
 }
 
 /** A river blocks onward travel until the hero swims across; going back the way they came is always allowed. */
@@ -134,18 +89,45 @@ function canCamp(state: GameState, player: PlayerState): { ok: boolean; cost: nu
   return { ok: player.staminaLeft >= cost, cost };
 }
 
+const readKey = (state: GameState, item: string) => `read:${item}@${state.round}`;
+
 /** Everything the player may do right now. The app builds its buttons from this list. */
 export function legalActions(state: GameState, playerId: string): Action[] {
+  if (state.winner) return [];
   const player = currentPlayer(state);
   if (player.id !== playerId) return [];
+  if (player.combat) return combatMoves(player, player.combat).map((move) => ({ type: 'combat', move }));
+  if (player.pendingEvent) {
+    return eventOptions(state, player).filter((o) => o.affordable).map((o) => ({ type: 'event', option: o.index }));
+  }
   const actions: Action[] = [];
   for (const n of neighbours(state.map, player.position)) {
     if (moveCost(state, n) <= player.speedLeft && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
   for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
   if (canCamp(state, player).ok) actions.push({ type: 'camp' });
+  for (const service of availableServices(state, player)) actions.push({ type: 'service', service });
+  for (const to of portalTargets(state, player)) actions.push({ type: 'portal', to });
+  for (const item of ['food', ...shopStock(state, player)]) {
+    const price = buyPrice(state, player, item);
+    if (price !== null && price <= player.character.gold) actions.push({ type: 'buy', item });
+  }
+  const sellable = new Set<string>(['food', ...player.inventory.items, ...Object.keys(player.inventory.materials), ...Object.keys(player.inventory.herbs)]);
+  for (const item of sellable) if (sellPrice(state, player, item) !== null) actions.push({ type: 'sell', item });
+  for (const id of new Set(player.inventory.items)) {
+    const kind = ITEMS[id]?.kind;
+    if (kind === 'potion') actions.push({ type: 'use', item: id });
+    if (kind === 'weapon' || kind === 'armour' || kind === 'shield') actions.push({ type: 'equip', item: id });
+    if (kind === 'book' && !player.counters[readKey(state, id)]) actions.push({ type: 'read', item: id });
+  }
+  if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
   actions.push({ type: 'endTurn' });
   return actions;
+}
+
+function busy(player: PlayerState) {
+  if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
+  if (player.pendingEvent) throw new EngineError('event.pending', 'Answer the event first.');
 }
 
 /**
@@ -153,10 +135,12 @@ export function legalActions(state: GameState, playerId: string): Action[] {
  * so the server can keep the old version until the new one is saved.
  */
 export function applyAction(prev: GameState, playerId: string, action: Action): GameState {
+  if (prev.winner) throw new EngineError('game.over', 'The game is over.');
   const state = structuredClone(prev);
   const rng = new Rng(state.rng);
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
+  if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'spend') busy(player);
 
   switch (action.type) {
     case 'move': {
@@ -167,21 +151,14 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
       if (blockedByRiver(state, player, action.to)) throw new EngineError('move.river', 'Swim across the river first.');
       player.crossedRiver = false;
-      state.log.push({ type: 'moved', player: player.id, from: player.position, to: action.to, cost });
+      log(state, { type: 'moved', player: player.id, from: player.position, to: action.to, cost });
       player.speedLeft -= cost;
       player.cameFrom = player.position;
       player.position = action.to;
-      if (!player.revealed.includes(action.to)) {
-        player.revealed.push(action.to);
-        const cell = state.map.cells[action.to]!;
-        const settings = DIFFICULTIES[state.config.difficulty];
-        const xp = 1 * settings.xp * (1 + dangerLevel(cell.ring, state.map.maxRing, settings));
-        gainXp(state, player, xp);
-        state.log.push({ type: 'revealed', player: player.id, cell: action.to, xp });
-        if (cell.terrain !== 'core' && TERRAINS[cell.terrain].drawsEvent) {
-          // Event cards arrive in milestone 2; the draw is recorded so replays stay stable.
-          state.log.push({ type: 'eventDrawn', player: player.id, cell: action.to });
-        }
+      const terrain = state.map.cells[action.to]!.terrain;
+      if (reveal(state, player, action.to) && drawsEvent(terrain)) {
+        const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
+        if (card !== null) startEvent(state, player, card);
       }
       break;
     }
@@ -192,39 +169,165 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       const healed = Math.min(2, player.character.maxVitality - player.character.vitality);
       player.character.vitality += healed;
       player.actionsSinceCamp = 0;
-      state.log.push({ type: 'camped', player: player.id, cell: player.position, healed });
-      endTurn(state, player);
+      log(state, { type: 'camped', player: player.id, cell: player.position, healed });
+      endTurn(state, player, rng);
       break;
     }
     case 'terrain': {
       const outcome = runTerrainAction(worldView(state), player, action.action, rng);
-      state.log.push({ player: player.id, ...outcome });
+      log(state, { player: player.id, ...outcome });
       break;
     }
+    case 'event':
+      chooseEventOption(state, player, rng, action.option);
+      break;
+    case 'combat':
+      fight(state, player, rng, action.move);
+      break;
+    case 'service':
+      useService(state, player, rng, action.service);
+      break;
+    case 'buy':
+      buy(state, player, action.item);
+      break;
+    case 'sell':
+      sell(state, player, action.item);
+      break;
+    case 'portal':
+      usePortal(state, player, action.to);
+      break;
+    case 'use':
+      if (!player.inventory.items.includes(action.item)) throw new EngineError('item.missing', 'You do not carry that.');
+      drinkPotion(worldView(state), player, action.item);
+      player.inventory.items.splice(player.inventory.items.indexOf(action.item), 1);
+      log(state, { type: 'change', player: player.id, change: { what: 'item', item: action.item, amount: -1 } });
+      break;
+    case 'equip':
+      equip(state, player, action.item);
+      break;
+    case 'read':
+      readBook(state, player, rng, action.item);
+      break;
+    case 'spend':
+      if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
+      spendPoints(player.character, action.bonus);
+      break;
     case 'endTurn':
-      endTurn(state, player);
+      endTurn(state, player, rng);
       break;
     default:
       throw new EngineError('action.unknown', 'Unknown action.');
   }
 
+  afterAction(state, player);
+  // The state keeps a short recent log for the app; the server stores the full history.
+  if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
   state.rng = rng.state;
   state.version++;
   return state;
 }
 
-function gainXp(state: GameState, player: PlayerState, xp: number) {
-  const before = player.character.level;
-  player.character.xp += xp;
-  const after = levelForXp(player.character.xp);
-  if (after > before) {
-    player.character.level = after;
-    state.log.push({ type: 'levelUp', player: player.id, level: after });
+function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove) {
+  if (!player.combat) throw new EngineError('combat.none', 'You are not in a fight.');
+  const { events, result } = combatTurn(worldView(state), player, player.combat, move, rng);
+  for (const event of events) log(state, { type: 'combat', player: player.id, event });
+  switch (result) {
+    case 'won':
+      winCombat(state, player, rng);
+      break;
+    case 'fled':
+    case 'enthralled':
+      log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
+      player.combat = null;
+      if (result === 'enthralled') {
+        // Under the witch's spell: she takes the hero's gold and the rest of the round.
+        runOutcomes(state, player, rng, [{ do: 'gold', amount: -player.character.gold }, { do: 'loseSpeed' }]);
+      } else if (player.cameFrom !== null) {
+        log(state, { type: 'moved', player: player.id, from: player.position, to: player.cameFrom, cost: 0, pushed: true });
+        [player.position, player.cameFrom] = [player.cameFrom, player.position];
+      }
+      break;
+    case 'lost':
+      log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
+      break;
+    case 'ongoing':
+      break;
+  }
+}
+
+function equip(state: GameState, player: PlayerState, id: string) {
+  const inv = player.inventory.items;
+  if (!inv.includes(id)) throw new EngineError('item.missing', 'You do not carry that.');
+  const item = ITEMS[id]!;
+  const eq = player.character.equipment;
+  const take = () => inv.splice(inv.indexOf(id), 1);
+  if (item.kind === 'weapon') {
+    take();
+    inv.push(eq.weapon);
+    eq.weapon = id;
+    eq.rune = null; // a rune belongs to the blade it was set on
+  } else if (item.kind === 'armour') {
+    take();
+    const keep: string[] = [];
+    for (const worn of eq.armour) {
+      const w = ITEMS[worn];
+      if (w?.kind === 'armour' && w.covers.some((s) => item.covers.includes(s))) inv.push(worn);
+      else keep.push(worn);
+    }
+    eq.armour = [...keep, id];
+  } else if (item.kind === 'shield') {
+    if (eq.shield) throw new EngineError('item.worn', 'You already carry a shield.');
+    take();
+    eq.shield = true;
+  } else {
+    throw new EngineError('item.notGear', 'That cannot be worn.');
+  }
+  log(state, { type: 'change', player: player.id, change: { what: 'item', item: id, amount: 0 } });
+}
+
+/** Reading a book: one Intelligence test a round; the 3rd good reading teaches its lesson. */
+function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
+  const item = ITEMS[id];
+  if (item?.kind !== 'book' || !player.inventory.items.includes(id)) throw new EngineError('item.missing', 'You have no such book.');
+  const key = readKey(state, id);
+  if (player.counters[key]) throw new EngineError('book.once', 'You can read this book once a round.');
+  player.counters[key] = 1;
+  const result = test(rng, player.character.attributes.int, testModifier(worldView(state), player, 'int'));
+  log(state, { type: 'check', player: player.id, attribute: 'int', result });
+  if (!result.success) return;
+  const count = (player.counters[`book:${id}`] ?? 0) + 1;
+  player.counters[`book:${id}`] = count;
+  if (count < BOOK_READINGS) return;
+  player.inventory.items.splice(player.inventory.items.indexOf(id), 1);
+  for (const lesson of item.teaches) {
+    if (lesson.target === 'mine') runOutcomes(state, player, rng, [{ do: 'skill', skill: 'mine', amount: lesson.amount }]);
+    else runOutcomes(state, player, rng, [{ do: 'permanent', target: lesson.target, amount: lesson.amount }]);
+  }
+}
+
+/** Death, the Stone of Beginnings, the Fountain of rebirth and the win conditions. */
+function afterAction(state: GameState, player: PlayerState) {
+  if (player.character.vitality <= 0) respawn(state, player);
+  const cell = state.map.cells[player.position]!;
+  if (cell.terrain === 'city') player.respawnAt = player.position;
+  if (cell.terrain === 'core' && !state.players.some((p) => p.hasStone)) {
+    player.hasStone = true;
+    log(state, { type: 'stoneTaken', player: player.id, cell: player.position });
+  }
+  if (state.winner || player.combat || player.pendingEvent) return;
+  const won =
+    (state.config.winMode === 'stone' && player.hasStone && isSettlement(state, player.position) && placeOf(state, player) === 'city')
+    || (state.config.winMode === 'exploration' && player.revealed.length === state.map.cells.length);
+  if (won) {
+    const xp = WIN_XP[state.config.winMode];
+    gainXp(state, player, xp);
+    state.winner = player.id;
+    log(state, { type: 'won', player: player.id, mode: state.config.winMode, xp });
   }
 }
 
 /** End-of-turn upkeep for one player, then the turn passes on. */
-function endTurn(state: GameState, player: PlayerState) {
+function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   const c = player.character;
   // Sunborn need food only every second round.
   const needsFood = c.race !== 'sunborn' || state.round % 2 === 1;
@@ -234,33 +337,34 @@ function endTurn(state: GameState, player: PlayerState) {
     if (c.food >= meals) {
       c.food -= meals;
       player.roundsWithoutFood = 0;
-      state.log.push({ type: 'ate', player: player.id, foodLeft: c.food });
+      log(state, { type: 'ate', player: player.id, foodLeft: c.food });
     } else {
       player.roundsWithoutFood++;
       const lost = player.roundsWithoutFood === 3 ? 5 : player.roundsWithoutFood === 6 ? 10 : 0;
       if (player.roundsWithoutFood >= 9) c.vitality = 0;
       else c.vitality -= lost;
-      state.log.push({ type: 'hungry', player: player.id, rounds: player.roundsWithoutFood, vitalityLost: lost });
+      log(state, { type: 'hungry', player: player.id, rounds: player.roundsWithoutFood, vitalityLost: lost });
     }
   }
-  if (c.vitality <= 0) {
-    player.position = player.start;
-    player.cameFrom = null;
-    c.vitality = Math.ceil(c.maxVitality / 2);
-    player.roundsWithoutFood = 0;
-    state.log.push({ type: 'respawned', player: player.id, cell: player.start });
-  }
+  if (c.vitality <= 0) respawn(state, player);
 
   state.turnIndex++;
   if (state.turnIndex >= state.turnOrder.length) {
     state.turnIndex = 0;
     state.round++;
-    for (const p of state.players) p.effects = p.effects.filter((e) => e.untilRound >= state.round);
+    for (const p of state.players) {
+      p.effects = p.effects.filter((e) => e.untilRound >= state.round);
+      // Per-round limits (market, gossip, reading) are keyed by round; drop the old ones.
+      for (const key of Object.keys(p.counters)) if (key.includes('@') && Number(key.split('@')[1]) < state.round) delete p.counters[key];
+    }
   }
   const next = currentPlayer(state);
-  next.speedLeft = next.character.speed;
-  next.staminaLeft = next.character.stamina;
-  state.log.push({ type: 'turnEnded', player: player.id, next: next.id, round: state.round });
+  next.speedLeft = Math.max(0, next.character.speed + effectBonus(next, state.round, 'speed'));
+  next.staminaLeft = Math.max(0, next.character.stamina + effectBonus(next, state.round, 'stamina'));
+  log(state, { type: 'turnEnded', player: player.id, next: next.id, round: state.round });
+  // Poison, nightmares and the like strike at the start of the hero's turn.
+  tickConditions(state, next, rng);
+  if (next.character.vitality <= 0) respawn(state, next);
 }
 
 /** True once the hero has a reason to stop: no Speed for any move. */
@@ -268,3 +372,4 @@ export function isStuck(state: GameState): boolean {
   return !legalActions(state, currentPlayer(state).id).some((a) => a.type === 'move');
 }
 
+export { giveItem };

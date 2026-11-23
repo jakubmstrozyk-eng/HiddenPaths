@@ -1,6 +1,7 @@
 import {
-  COMMON_ORES, HERB_IDS, RARE_ORES, TERRAINS,
-  type Attribute, type HerbId, type MaterialId, type TerrainAction,
+  COMMON_ORES, HERB_IDS, ITEMS, RARE_ORES, TERRAINS,
+  type Attribute, type EffectTarget, type EnemyKind, type HerbId, type MaterialId, type Outcome,
+  type RaceId, type SkillId, type TerrainAction, type Text,
 } from '@hp/content';
 import { DIFFICULTIES, dangerLevel } from './config';
 import { test, type TestResult } from './dice';
@@ -10,22 +11,52 @@ import type { Rng } from './rng';
 /** A timed bonus or penalty. `attribute: 'all'` applies to every base attribute. */
 export interface Effect {
   id: string;
-  attribute: Attribute | 'all';
+  attribute: EffectTarget;
   amount: number;
   /** Last round (inclusive) the effect applies. */
   untilRound: number;
+  /** Only in fights against this kind of foe. */
+  vs?: EnemyKind;
 }
+
+/** Effects that last for the rest of the game use this as their last round. */
+export const FOREVER = 1_000_000;
 
 export interface Inventory {
   materials: Partial<Record<MaterialId, number>>;
   herbs: Partial<Record<HerbId, number>>;
+  /** Carried items by id (gear not worn, potions, trinkets, books). Trinkets work while carried. */
+  items: string[];
 }
+
+/** A lasting condition such as poison or a nightmare, tested at the end of each turn. */
+export interface Condition {
+  id: string;
+  name: Text;
+  test: Attribute;
+  modifier: number;
+  worsen: number;
+  each: Outcome[];
+}
+
+export interface Equipment {
+  weapon: string;
+  /** Worn armour pieces by item id. */
+  armour: string[];
+  shield: boolean;
+  /** A rune set on the weapon by a runic smith. */
+  rune: Rune | null;
+}
+
+/** Weapon runes from the runic smith's d10 table. */
+export type Rune = 'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing';
 
 /** The parts of a player's state that terrain actions read and change. */
 export interface ActorState {
   id: string;
   position: number;
   cameFrom: number | null;
+  speedLeft: number;
   staminaLeft: number;
   actionsSinceCamp: number;
   inventory: Inventory;
@@ -33,12 +64,16 @@ export interface ActorState {
   counters: Record<string, number>;
   /** Set by a successful swim; lets the hero leave a river fragment onwards. */
   crossedRiver: boolean;
+  conditions: Condition[];
   character: {
+    race: RaceId;
     attributes: Record<Attribute, number>;
     vitality: number;
     maxVitality: number;
     food: number;
     gold: number;
+    skills: Partial<Record<SkillId, number>>;
+    equipment: Equipment;
   };
 }
 
@@ -65,14 +100,31 @@ export function fatiguePenalty(actionsSinceCamp: number): number {
   return 0;
 }
 
-/** Every modifier on a test right now: difficulty, danger rings, fatigue and timed effects. */
-export function testModifier(world: WorldView, actor: ActorState, attribute: Attribute, extra = 0): number {
+/** Bonuses from carried trinkets for a target, optionally against a kind of foe or a race. */
+export function itemBonus(actor: Pick<ActorState, 'inventory'>, target: string, vs?: string): number {
+  let sum = 0;
+  for (const id of actor.inventory.items) {
+    const item = ITEMS[id];
+    for (const b of item?.bonuses ?? []) {
+      if ((b.target === target || (b.target === 'all' && target !== 'initiative' && target !== 'damage')) && (!b.vs || b.vs === vs)) sum += b.amount;
+    }
+  }
+  return sum;
+}
+
+/** Timed effects on a target this round: an attribute, Speed, Stamina or damage. */
+export function effectBonus(actor: Pick<ActorState, 'effects'>, round: number, target: EffectTarget, vs?: string): number {
+  return actor.effects
+    .filter((e) => e.untilRound >= round && (e.attribute === target || (e.attribute === 'all' && target !== 'speed' && target !== 'stamina' && target !== 'damage')) && (!e.vs || e.vs === vs))
+    .reduce((sum, e) => sum + e.amount, 0);
+}
+
+/** Every modifier on a test right now: difficulty, danger rings, fatigue, timed effects and trinkets. */
+export function testModifier(world: WorldView, actor: ActorState, attribute: Attribute, extra = 0, vs?: string): number {
   const settings = DIFFICULTIES[world.difficulty];
   const danger = dangerLevel(world.ringAt(actor.position), world.maxRing, settings);
-  const effects = actor.effects
-    .filter((e) => e.untilRound >= world.round && (e.attribute === attribute || e.attribute === 'all'))
-    .reduce((sum, e) => sum + e.amount, 0);
-  return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp) + effects + extra;
+  return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp)
+    + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + extra;
 }
 
 /** The terrain actions available on the hero's fragment right now (camping is handled separately). */
@@ -103,8 +155,12 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
   actor.staminaLeft -= ACTION_COST[action]!;
   if (ACTION_COST[action]! > 0) actor.actionsSinceCamp++;
   const gained: string[] = [];
+  const skills = actor.character.skills;
+  const skill: Partial<Record<TerrainAction, number>> = {
+    hunt: skills.hunt ?? 0, gather: skills.gather ?? 0, herbalism: skills.herbalism ?? 0, mine: skills.mine ?? 0,
+  };
   const roll = (attribute: Attribute, extra = 0) =>
-    test(rng, attrs[attribute], testModifier(world, actor, attribute, extra));
+    test(rng, attrs[attribute], testModifier(world, actor, attribute, extra + (skill[action] ?? 0)));
 
   switch (action) {
     case 'hunt': {
@@ -157,7 +213,7 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
         if (terrain === 'cave') {
           actor.character.food += 1; // a mushroom
           gained.push('food:1');
-        } else if (test(rng, attrs.int, testModifier(world, actor, 'int', -10)).success) {
+        } else if (test(rng, attrs.int, testModifier(world, actor, 'int', -10 + (skill.mine ?? 0))).success) {
           const rare = RARE_ORES[rng.int(RARE_ORES.length)]!;
           add(actor.inventory.materials, rare);
           gained.push(`material:${rare}`);

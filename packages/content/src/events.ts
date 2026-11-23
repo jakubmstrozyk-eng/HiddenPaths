@@ -1,0 +1,519 @@
+import type { EventCard, EventOption, Outcome } from './eventTypes';
+import type { Text } from './types';
+
+const t = (pl: string, en: string): Text => ({ pl, en });
+const opt = (label: Text, then: Outcome[], cost?: EventOption['cost']): EventOption => ({ label, then, ...(cost ? { cost } : {}) });
+
+const GO = t('Dalej', 'Continue');
+const LEAVE = t('Idę dalej', 'Walk on');
+const FIGHT = t('Do walki!', 'Fight!');
+const leave = opt(LEAVE, []);
+const fightOnly = (enemies: string[], onWin: Outcome[] = []) => ({ start: { options: [opt(FIGHT, [{ do: 'fight', enemies, onWin }])] } });
+const single = (then: Outcome[], label = GO) => ({ start: { options: [opt(label, then)] } });
+
+/**
+ * The event cards in the MVP, from the "Karty Wydarzeń" chapter. Cards that other players
+ * judged at the table (riddles, stories) are multiple choice here, as agreed in the plan.
+ */
+export const EVENTS: EventCard[] = [
+  {
+    id: 1, hostile: true,
+    title: t('Posłaniec z zaświatów', 'Messenger from beyond'),
+    text: t('Widzisz przed sobą niewyraźną humanoidalną postać, która unosi się w powietrzu i zawodzi.', 'A blurred, human-like shape floats in the air before you, wailing.'),
+    steps: single([{
+      do: 'test', attribute: 'wil', modifier: 10,
+      fail: [{ do: 'effect', target: 'all', amount: -10, rounds: 2 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 2 }],
+      pass: [{ do: 'fight', enemies: ['giantSpider'], onWin: [{ do: 'gold', amount: 2 }, { do: 'item', item: 'shortSword' }, { do: 'effect', target: 'com', amount: 10, rounds: 0, vs: 'beast' }] }],
+    }], t('Opieram się zawodzeniu (SW +10)', 'Resist the wailing (Wil +10)')),
+  },
+  {
+    id: 2, hostile: false,
+    title: t('Mędrzec', 'The sage'),
+    text: t('Na swojej drodze spotykasz mędrca Opiekuna. Za drobną ofiarę oferuje Ci swoje nauki.', 'You meet a Keeper sage on the road. For a small offering he will teach you.'),
+    steps: { start: { options: [
+      opt(t('Daję 1 zł.', 'Give 1 gold'), [{ do: 'ifRace', race: 'keepers', then: [{ do: 'permanent', target: 'int', amount: 10 }], else: [{ do: 'permanent', target: 'int', amount: 5 }] }], { gold: 1 }),
+      opt(t('Daję 3 pożywienia', 'Give 3 food'), [{ do: 'ifRace', race: 'keepers', then: [{ do: 'permanent', target: 'int', amount: 10 }], else: [{ do: 'permanent', target: 'int', amount: 5 }] }], { food: 3 }),
+      leave,
+    ] } },
+  },
+  {
+    id: 3, hostile: true,
+    title: t('Wataha wilków', 'Wolf pack'),
+    text: t('Na swojej drodze spotykasz watahę wilków. Bestie są wyraźnie wygłodniałe. Szykuj się do walki!', 'A pack of wolves blocks your way, plainly starving. Get ready to fight!'),
+    steps: fightOnly(['wolf', 'wolf', 'wolf']),
+  },
+  {
+    id: 4, hostile: true,
+    title: t('Mistral', 'Mistral'),
+    text: t('Wiatr nagle nabiera prędkości i mocy. Świat ciemnieje, a wszystko co żywe szuka schronienia.', 'The wind suddenly gains speed and power. The world darkens and every living thing takes cover.'),
+    steps: single([{ do: 'test', attribute: 'str', fail: [{ do: 'vitality', amount: -6 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 2 }] }], t('Stawiam czoła wichrowi (S)', 'Brace against the wind (Str)')),
+  },
+  {
+    id: 5, hostile: false,
+    title: t('Zagadka satyra', "The satyr's riddle"),
+    text: t('Sędziwy satyr proponuje grę: odpowiedz na zagadkę, a otrzymasz błogosławieństwo szczęścia. „Jakie 5 rzeczy potrzebuje każdy wędrowiec?”', 'An ancient satyr offers a game: answer his riddle and earn a blessing of luck. "What 5 things does every wanderer need?"'),
+    steps: { start: { options: [
+      opt(t('Jedzenie, woda, ogień, ostrze i płaszcz', 'Food, water, fire, a blade and a cloak'), [{ do: 'effect', target: 'com', amount: 10, rounds: 5 }]),
+      opt(t('Złoto, złoto, złoto, koń i korona', 'Gold, gold, gold, a horse and a crown'), []),
+      leave,
+    ] } },
+  },
+  {
+    id: 6, hostile: false,
+    title: t('Zaginiony kwiat Nomadów', 'Lost flower of the Nomads'),
+    text: t('Niedaleko dostrzegasz przepiękny brunatny kwiat.', 'Not far away you notice a beautiful russet flower.'),
+    steps: single([{
+      do: 'test', attribute: 'int', raceBonus: { race: 'nomads', amount: 10 },
+      pass: [{ do: 'effect', target: 'dex', amount: 10, rounds: 2 }, { do: 'effect', target: 'speed', amount: 1, rounds: 2 }, { do: 'vitality', amount: 2 }],
+    }], t('Zrywam kwiat (Int)', 'Pick the flower (Int)')),
+  },
+  {
+    id: 7, hostile: true,
+    title: t('Ciemna materia', 'Dark matter'),
+    text: t('Ciemna materia świata zaczyna się kurczyć na Twoich oczach. Musisz jak najszybciej przejść na stabilny teren.', 'The dark matter of the world shrinks before your eyes. You must reach stable ground at once.'),
+    steps: single([{ do: 'loseSpeed' }, {
+      do: 'test', attribute: 'dex',
+      fail: [{ do: 'stuck', rounds: 2 }],
+      pass: [{ do: 'move', direction: 'forward', distance: 1 }],
+    }], t('Uciekam (Zr)', 'Run (Dex)')),
+  },
+  {
+    id: 8, hostile: false,
+    title: t('Pomocna dłoń', 'A helping hand'),
+    text: t('Młoda Słoneczna walczy zaciekle z pomniejszymi demonami czeluści. Pomożesz jej?', 'A young Sunborn is fighting lesser demons of the abyss. Will you help her?'),
+    steps: { start: { options: [
+      opt(t('Pomagam', 'Help her'), [{ do: 'fight', enemies: ['youngVoidDemon', 'youngVoidDemon'], onWin: [{ do: 'item', item: 'sunMedallion' }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 9, hostile: false,
+    title: t('Portal', 'Portal'),
+    text: t('Widzisz ciemną plamę czarnej materii, która wygląda jak kałuża. Dotkniesz jej?', 'A dark patch of black matter lies before you like a puddle. Will you touch it?'),
+    steps: { start: { options: [
+      opt(t('Dotykam materii', 'Touch the matter'), [{ do: 'move', direction: 'forward', distance: 'd10' }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 10, hostile: true,
+    title: t('Nawałnica', 'Tempest'),
+    text: t('Atakuje Cię gwałtowna nawałnica. Wiatr, błyskawice i ulewa zdają się nie mieć końca.', 'A violent tempest breaks over you. Wind, lightning and rain seem endless.'),
+    steps: single([{ do: 'test', attribute: 'str', fail: [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }, { do: 'effect', target: 'all', amount: -10, rounds: 1 }] }], t('Przetrwam (S)', 'Endure it (Str)')),
+  },
+  {
+    id: 11, hostile: true,
+    title: t('Lawina', 'Landslide'),
+    text: t('Teren okazuje się niestabilny. Nagle ucieka Ci grunt spod nóg.', 'The ground is unstable. Suddenly it slides from under your feet.'),
+    steps: single([{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'halfVitality' }, { do: 'stuck', rounds: 1 }] }], t('Skaczę w bok (Zr -10)', 'Leap aside (Dex -10)')),
+  },
+  {
+    id: 12, hostile: false,
+    title: t('Karawana', 'The caravan'),
+    text: t('Na horyzoncie grupa bandytów napada na małą karawanę. Co robisz?', 'On the horizon, bandits are attacking a small caravan. What do you do?'),
+    steps: { start: { options: [
+      opt(t('Pomagam karawanie', 'Help the caravan'), [{ do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 2 }, { do: 'item', item: 'protectiveAmulet' }, { do: 'xp', amount: 5 }] }]),
+      opt(t('Pomagam bandytom', 'Help the bandits'), [{ do: 'fight', enemies: ['caravanDriver'], onWin: [{ do: 'gold', amount: 2 }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 13, hostile: false,
+    title: t('Magiczny staw', 'The magic pond'),
+    text: t('Kilka kroków dalej błyszczy mały staw o dziwnym czarnym kolorze.', 'A few steps away glimmers a small pond of a strange black colour.'),
+    steps: { start: { options: [
+      opt(t('Przyglądam się (SW)', 'Look into it (Wil)'), [{
+        do: 'test', attribute: 'wil',
+        pass: [{ do: 'effect', target: 'com', amount: 10, rounds: 2 }, { do: 'effect', target: 'dex', amount: 10, rounds: 2 }],
+        fail: [{ do: 'effect', target: 'com', amount: -10, rounds: 2 }, { do: 'effect', target: 'dex', amount: -10, rounds: 2 }],
+      }]),
+      opt(t('Wchodzę do stawu (S -20)', 'Wade in (Str -20)'), [{
+        do: 'test', attribute: 'str', modifier: -20,
+        pass: [{ do: 'permanent', target: 'maxVitality', amount: 2 }],
+        fail: [{ do: 'vitality', amount: -4 }],
+      }]),
+      opt(t('Nie podchodzę', 'Keep away'), []),
+    ] } },
+  },
+  {
+    id: 14, hostile: false,
+    title: t('Powidoki', 'Afterimages'),
+    text: t('Niedaleko majaczy sylwetka młodej niewiasty. Nagle znika za drzewem.', 'Nearby you glimpse the shape of a young woman. Suddenly she vanishes behind a tree.'),
+    steps: { start: { options: [
+      opt(t('Gonię ją', 'Chase her'), [{ do: 'fight', enemies: ['banshee'], onWin: [{ do: 'randomItem', rare: true }] }]),
+      opt(t('Zatrzymuję się (SW +10)', 'Stand still (Wil +10)'), [{
+        do: 'test', attribute: 'wil', modifier: 10,
+        fail: [{ do: 'effect', target: 'wil', amount: -10, rounds: 3 }, { do: 'effect', target: 'int', amount: -10, rounds: 3 }, { do: 'effect', target: 'cha', amount: -10, rounds: 3 }],
+      }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 15, hostile: false,
+    title: t('Wędrowny kupiec', 'The wandering merchant'),
+    text: t('Wędrowny kupiec przez przypadek przekroczył granice materii. Za 3 porcje prowiantu oferuje Ci wzmocnione buty skórzane (pancerz 2 na nogi).', 'A wandering merchant has strayed past the edge of the matter. For 3 food he offers you reinforced leather boots (armour 2 on the legs).'),
+    steps: {
+      start: { options: [
+        opt(t('Dzielę się prowiantem (3)', 'Share 3 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 3 }),
+        opt(t('Targuję się (Ch -10)', 'Haggle (Cha -10)'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'goto', step: 'cheap' }], fail: [{ do: 'goto', step: 'full' }] }]),
+        leave,
+      ] },
+      cheap: { text: t('Kupiec zgadza się na 2 porcje.', 'The merchant agrees to 2 food.'), options: [opt(t('Daję 2 pożywienia', 'Give 2 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 2 }), leave] },
+      full: { text: t('Kupiec nie ustępuje.', 'The merchant will not budge.'), options: [opt(t('Daję 3 pożywienia', 'Give 3 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 3 }), leave] },
+    },
+  },
+  {
+    id: 16, hostile: false,
+    title: t('Owoc życia', 'Fruit of life'),
+    text: t('Na szczycie stromego wzniesienia rośnie olbrzymie drzewo o złotych liściach i szkarłatnych owocach.', 'On top of a steep rise grows a huge tree with golden leaves and crimson fruit.'),
+    steps: {
+      start: { options: [
+        opt(t('Wspinam się (Zr -20)', 'Climb (Dex -20)'), [{
+          do: 'test', attribute: 'dex', modifier: -20,
+          pass: [{ do: 'permanent', target: 'maxVitality', amount: 2 }, { do: 'vitality', amount: 2 }, { do: 'move', direction: 'random', distance: 1 }],
+          fail: [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'dex', amount: -10, rounds: 1 }, { do: 'effect', target: 'str', amount: -10, rounds: 1 }, { do: 'effect', target: 'com', amount: -10, rounds: 1 }, { do: 'goto', step: 'again' }],
+        }]),
+        leave,
+      ] },
+      again: { text: t('Spadasz. Spróbujesz jeszcze raz?', 'You fall. Try again?'), options: [
+        opt(t('Jeszcze raz (Zr -20)', 'Once more (Dex -20)'), [{
+          do: 'test', attribute: 'dex', modifier: -20,
+          pass: [{ do: 'permanent', target: 'maxVitality', amount: 2 }, { do: 'vitality', amount: 2 }, { do: 'move', direction: 'random', distance: 1 }],
+          fail: [{ do: 'vitality', amount: -6 }, { do: 'effect', target: 'str', amount: -20, rounds: 3 }, { do: 'effect', target: 'dex', amount: -20, rounds: 3 }, { do: 'effect', target: 'com', amount: -20, rounds: 3 }, { do: 'effect', target: 'speed', amount: -1, rounds: 3 }],
+        }]),
+        leave,
+      ] },
+    },
+  },
+  {
+    id: 17, hostile: false,
+    title: t('Posąg spragniony wiedzy', 'The statue hungry for knowledge'),
+    text: t('Przy drodze stoi posąg zamyślonego starca. Napis głosi: „wiedza jest moim pokarmem”. Co mu powiesz?', 'By the road stands a statue of a thoughtful old man. The plaque says: "knowledge is my food". What will you tell him?'),
+    steps: { start: { options: [
+      opt(t('Rzeki zatrzymują wędrowca, póki ich nie przepłynie', 'Rivers stop a wanderer until they swim across'), [{ do: 'permanent', target: 'int', amount: 5 }]),
+      opt(t('Na pustyni nie trzeba jeść', 'In the desert you need no food'), []),
+      opt(t('Bliżej środka świata jest bezpieczniej', 'It is safer near the centre of the world'), []),
+      leave,
+    ] } },
+  },
+  {
+    id: 18, hostile: false,
+    title: t('Sarkofag', 'Sarcophagus'),
+    text: t('Potykasz się o coś twardego wystającego z ziemi. To wieko sarkofagu.', 'You trip over something hard sticking out of the ground. It is the lid of a sarcophagus.'),
+    steps: { start: { options: [
+      opt(t('Otwieram (S)', 'Open it (Str)'), [{
+        do: 'test', attribute: 'str',
+        pass: [{ do: 'roll', die: 10, table: [
+          { upTo: 2, then: [] },
+          { upTo: 4, then: [{ do: 'randomItem' }] },
+          { upTo: 6, then: [{ do: 'item', item: 'pharaohAmulet' }] },
+          { upTo: 8, then: [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'condition', id: 'foulAir', name: t('Zatrute powietrze', 'Foul air'), test: 'str', each: [{ do: 'vitality', amount: -2 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] }] }] },
+          { upTo: 10, then: [{ do: 'fight', enemies: ['mummy'], onWin: [{ do: 'randomItem' }] }] },
+        ] }],
+      }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 19, hostile: false,
+    title: t('Szczęśliwa moneta', 'The lucky coin'),
+    text: t('Myrmid układający karty proponuje wyzwanie: jeśli zdołasz go oszukać, odda Ci swoją szczęśliwą monetę.', 'A Myrmid laying out cards offers a challenge: fool him and he will give you his lucky coin.'),
+    steps: { start: { options: [
+      opt(t('Opowiadam zmyśloną historię (Ch -10)', 'Tell him a made-up tale (Cha -10)'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'item', item: 'luckyCoin' }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 20, hostile: true,
+    title: t('Pułapka', 'Ambush'),
+    text: t('W ziemię przed Tobą wbija się strzała. Głos z ukrycia woła: rzuć broń i nie ruszaj się!', 'An arrow thuds into the ground before you. A hidden voice calls: drop your weapon and stand still!'),
+    steps: { start: { options: [
+      opt(t('Rzucam broń', 'Drop my weapon'), [{ do: 'loseAll' }, { do: 'stuck', rounds: 1 }]),
+      opt(t('Uciekam (Zr -10, potem Zr)', 'Run (Dex -10, then Dex)'), [{
+        do: 'test', attribute: 'dex', modifier: -10,
+        pass: [{ do: 'test', attribute: 'dex', pass: [{ do: 'move', direction: 'back', distance: 1 }], fail: [{ do: 'vitality', amount: -3 }, { do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 5 }, { do: 'randomItem' }] }] }],
+        fail: [{ do: 'vitality', amount: -3 }, { do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 5 }, { do: 'randomItem' }] }],
+      }]),
+      opt(t('Walczę (Zr -10)', 'Fight (Dex -10)'), [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'vitality', amount: -3 }] }, { do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 5 }, { do: 'randomItem' }] }]),
+    ] } },
+  },
+  {
+    id: 21, hostile: true,
+    title: t('Demon', 'Demon'),
+    text: t('Przed Tobą pojawia się w pełni rozwinięty demon czeluści. Szykuj się do walki!', 'A full-grown demon of the abyss appears before you. Get ready to fight!'),
+    steps: fightOnly(['voidDemon']),
+  },
+  {
+    id: 22, hostile: false,
+    title: t('Księga I', 'Book I'),
+    text: t('Wśród wraków karawany kupieckiej znajdujesz zdobioną księgę: Księgę Wiedzy Rycerskiej. Czytaj ją (test Int raz na rundę); 3 udane lektury dają +5 do Walki.', 'Among the wrecks of a merchant caravan you dig out an ornate book: the Book of Knightly Lore. Read it (an Int test once a round); 3 good readings give +5 Combat.'),
+    steps: single([{ do: 'item', item: 'bookKnight' }], t('Zabieram księgę', 'Take the book')),
+  },
+  {
+    id: 23, hostile: false, terrains: ['cave'],
+    title: t('Jaskinia', 'The cave'),
+    text: t('Dostrzegasz w oddali wejście do jaskini.', 'In the distance you spot the mouth of a cave.'),
+    steps: { start: { options: [
+      opt(t('Wchodzę', 'Go in'), [{ do: 'roll', die: 10, table: [
+        { upTo: 2, then: [{ do: 'fightRandom' }] },
+        { upTo: 4, then: [{ do: 'camp' }] },
+        { upTo: 6, then: [] },
+        { upTo: 8, then: [{ do: 'camp' }, { do: 'test', attribute: 'dex', pass: [{ do: 'herbs', amount: 2 }] }] },
+        { upTo: 10, then: [{ do: 'camp' }, { do: 'test', attribute: 'int', pass: [{ do: 'randomItem' }, { do: 'gold', amount: 5 }] }] },
+      ] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 24, hostile: true,
+    title: t('Śpiew czarownicy', "The witch's song"),
+    text: t('Nagle słyszysz głęboki, przejmujący kobiecy śpiew.', 'Suddenly you hear a deep, haunting woman\'s song.'),
+    steps: single([{
+      do: 'test', attribute: 'wil',
+      fail: [{ do: 'stuck', rounds: 1 }, { do: 'condition', id: 'enthralled', name: t('Zauroczenie', 'Enthralled'), test: 'wil', modifier: -5, worsen: -5, each: [{ do: 'stuck', rounds: 1 }] }],
+      pass: [{ do: 'fight', enemies: ['witch'], onWin: [{ do: 'herbs', amount: 4 }, { do: 'item', item: 'bookJuggler' }] }],
+    }], t('Opieram się czarowi (SW)', 'Resist the spell (Wil)')),
+  },
+  {
+    id: 25, hostile: false,
+    title: t('Banda', 'The band'),
+    text: t('Widzisz blask ognia i słyszysz głosy rozmów.', 'You see firelight and hear voices talking.'),
+    steps: {
+      start: { options: [
+        opt(t('Zakradam się (Zr)', 'Sneak closer (Dex)'), [{ do: 'test', attribute: 'dex', pass: [{ do: 'goto', step: 'camp' }], fail: [{ do: 'goto', step: 'spotted' }] }]),
+        opt(t('Podchodzę otwarcie', 'Walk up openly'), [{ do: 'goto', step: 'camp' }]),
+        leave,
+      ] },
+      camp: {
+        text: t('Pięciu Nomadów pije i rozmawia przy ognisku, nad którym smaży się dziczyzna.', 'Five Nomads drink and talk by a fire with game roasting over it.'),
+        options: [
+          opt(t('Zagaduję (Ch)', 'Talk to them (Cha)'), [{ do: 'test', attribute: 'cha', raceBonus: { race: 'nomads', amount: 10 }, pass: [{ do: 'camp' }, { do: 'food', amount: 1 }, { do: 'effect', target: 'all', amount: 5, rounds: 1 }, { do: 'goto', step: 'learn' }], fail: [{ do: 'goto', step: 'spotted' }] }]),
+          leave,
+        ],
+      },
+      spotted: {
+        text: t('Nomadzi celują do Ciebie z łuków i nie chcą Ci zaufać.', 'The Nomads aim their bows at you and will not trust you.'),
+        options: [
+          opt(FIGHT, [{ do: 'fight', enemies: ['nomadWarrior', 'nomadWarrior', 'nomadWarrior', 'nomadWarrior', 'nomadWarrior'], onWin: [{ do: 'gold', amount: 10 }, { do: 'item', item: 'longBow' }, { do: 'food', amount: 5 }] }]),
+          opt(t('Odchodzę', 'Back away'), []),
+        ],
+      },
+      learn: {
+        text: t('Dołączasz do ogniska. Możesz spróbować nauczyć się czegoś od Nomadów.', 'You join the fire. You could try to learn something from the Nomads.'),
+        options: [opt(t('Słucham opowieści łowców (Ch)', 'Listen to the hunters (Cha)'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'skill', skill: 'hunt', amount: 5 }] }]), opt(GO, [])],
+      },
+    },
+  },
+  {
+    id: 26, hostile: false,
+    title: t('Księga II', 'Book II'),
+    text: t('Pod korzeniami starego drzewa znajdujesz Księgę Magii Kuglarskiej. Czytaj ją (test Int raz na rundę); 3 udane lektury dają +5 do Siły Woli i Charyzmy.', 'Under the roots of an old tree you find the Book of Juggler\'s Magic. Read it (an Int test once a round); 3 good readings give +5 Willpower and Charisma.'),
+    steps: single([{ do: 'item', item: 'bookJuggler' }], t('Zabieram księgę', 'Take the book')),
+  },
+  {
+    id: 27, hostile: true,
+    title: t('Koszmar', 'Nightmare'),
+    text: t('We śnie nawiedza Cię bardzo realny koszmar, który kończy się Twoją śmiercią.', 'In your sleep a vivid nightmare haunts you, and it ends with your death.'),
+    steps: single([{
+      do: 'test', attribute: 'wil',
+      fail: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }, { do: 'condition', id: 'nightmare', name: t('Koszmar', 'Nightmare'), test: 'wil', each: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }] }],
+    }], t('Budzę się (SW)', 'Wake up (Wil)')),
+  },
+  {
+    id: 28, hostile: true,
+    title: t('Zaraza', 'Plague'),
+    text: t('Wkraczasz na teren starożytnych katakumb. Powietrze jest ciężkie od zarazy.', 'You walk into the remains of ancient catacombs. The air is heavy with plague.'),
+    steps: single([{
+      do: 'test', attribute: 'str',
+      fail: [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }, { do: 'condition', id: 'plague', name: t('Zaraza', 'Plague'), test: 'str', each: [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] }],
+    }], t('Opieram się zarazie (S)', 'Fight off the sickness (Str)')),
+  },
+  {
+    id: 29, hostile: false,
+    title: t('Runiczny kowal', 'The runic smith'),
+    text: t('Skałogrzmot w stroju kowala oferuje nałożenie runy na Twoją broń za 6 zł., jeśli powiesz mu, jaki jest Twój cel w życiu.', 'A Flintborn in a smith\'s apron offers to set a rune on your weapon for 6 gold, if you tell him your purpose in life.'),
+    steps: { start: { options: [
+      opt(t('„Chronić swoich bliskich”', '"To protect the ones I love"'), [{ do: 'rune' }], { gold: 6 }),
+      opt(t('„Zdobyć władzę nad światem”', '"To rule the world"'), []),
+      leave,
+    ] } },
+  },
+  {
+    id: 30, hostile: true,
+    title: t('Minotaur', 'Minotaur'),
+    text: t('Drogę zastępuje Ci pół-człowiek, pół-byk. W jego oczach widzisz zwierzęcy szał. Przygotuj się do walki!', 'A half-man, half-bull bars your way, wild fury in its eyes. Get ready to fight!'),
+    steps: fightOnly(['minotaur'], [{ do: 'item', item: 'minotaurAxe' }]),
+  },
+  {
+    id: 31, hostile: false,
+    title: t('Rozpadająca się chata', 'The crumbling hut'),
+    text: t('Przed Tobą stoi stary, rozpadający się budynek. Wygląda jak zamieszkana szopa.', 'Before you stands an old, crumbling building. It looks like a lived-in shed.'),
+    steps: { start: { options: [
+      opt(t('Przeszukuję (Zr, potem Int)', 'Search it (Dex, then Int)'), [
+        { do: 'test', attribute: 'dex', fail: [{ do: 'vitality', amount: -6 }, { do: 'effect', target: 'all', amount: -10, rounds: 2 }] },
+        { do: 'test', attribute: 'int', pass: [{ do: 'randomItem' }, { do: 'gold', amount: 1 }] },
+      ]),
+      leave,
+    ] } },
+  },
+  {
+    id: 33, hostile: false, terrains: ['mountains'],
+    title: t('Dolina nieskończoności', 'Valley of infinity'),
+    text: t('Lądujesz w górskiej dolinie o bujnej roślinności. Na środku wodospad wpada do niewielkiego zbiornika.', 'You come down into a lush mountain valley. In its middle a waterfall pours into a small pool.'),
+    steps: { start: { options: [
+      opt(t('Rozbijam obóz', 'Make camp'), [{ do: 'camp' }, { do: 'effect', target: 'all', amount: 10, rounds: 1 }]),
+      opt(t('Zbieram prowiant (1 Wt.)', 'Gather food (1 Stamina)'), [{ do: 'effect', target: 'stamina', amount: -1, rounds: 1 }, { do: 'food', amount: 2 }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 34, hostile: false,
+    title: t('Opuszczona wieża', 'The abandoned tower'),
+    text: t('Przed Tobą stara, opuszczona kamienna wieża warowna.', 'Before you stands an old, abandoned stone watchtower.'),
+    steps: { start: { options: [
+      opt(t('Wchodzę na szczyt (Zr +10)', 'Climb to the top (Dex +10)'), [{
+        do: 'test', attribute: 'dex', modifier: 10,
+        pass: [{ do: 'peek' }],
+        fail: [{ do: 'halfVitality' }, { do: 'effect', target: 'all', amount: -20, rounds: 1 }],
+      }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 35, hostile: true,
+    title: t('Inferno', 'Inferno'),
+    text: t('Teren wokół Ciebie zaczyna gwałtownie płonąć. Musisz uciekać!', 'The land around you bursts into flames. You must run!'),
+    steps: single([{ do: 'loseSpeed' }, {
+      do: 'test', attribute: 'dex',
+      pass: [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'vitality', amount: -4 }] }],
+      fail: [{ do: 'vitality', amount: -4 }],
+    }], t('Uciekam przed ogniem (Zr, Zr -10)', 'Outrun the fire (Dex, Dex -10)')),
+  },
+  {
+    id: 36, hostile: false, terrains: ['fields'],
+    title: t('Kamień skupienia', 'The focus stone'),
+    text: t('Na środku dzikiej polany stoi idealnie gładki, płaski kamień.', 'In the middle of a wild meadow lies a perfectly smooth, flat stone.'),
+    steps: { start: { options: [
+      opt(t('Medytuję (Int)', 'Meditate (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'effect', target: 'all', amount: 10, rounds: 2 }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 37, hostile: false,
+    title: t('Siłowanie na rękę', 'Arm wrestling'),
+    text: t('Skałogrzmot siedzący na pniu proponuje siłowanie na rękę o tajemniczą nagrodę. Przegrany płaci 2 zł.', 'A Flintborn on a tree stump offers an arm-wrestling match for a mystery prize. The loser pays 2 gold.'),
+    steps: { start: { options: [
+      opt(t('Siłuję się (S -10)', 'Wrestle (Str -10)'), [{ do: 'test', attribute: 'str', modifier: -10, pass: [{ do: 'item', item: 'bookStonemason' }], fail: [{ do: 'gold', amount: -2 }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 38, hostile: false, terrains: ['cave'],
+    title: t('Niedostępna jaskinia', 'The sealed cave'),
+    text: t('Jeden olbrzymi kamień w skalnym masywie wygląda nienaturalnie. Może coś zasłania?', 'One huge boulder in the rock face looks out of place. Is it hiding something?'),
+    steps: {
+      start: { options: [
+        opt(t('Przesuwam kamień (S -20)', 'Push the boulder (Str -20)'), [{ do: 'test', attribute: 'str', modifier: -20, pass: [{ do: 'goto', step: 'treasure' }], fail: [{ do: 'goto', step: 'again' }] }]),
+        leave,
+      ] },
+      again: { text: t('Kamień ani drgnie.', 'The boulder does not move.'), options: [
+        opt(t('Jeszcze raz (S -30)', 'Again (Str -30)'), [{ do: 'test', attribute: 'str', modifier: -30, pass: [{ do: 'goto', step: 'treasure' }] }]),
+        leave,
+      ] },
+      treasure: { text: t('Za kamieniem kryje się skarb!', 'Behind the boulder lies a treasure!'), options: [
+        opt(t('Zabieram wszystko', 'Take it all'), [{ do: 'gold', amount: 10 }, { do: 'item', item: 'chainmail' }, { do: 'item', item: 'healingElixir' }]),
+      ] },
+    },
+  },
+  {
+    id: 39, hostile: true,
+    title: t('Złośliwe chochliki', 'Spiteful imps'),
+    text: t('Wpada na Ciebie grupa małych, włochatych chochlików, które piszczą i biegają dookoła.', 'A band of small, hairy imps bursts upon you, squealing and running in circles.'),
+    steps: single([{ do: 'test', attribute: 'cha', fail: [{ do: 'fight', enemies: ['imp', 'imp', 'imp', 'imp', 'imp', 'imp'] }] }], t('Straszę je (Ch)', 'Scare them off (Cha)')),
+  },
+  {
+    id: 40, hostile: true,
+    title: t('Zwiad zwierzoludzi', 'Beastmen scouts'),
+    text: t('Atakuje Cię dwóch zwierzoludzi o łbach kozłów i podkutych kopytach.', 'Two beastmen with the heads of goats and shod hooves attack you.'),
+    steps: fightOnly(['beastman', 'beastman'], [{ do: 'randomItem' }, { do: 'gold', amount: 4 }]),
+  },
+  {
+    id: 42, hostile: true,
+    title: t('Przepaść', 'The chasm'),
+    text: t('Przed Tobą ogromny uskok szerokości 10 metrów. Nie przejdziesz prosto.', 'A huge rift 10 metres wide opens before you. You cannot go straight on.'),
+    steps: { start: { options: [
+      opt(t('Skaczę (Zr -20)', 'Jump (Dex -20)'), [{ do: 'test', attribute: 'dex', modifier: -20, pass: [{ do: 'move', direction: 'forward', distance: 1 }], fail: [{ do: 'death' }] }]),
+      opt(t('Zawracam', 'Turn back'), [{ do: 'move', direction: 'back', distance: 1 }]),
+    ] } },
+  },
+  {
+    id: 44, hostile: true,
+    title: t('Niestabilny teren', 'Unstable ground'),
+    text: t('Ziemia zaczyna się chybotać i po chwili cały fragment się przemieszcza.', 'The ground starts to sway and then the whole fragment drifts away.'),
+    steps: single([{ do: 'roll', die: 10, table: [
+      { upTo: 2, then: [{ do: 'move', direction: 'left', distance: 'd6half' }] },
+      { upTo: 5, then: [{ do: 'move', direction: 'forward', distance: 'd6half' }] },
+      { upTo: 8, then: [{ do: 'move', direction: 'back', distance: 'd6half' }] },
+      { upTo: 10, then: [{ do: 'move', direction: 'right', distance: 'd6half' }] },
+    ] }], t('Trzymam się!', 'Hold on!')),
+  },
+  {
+    id: 45, hostile: true,
+    title: t('Dzika bestia', 'Wild beast'),
+    text: t('Z bliska dochodzi ryk. Wyskakuje ogromna bestia, skrzyżowanie niedźwiedzia z dzikiem!', 'A roar sounds close by. A huge beast leaps out, half bear and half boar!'),
+    steps: fightOnly(['honeybadger'], [{ do: 'item', item: 'beastFur' }]),
+  },
+  {
+    id: 46, hostile: true,
+    title: t('Jadowity wąż', 'Venomous snake'),
+    text: t('Atakuje Cię groźnie wyglądający jadowity wąż.', 'A deadly-looking venomous snake strikes at you.'),
+    steps: single([{
+      do: 'test', attribute: 'dex',
+      fail: [{ do: 'vitality', amount: -3 }, { do: 'test', attribute: 'str', modifier: -10, fail: [{ do: 'effect', target: 'all', amount: -15, rounds: 2 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] }],
+    }], t('Unikam (Zr)', 'Dodge (Dex)')),
+  },
+  {
+    id: 47, hostile: false,
+    title: t('Opiekun', 'The keeper'),
+    text: t('Opiekun niesie pęk ziół i leśnych owoców. Za 2 zł. sprzeda Ci 2 losowe zioła.', 'A Keeper carries a bundle of herbs and forest fruit. For 2 gold he will sell you 2 random herbs.'),
+    steps: { start: { options: [
+      opt(t('Kupuję zioła (2 zł.)', 'Buy herbs (2 gold)'), [{ do: 'herbs', amount: 2 }], { gold: 2 }),
+      opt(t('Proszę o naukę (Ogł -10)', 'Ask him to teach me (Cha -10)'), [{ do: 'ifRace', race: 'keepers',
+        then: [{ do: 'test', attribute: 'cha', pass: [{ do: 'skill', skill: 'gather', amount: 10 }] }],
+        else: [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'skill', skill: 'gather', amount: 10 }] }] }]),
+      leave,
+    ] } },
+  },
+  {
+    id: 48, hostile: true,
+    title: t('Zastawiona pułapka', 'Trapped ground'),
+    text: t('Teren przed Tobą jest usiany pułapkami.', 'The ground ahead is riddled with traps.'),
+    steps: { start: { options: [
+      opt(t('Przedzieram się (Int, Zr, S)', 'Push through (Int, Dex, Str)'), [
+        { do: 'test', attribute: 'int', fail: [{ do: 'effect', target: 'dex', amount: -10, rounds: 1 }, { do: 'effect', target: 'str', amount: -10, rounds: 1 }] },
+        { do: 'test', attribute: 'dex', fail: [{ do: 'vitality', amount: -3 }] },
+        { do: 'test', attribute: 'str', fail: [{ do: 'vitality', amount: -1 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] },
+      ]),
+      opt(t('Cofam się', 'Step back'), [{ do: 'move', direction: 'back', distance: 1 }]),
+      opt(t('Obchodzę w lewo', 'Go around to the left'), [{ do: 'move', direction: 'left', distance: 1 }]),
+    ] } },
+  },
+  {
+    id: 49, hostile: true,
+    title: t('Mantikora', 'Manticore'),
+    text: t('Z nieba opada kreatura: lew, człowiek i skrzydlaty nietoperz w jednym. Nie masz dokąd uciec!', 'A creature drops from the sky: lion, man and winged bat in one. There is nowhere to run!'),
+    steps: fightOnly(['manticore'], [{ do: 'permanent', target: 'com', amount: 5 }]),
+  },
+  {
+    id: 50, hostile: false,
+    title: t('Ruletka', 'Roulette'),
+    text: t('Przed Tobą 3 skrzynie. Tylko jedna kryje skarb, jedna jest pusta, a jedna wybucha. Otworzysz jedną, reszta zniknie.', 'Three chests stand before you. One holds treasure, one is empty and one explodes. Open one and the rest vanish.'),
+    steps: { start: { options: ([t('Lewa', 'Left'), t('Środkowa', 'Middle'), t('Prawa', 'Right')]).map((label) => opt(label, [{ do: 'roll', die: 3, table: [
+      { upTo: 1, then: [{ do: 'randomItem' }, { do: 'randomItem' }, { do: 'gold', amount: 10 }] },
+      { upTo: 2, then: [] },
+      { upTo: 3, then: [{ do: 'vitality', amount: -10 }, { do: 'stuck', rounds: 1 }] },
+    ] }])).concat([leave]) } },
+  },
+];
+
+export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
