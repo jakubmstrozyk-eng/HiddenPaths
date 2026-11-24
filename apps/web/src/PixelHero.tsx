@@ -114,13 +114,41 @@ export function heroRows(race: RaceId, look: HeroLook = DEFAULT_LOOK, frame = 0)
   return [...(HEADS[race][look.head] ?? HEADS[race][0]!), ...(TORSOS[look.torso] ?? TORSOS[0]!), ...(frame === 1 ? stride(legs) : legs)];
 }
 
-export function PixelHero({ race, profession, look, size = 48, walking = false, facing = 1 }: {
+/** What the hero wears: armour value on each slot (0 for none), a shield, and the weapon in hand. */
+export interface Gear {
+  head: number; arms: number; torso: number; legs: number;
+  shield: boolean;
+  weapon: string;
+}
+
+/** The weapon an item id is drawn as. */
+const WEAPON_SPRITE: Record<string, Item> = {
+  dagger: 'daggers', shortSword: 'sword', oneHanded: 'sword', twoHanded: 'axe', minotaurAxe: 'axe', bow: 'bow', longBow: 'bow', crossbow: 'bow',
+};
+
+/** Leather, iron or plate by armour value. */
+const tier = (v: number) => (v >= 5 ? '#dfe3ec' : v >= 3 ? '#8f96a3' : '#9a6234');
+
+/** Armour pieces and a shield laid over the sprite, pixel by pixel. */
+function gearPixels(g: Gear): (readonly [number, number, number, number, string])[] {
+  const out: (readonly [number, number, number, number, string])[] = [];
+  if (g.head) out.push([4, 0, 8, 1, '#0b0b10'], [4, 1, 8, 2, tier(g.head)], [3, 2, 1, 1, '#0b0b10'], [12, 2, 1, 1, '#0b0b10']);
+  if (g.arms) out.push([1, 7, 3, 2, tier(g.arms)], [12, 7, 3, 2, tier(g.arms)], [1, 9, 3, 1, '#0b0b10'], [12, 9, 3, 1, '#0b0b10']);
+  if (g.torso) out.push([5, 8, 6, 3, tier(g.torso)], [7, 8, 2, 1, '#0b0b10']);
+  if (g.legs) out.push([4, 13, 2, 2, tier(g.legs)], [10, 13, 2, 2, tier(g.legs)]);
+  if (g.shield) out.push([0, 8, 4, 5, '#0b0b10'], [0, 9, 3, 3, '#7a4a22'], [1, 10, 1, 1, '#e8c020']);
+  return out;
+}
+
+export function PixelHero({ race, profession, look, size = 48, walking = false, facing = 1, gear }: {
   race: RaceId;
   profession?: ProfessionId;
   look?: HeroLook;
   size?: number;
   walking?: boolean;
   facing?: 1 | -1;
+  /** Draw the hero in this armour and with this weapon instead of the profession's tool. */
+  gear?: Gear;
 }) {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
@@ -131,7 +159,8 @@ export function PixelHero({ race, profession, look, size = 48, walking = false, 
   const prof = profession ? PROFESSION[profession] : null;
   const colour: Palette = { ...BASE, ...RACE_COLOURS[race], ...(prof ? { a: prof.trim } : {}) };
   const rows = heroRows(race, look ?? DEFAULT_LOOK, walking ? frame : 0);
-  const item = prof ? ITEMS[prof.item] : [];
+  const held = gear ? WEAPON_SPRITE[gear.weapon] ?? prof?.item : prof?.item;
+  const item = held ? ITEMS[held] : [];
   return (
     <svg
       width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true"
@@ -141,6 +170,7 @@ export function PixelHero({ race, profession, look, size = 48, walking = false, 
       {rows.flatMap((row, y) =>
         [...row].map((ch, x) => (ch === '.' || !colour[ch] ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colour[ch]} />)),
       )}
+      {gear && gearPixels(gear).map(([x, y, w, h, c], i) => <rect key={`g${i}`} x={x} y={y} width={w} height={h} fill={c} />)}
       {item.map(([x, y, c]) => <rect key={`i${x}-${y}`} x={x} y={y} width={1} height={1} fill={colour[c]} />)}
     </svg>
   );
