@@ -6,7 +6,7 @@ import { DIFFICULTIES } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
 import { Rng as RngCtor, type Rng } from './rng';
-import { eatRations, useLeaves, usesLeft } from './cards';
+import { eatRations, useLeaves, usesLeft, trapFoes } from './cards';
 import { effectBonus, itemBonus, testModifier, type ActorState, type WorldView } from './terrain';
 
 /** One foe in a fight. */
@@ -40,6 +40,8 @@ export interface CombatState {
   card?: number;
   /** Mystic's Barrier: up until a foe's blow lands on it. */
   barrier?: boolean;
+  /** Set a Trap played in the fight: it springs at the start of the next round. */
+  trap?: boolean;
 }
 
 export type CombatMove =
@@ -125,6 +127,7 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
       if (cards.includes(card)) moves.push({ move: 'card', card, target: target.target });
     }
   }
+  if (cards.includes('trapper-trap') && !combat.trap) moves.push({ move: 'card', card: 'trapper-trap' });
   if (cards.includes('mystic-barrier') && !combat.barrier) moves.push({ move: 'card', card: 'mystic-barrier' });
   for (const card of ['warrior-rations', 'wraith-leaves']) {
     if (cards.includes(card) && (usesLeft(actor, card) ?? 0) > 0) moves.push({ move: 'card', card });
@@ -290,6 +293,11 @@ export function combatTurn(
             events.push({ type: 'barrier', result });
             break;
           }
+          case 'trapper-trap':
+            // Setting a trap in a fight takes the hero's whole round; it springs when the next one starts.
+            combat.trap = true;
+            events.push({ type: 'card', card: move.card });
+            break;
           case 'warrior-rations':
             eatRations(world.round, actor);
             events.push({ type: 'card', card: move.card });
@@ -359,6 +367,11 @@ export function combatTurn(
       if (actor.staminaLeft === 0) enthralled = true;
     }
   };
+
+  if (combat.trap) {
+    combat.trap = false;
+    events.push(...trapFoes(alive(), rng));
+  }
 
   const heroInitiative = attrs.dex + itemBonus(actor, 'initiative');
   const order = [

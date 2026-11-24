@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProfessionId, RaceId } from '@hp/content';
 import {
-  applyAction, cardBonus, combatMoves, combatTurn, createGame, legalActions, Rng, startCombat, testModifier, worldView,
+  applyAction, cardBonus, runTerrainAction, combatMoves, combatTurn, createGame, legalActions, Rng, startCombat, testModifier, worldView,
   type GameState,
 } from '../src/index';
 
@@ -123,5 +123,65 @@ describe('skill cards (level 1)', () => {
     if (g.players[0]!.combat || g.players[0]!.pendingEvent) return;
     g = applyAction(g, 'p', { type: 'card', card: 'trapper-trap' });
     expect(g.players[0]!.counters[`trap:${g.players[0]!.position}`]).toBe(1);
+  });
+
+  it('Hunter: every failed hunt is rolled again once, with no limit per camp', () => {
+    const g = make('nomads', 'trapper');
+    const p = g.players[0]!;
+    p.position = g.map.cells.find((c) => c.terrain === 'forest')!.index;
+    let rerolls = 0;
+    for (let seed = 1; seed < 60; seed++) {
+      p.staminaLeft = 3;
+      const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(seed));
+      if (out.type === 'test' && out.rerolled === 'trapper-hunter') rerolls++;
+    }
+    expect(rerolls).toBeGreaterThan(1);
+  });
+
+  it('Fish: a failed hunt is rolled again once on water only', () => {
+    const g = make('myrmids', 'diver');
+    const p = g.players[0]!;
+    const count = (terrain: string) => {
+      const cell = g.map.cells.find((c) => c.terrain === terrain);
+      if (!cell) return null;
+      p.position = cell.index;
+      let rerolls = 0;
+      for (let seed = 1; seed < 60; seed++) {
+        p.staminaLeft = 3;
+        const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(seed));
+        if (out.type === 'test' && out.rerolled === 'diver-fish') rerolls++;
+      }
+      return rerolls;
+    };
+    const wet = count('river') ?? count('lake');
+    if (wet !== null) expect(wet).toBeGreaterThan(0);
+    expect(count('forest')).toBe(0);
+  });
+
+  it('Set a Trap in a fight: takes the round, springs next round, a caught foe loses 4 and skips its attack', () => {
+    const g = make('nomads', 'trapper');
+    const p = g.players[0]!;
+    let seen = false;
+    for (let seed = 1; seed < 80 && !seen; seed++) {
+      const c = startCombat(worldView(g), ['wolf']);
+      const a = structuredClone(p);
+      a.character.vitality = 99;
+      const first = combatTurn(worldView(g), a, c, { move: 'card', card: 'trapper-trap' }, new Rng(seed));
+      expect(first.events.some((e) => e.type === 'strike' && e.by === 'hero')).toBe(false);
+      expect(c.trap).toBe(true);
+      expect(combatMoves(a, c).some((m) => m.move === 'card' && m.card === 'trapper-trap')).toBe(false);
+      const before = c.foes[0]!.vitality;
+      const second = combatTurn(worldView(g), a, c, { move: 'focus' }, new Rng(seed + 1000));
+      const trap = second.events.find((e) => e.type === 'trap');
+      expect(trap).toBeDefined();
+      expect(c.trap).toBe(false);
+      if (trap && trap.type === 'trap' && !trap.result.success) {
+        expect(c.foes[0]!.vitality).toBe(before - 4);
+        expect(second.events.some((e) => e.type === 'strike' && e.by !== 'hero')).toBe(false);
+        expect(second.events.some((e) => e.type === 'stunned' && e.who === c.foes[0]!.uid)).toBe(true);
+        seen = true;
+      }
+    }
+    expect(seen).toBe(true);
   });
 });

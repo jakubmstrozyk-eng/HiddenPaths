@@ -7,7 +7,7 @@ import { Icon } from './Icons';
 
 /** Cards the player plays on the map and in a fight. Every other card works on its own. */
 const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap'];
-const FIGHT_PLAY = ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves'];
+const FIGHT_PLAY = ['trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves'];
 
 type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'map' | 'fight' | 'notNow' | 'passive';
 const NOTE: Record<Exclude<Status, 'play'>, UiKey> = {
