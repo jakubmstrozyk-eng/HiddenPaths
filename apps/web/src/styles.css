@@ -674,3 +674,27 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .doll-figure svg { width: 110px; height: 110px; }
 }
 @media (max-width: 560px) { .food-days { display: none; } .movebar.food small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+
+/* Dice held in the hand: press, drag to shake, let go to throw. */
+.shake-throw { display: flex; flex-direction: column; align-items: center; gap: 10px; user-select: none; -webkit-user-select: none; }
+.shake-dice { background: none; border: 0; padding: 14px; color: inherit; cursor: grab; touch-action: none; position: relative; z-index: 2; }
+.shake-throw.held .shake-dice { cursor: grabbing; }
+.shake-throw .dice-row { pointer-events: none; }
+.shake-hint { color: #ffe066; font: 600 13px Inter, sans-serif; text-transform: uppercase; letter-spacing: 0.08em; text-shadow: 0 1px 3px #000; }
+.shake-throw:not(.held) .shake-dice .die { animation: die-wait 1.3s ease-in-out infinite; }
+.shake-throw:not(.held) .shake-dice { filter: drop-shadow(0 0 12px #ffe066); }
+.die.shaking { animation: die-shake 0.32s linear infinite !important; }
+@keyframes die-shake {
+  0% { transform: rotate(0deg) translate(0, 0); }
+  25% { transform: rotate(95deg) translate(3px, -4px); }
+  50% { transform: rotate(185deg) translate(-3px, 2px); }
+  75% { transform: rotate(275deg) translate(2px, 4px); }
+  100% { transform: rotate(360deg) translate(0, 0); }
+}
+@keyframes die-wait { 50% { transform: translateY(-6px) rotate(-6deg); } }
+.dice-tray.ready { cursor: default; background: rgba(0, 0, 0, 0.55); }
+.dice-skip-btn { opacity: 0.7; }
+.dice-verdict.big { font: 700 26px 'Pixelify Sans', Inter, sans-serif; padding: 4px 16px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+.dice-verdict.big.ok { box-shadow: 0 0 26px rgba(110, 240, 160, 0.7); }
+.dice-verdict.big.bad { box-shadow: 0 0 22px rgba(255, 138, 122, 0.6); }
+@media (prefers-reduced-motion: reduce) { .die.shaking, .shake-throw:not(.held) .shake-dice .die { animation: none !important; } }
