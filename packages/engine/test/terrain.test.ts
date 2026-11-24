@@ -3,13 +3,14 @@ import {
   applyAction, createGame, currentPlayer, fatiguePenalty, legalActions, neighbours, testModifier, worldView,
   type CharacterInput, type GameConfig, type GameState,
 } from '../src';
+import { onMap } from './helpers';
 
 const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter', 'scout'] };
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
 
 /** A game with the hero standing on a chosen terrain, with sure-fire attributes. */
 function standingOn(terrain: string, seed = 'terrain'): GameState {
-  const game = createGame(seed, solo, [{ id: 'p1', character: hero }]);
+  const game = onMap(createGame(seed, solo, [{ id: 'p1', character: hero }]));
   const p = currentPlayer(game);
   (game.map.cells[p.position] as { terrain: string }).terrain = terrain;
   for (const k of Object.keys(p.character.attributes)) (p.character.attributes as Record<string, number>)[k] = 98;

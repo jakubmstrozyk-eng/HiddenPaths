@@ -7,6 +7,7 @@ import {
   createGame, applyAction, legalActions, currentPlayer,
   EngineError, type CharacterInput, type GameConfig, type SizePreset,
 } from '../src';
+import { onMap } from './helpers';
 
 const hero = (over: Partial<CharacterInput> = {}): CharacterInput => ({
   name: 'Ara',
@@ -134,7 +135,7 @@ describe('characters', () => {
 
 describe('turns', () => {
   it('moves to a neighbour, spends Speed and reveals the fragment', () => {
-    let game = createGame('turns-1', solo, [{ id: 'p1', character: hero() }]);
+    let game = onMap(createGame('turns-1', solo, [{ id: 'p1', character: hero() }]));
     const me = currentPlayer(game);
     const move = legalActions(game, 'p1').find((a) => a.type === 'move');
     expect(move).toBeDefined();

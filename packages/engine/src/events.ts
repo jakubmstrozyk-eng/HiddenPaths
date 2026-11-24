@@ -90,6 +90,7 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
 }
 
 function change(state: GameState, player: PlayerState, what: 'gold' | 'food' | 'vitality' | 'maxVitality' | 'herbs', amount: number) {
+  amount = amount + 0; // avoid -0, which does not survive JSON
   const c = player.character;
   if (what === 'gold') c.gold = Math.max(0, c.gold + amount);
   if (what === 'food') c.food = Math.max(0, c.food + amount);

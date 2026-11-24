@@ -6,10 +6,11 @@ import { DIFFICULTIES, type GameConfig } from './config';
 import { test } from './dice';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
-import { generateMap, neighbours, startCell } from './mapgen';
+import { generateMap, neighbours } from './mapgen';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
-import type { Action, GameState, NewPlayer, PlayerState } from './state';
+import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
+import type { GameMap } from './mapgen';
 import { availableTerrainActions, effectBonus, runTerrainAction, testModifier } from './terrain';
 import {
   availableServices, buy, buyPrice, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, useService, usePortal,
@@ -33,15 +34,14 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
   const taken: number[] = [];
   const players = newPlayers.map((p): PlayerState => {
     const character = createCharacter(p.character, settings.startFood);
-    const start = startCell(map, character.race, taken);
-    taken.push(start);
+    // Every hero starts outside the map and chooses a side to step in from (Jacob, 2026-11-24).
     return {
       id: p.id,
       character,
-      position: start,
-      start,
-      respawnAt: start,
-      revealed: [start],
+      position: OUTSIDE,
+      start: OUTSIDE,
+      respawnAt: OUTSIDE,
+      revealed: [],
       speedLeft: character.speed,
       staminaLeft: character.stamina,
       cameFrom: null,
@@ -81,6 +81,16 @@ function blockedByRiver(state: GameState, player: PlayerState, to: number): bool
 /** Jacob's rule (2026-11-23): stepping onto a fragment also costs 1 Stamina, besides its Speed. */
 export const MOVE_STAMINA = 1;
 
+/** The fragment in the middle of a side of the map: the first step from the starting place on that side. */
+export function entryCell(map: Pick<GameMap, 'width' | 'height'>, side: Side): number {
+  const midX = Math.floor((map.width - 1) / 2);
+  const midY = Math.floor((map.height - 1) / 2);
+  const [x, y] = side === 'N' ? [midX, 0] : side === 'S' ? [midX, map.height - 1] : side === 'W' ? [0, midY] : [map.width - 1, midY];
+  return y * map.width + x;
+}
+
+export const isOutside = (player: Pick<PlayerState, 'position'>) => player.position === OUTSIDE;
+
 function moveCost(state: GameState, to: number): number {
   const terrain = state.map.cells[to]!.terrain;
   return terrain === 'core' ? 2 : TERRAINS[terrain].hard ? 2 : 1;
@@ -111,6 +121,13 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     return eventOptions(state, player).filter((o) => o.affordable).map((o) => ({ type: 'event', option: o.index }));
   }
   const actions: Action[] = [];
+  if (isOutside(player)) {
+    for (const side of SIDES) {
+      if (moveCost(state, entryCell(state.map, side)) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA) actions.push({ type: 'enter', side });
+    }
+    actions.push({ type: 'endTurn' });
+    return actions;
+  }
   for (const n of neighbours(state.map, player.position)) {
     if (moveCost(state, n) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
@@ -139,6 +156,24 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   return actions;
 }
 
+/** One step onto a fragment: costs Speed and Stamina, reveals it and may draw an event. */
+function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
+  const cost = moveCost(state, to);
+  if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
+  if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
+  player.crossedRiver = false;
+  log(state, { type: 'moved', player: player.id, from: player.position, to, cost });
+  player.speedLeft -= cost;
+  player.staminaLeft -= MOVE_STAMINA;
+  player.cameFrom = isOutside(player) ? null : player.position;
+  player.position = to;
+  const terrain = state.map.cells[to]!.terrain;
+  if (reveal(state, player, to, rng) && drawsEvent(terrain)) {
+    const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
+    if (card !== null) startEvent(state, player, card);
+  }
+}
+
 function busy(player: PlayerState) {
   if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
   if (player.pendingEvent) throw new EngineError('event.pending', 'Answer the event first.');
@@ -155,27 +190,27 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
   if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'spend') busy(player);
+  if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'spend') {
+    throw new EngineError('enter.first', 'Step onto the map first.');
+  }
 
   switch (action.type) {
     case 'move': {
-      if (!neighbours(state.map, player.position).includes(action.to)) {
+      if (isOutside(player) || !neighbours(state.map, player.position).includes(action.to)) {
         throw new EngineError('move.notAdjacent', 'You can only move to a neighbouring fragment.');
       }
-      const cost = moveCost(state, action.to);
-      if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
-      if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
       if (blockedByRiver(state, player, action.to)) throw new EngineError('move.river', 'Swim across the river first.');
-      player.crossedRiver = false;
-      log(state, { type: 'moved', player: player.id, from: player.position, to: action.to, cost });
-      player.speedLeft -= cost;
-      player.staminaLeft -= MOVE_STAMINA;
-      player.cameFrom = player.position;
-      player.position = action.to;
-      const terrain = state.map.cells[action.to]!.terrain;
-      if (reveal(state, player, action.to, rng) && drawsEvent(terrain)) {
-        const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
-        if (card !== null) startEvent(state, player, card);
-      }
+      step(state, player, action.to, rng);
+      break;
+    }
+    case 'enter': {
+      if (!isOutside(player)) throw new EngineError('enter.onMap', 'You are already on the map.');
+      if (!SIDES.includes(action.side)) throw new EngineError('enter.side', 'Choose a side of the map.');
+      const to = entryCell(state.map, action.side);
+      // Until the hero finds a city, death brings them back to where they stepped in.
+      if (player.start === OUTSIDE) player.start = to;
+      if (player.respawnAt === OUTSIDE) player.respawnAt = to;
+      step(state, player, to, rng);
       break;
     }
     case 'camp': {
@@ -339,6 +374,7 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
 /** Death, the Stone of Beginnings, the Fountain of rebirth and the win conditions. */
 function afterAction(state: GameState, player: PlayerState) {
   if (player.character.vitality <= 0) respawn(state, player);
+  if (isOutside(player)) return;
   const cell = state.map.cells[player.position]!;
   if (cell.terrain === 'city') player.respawnAt = player.position;
   if (cell.terrain === 'core' && !state.players.some((p) => p.hasStone)) {
@@ -363,7 +399,7 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   // Sunborn need food only every second round.
   const needsFood = c.race !== 'sunborn' || state.round % 2 === 1;
   // Staying in the desert costs double food.
-  const meals = state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
+  const meals = !isOutside(player) && state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
   if (needsFood) {
     if (c.food >= meals) {
       c.food -= meals;

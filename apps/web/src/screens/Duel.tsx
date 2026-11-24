@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ENEMIES, ITEMS } from '@hp/content';
+import { ENEMIES, ITEMS, type DiceLook } from '@hp/content';
 import {
   attacksPerTurn, combatMoves, fightOdds, foeDamage, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
 import { Icon } from '../Icons';
+import { diceVars } from '../DiceFace';
 import { PixelFoe, PixelHero } from '../PixelHero';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
@@ -178,7 +179,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               {step?.kind === 'roll' && (
                 <motion.div key={`roll-${at}`} className={`throw ${step.who === HERO ? 'mine' : 'theirs'}`} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                   <TestTitle test={step.test} target={step.result.target} who={`${step.who === HERO ? c.name : step.who === 'foe' ? t('foe') : foeName(step.who, locale)}${step.card ? ` · ${cardName(step.card, locale)}` : ''}`} />
-                  <BigDie result={step.result} rolling={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} />
+                  <BigDie dice={c.dice} result={step.result} rolling={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} />
                 </motion.div>
               )}
               {step?.kind === 'note' && (
@@ -187,7 +188,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               {!busy && prompt && (
                 <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                   <TestTitle test={promptTest} target={promptTarget} who={`${c.name}${promptCard ? ` · ${cardName(promptCard, locale)}` : ''}`} />
-                  <BigDie onTap={throwDie} />
+                  <BigDie dice={c.dice} onTap={throwDie} />
                   <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
                 </motion.div>
               )}
@@ -260,13 +261,14 @@ function TestTitle({ test, target, who }: { test: UiKey; target: number; who: st
 }
 
 /** A big d100 die. Before the throw it waits for a tap; then it tumbles and lands on the result. */
-function BigDie({ result, rolling = false, onTap }: { result?: TestResult; rolling?: boolean; onTap?: () => void }) {
+/** The k100 throw: a k100 die for the tens and a k10 for the units, in the hero's own dice colours. */
+function BigDie({ result, rolling = false, onTap, dice }: { result?: TestResult; rolling?: boolean; onTap?: () => void; dice?: DiceLook }) {
   const { t } = useT();
-  const [face, setFace] = useState('?');
+  const [face, setFace] = useState<number | null>(null);
   const [landed, setLanded] = useState(false);
   useEffect(() => {
     if (!rolling || !result) {
-      setFace('?');
+      setFace(null);
       setLanded(false);
       return;
     }
@@ -277,11 +279,11 @@ function BigDie({ result, rolling = false, onTap }: { result?: TestResult; rolli
     const tick = () => {
       if (!alive) return;
       if (performance.now() - start > ROLL_MS - 100) {
-        setFace(String(result.roll));
+        setFace(result.roll);
         setLanded(true);
         return;
       }
-      setFace(String(1 + Math.floor(Math.random() * 100)));
+      setFace(1 + Math.floor(Math.random() * 100));
       wait *= 1.17;
       timer = setTimeout(tick, wait);
     };
@@ -292,18 +294,34 @@ function BigDie({ result, rolling = false, onTap }: { result?: TestResult; rolli
     };
   }, [rolling, result]);
 
+  // 100 shows as "00" on the tens die and "0" on the units die.
+  const tens = face === null ? '?' : face === 100 ? '00' : String(Math.floor(face / 10) * 10).padStart(2, '0');
+  const units = face === null ? '?' : String(face % 10);
+  const spin = rolling && !landed;
   return (
     <div className="big-die-wrap">
       <motion.button
         className={`big-die ${onTap ? 'ready' : ''} ${landed ? (result!.success ? 'ok' : 'bad') : ''}`}
         disabled={!onTap}
         onClick={onTap}
-        animate={rolling && !landed ? { rotate: [0, 200, 340, 380, 360], y: [0, -40, 0, -14, 0] } : onTap ? { scale: [1, 1.06, 1] } : { rotate: 0, y: 0 }}
-        transition={rolling && !landed ? { duration: ROLL_MS / 1000, ease: 'easeOut' } : onTap ? { duration: 1.1, repeat: Infinity } : { duration: 0.2 }}
-        aria-label={onTap ? t('roll') : face}
+        animate={onTap ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+        transition={onTap ? { duration: 1.1, repeat: Infinity } : { duration: 0.2 }}
+        aria-label={onTap ? t('roll') : face === null ? 'k100' : String(face)}
       >
-        <span>{onTap ? t('roll') : face}</span>
-        <small>k100</small>
+        <span className="big-die-pair">
+          {[{ text: tens, die: 'd100' as const, d: 0 }, { text: units, die: 'd10' as const, d: 0.08 }].map((x) => (
+            <motion.span
+              key={x.die}
+              className={`die big ${x.die === 'd100' ? 'tens' : ''}`}
+              style={diceVars(dice, x.die)}
+              animate={spin ? { rotate: [0, 200, 340, 380, 360], y: [0, -40, 0, -14, 0] } : { rotate: 0, y: 0 }}
+              transition={spin ? { duration: ROLL_MS / 1000, ease: 'easeOut', delay: x.d } : { duration: 0.2 }}
+            >
+              {x.text}
+            </motion.span>
+          ))}
+        </span>
+        <small>{onTap ? t('roll') : 'k100 + k10'}</small>
       </motion.button>
       <AnimatePresence>
         {landed && result && (

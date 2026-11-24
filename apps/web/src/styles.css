@@ -99,24 +99,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .stat small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .stat b { font-variant-numeric: tabular-nums; }
 
-.board-wrap { flex: 1; display: grid; place-items: center; min-height: 0; }
+.board-wrap { flex: 1; align-self: stretch; width: 100%; display: grid; place-items: center; min-height: 240px; }
+/* The board leaves a margin of about one fragment on every side for the starting places outside the map. */
 .board {
   position: relative; display: grid; gap: 3px;
-  width: min(100%, calc((100dvh - 220px) * var(--ratio, 1)), 720px);
-  max-height: calc(100dvh - 220px);
 }
 .frag {
   position: relative; border: 0; border-radius: 0; padding: 0; overflow: hidden; aspect-ratio: 1;
-  image-rendering: pixelated;
+  image-rendering: pixelated; background: #0b0814;
+  transition: transform 0.35s cubic-bezier(.3, 1.4, .5, 1), box-shadow 0.35s, filter 0.35s;
 }
+.terrain-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; shape-rendering: crispEdges; }
+.frag.seen:not(.here-tile) .terrain-art { filter: saturate(0.85) brightness(0.88); }
+/* The fragment the hero stands on is lifted off the board and lit. */
+.frag.here-tile {
+  z-index: 2; overflow: visible; transform: translateY(-5%) scale(1.07);
+  box-shadow: 0 10px 16px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 230, 160, 0.85), 0 0 22px rgba(255, 220, 140, 0.45);
+  filter: brightness(1.12);
+}
+.frag.here-tile .terrain-art { filter: none; }
+.frag-icons { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 2px; z-index: 2; padding: 2px 1px; background: linear-gradient(transparent, rgba(8, 6, 14, 0.75)); }
+.frag-icons .icon { display: block; }
 .frag::after { /* faint pixel texture */
   content: ''; position: absolute; inset: 0; opacity: 0.25; pointer-events: none;
   background-image: linear-gradient(45deg, rgba(0,0,0,.25) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.25) 75%),
     linear-gradient(45deg, rgba(0,0,0,.25) 25%, transparent 25%, transparent 75%, rgba(0,0,0,.25) 75%);
   background-size: 8px 8px; background-position: 0 0, 4px 4px;
 }
-.frag-name { position: absolute; left: 4px; bottom: 3px; font-size: clamp(8px, 1.6vw, 11px); font-weight: 600; text-shadow: 0 1px 2px #000; z-index: 2; }
-.frag-hard { position: absolute; right: 4px; top: 3px; font-size: 10px; opacity: 0.8; z-index: 2; }
+.frag-name { position: absolute; left: 4px; top: 3px; font-size: clamp(8px, 1.6vw, 11px); font-weight: 600; text-shadow: 0 1px 2px #000; z-index: 2; }
+.frag-hard { position: absolute; right: 3px; top: 3px; display: flex; align-items: center; gap: 1px; font-size: 10px; z-index: 2; padding: 0 2px; background: rgba(8, 6, 14, 0.55); }
 .frag.reachable { cursor: pointer; }
 .frag.reachable::before {
   content: ''; position: absolute; inset: 3px; z-index: 4; border: 2px dashed rgba(200, 190, 255, 0.75);
@@ -144,13 +155,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   to { clip-path: circle(0% at calc(100% - var(--ox, 50%)) calc(100% - var(--oy, 50%))); }
 }
 
-.hero { position: absolute; z-index: 5; display: grid; place-items: center; pointer-events: none; filter: drop-shadow(0 0 8px rgba(255, 240, 200, 0.6)); }
-.hero svg { width: 70%; height: auto; max-width: 64px; }
+.hero { position: absolute; z-index: 5; display: grid; place-items: center; pointer-events: none; }
+/* A small figurine standing on the lifted fragment, with its shadow on the ground. */
+.figurine { position: relative; width: 46%; translate: 0 -14%; display: grid; place-items: end center; filter: drop-shadow(0 0 5px rgba(255, 240, 200, 0.55)); }
+.figurine::before { content: ''; position: absolute; left: 8%; right: 8%; bottom: -6%; height: 16%; background: rgba(0, 0, 0, 0.55); border-radius: 50%; filter: blur(1px); }
+.figurine svg { position: relative; width: 100%; height: auto; max-width: 44px; }
+.hero.waiting-outside .figurine { translate: 0 0; }
+/* The starting places outside the map, one in the middle of each side. */
+.gate {
+  position: absolute; z-index: 4; display: grid; place-items: center; align-content: center; gap: 0; padding: 0;
+  border: 2px dashed rgba(200, 190, 255, 0.45); background: rgba(20, 14, 40, 0.55); color: var(--ink);
+  scale: 0.86; transition: border-color 0.2s, background 0.2s;
+}
+.gate small { font-size: clamp(8px, 1.4vw, 10px); color: var(--muted); }
+.gate-arrow { font-size: clamp(10px, 2vw, 16px); opacity: 0.85; }
+.gate-N .gate-arrow, .gate-S .gate-arrow, .gate-W .gate-arrow, .gate-E .gate-arrow { animation: pulse 1.6s ease-in-out infinite; }
+.gate.chosen { border-color: rgba(255, 230, 160, 0.9); background: rgba(60, 44, 20, 0.6); }
+.gate:not(:disabled):hover { border-color: #fff; }
+.gate.chosen .gate-arrow, .gate.chosen small { opacity: 0; }
+.gate-N .gate-arrow { order: 2; }
+/* Terrain actions: the title, the test with its odds, and the reward. */
+.act-btn { display: grid; justify-items: start; gap: 1px; text-align: left; padding: 6px 10px; min-width: 150px; }
+.act-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.act-test, .act-reward { font-size: 11px; color: var(--muted); line-height: 1.25; }
+.act-reward { color: #cfe8b0; }
 
 .dock { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .here { margin: 0; color: var(--muted); }
 .here b { color: var(--ink); }
-.dock-actions { display: flex; gap: 8px; margin-left: auto; }
+.dock-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 
 
 .stat.warn b { color: #ff9a8a; }
@@ -159,7 +192,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .badge::after { content: ''; position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; background: var(--glow); box-shadow: 0 0 8px var(--glow); }
 
 .hero.other { z-index: 4; opacity: 0.85; filter: drop-shadow(0 0 6px rgba(143, 123, 255, 0.7)); }
-.hero.other svg { width: 45%; }
+.hero.other .figurine { width: 34%; }
 .hero-tag { position: absolute; bottom: 2px; font-size: 10px; text-shadow: 0 1px 2px #000; }
 .waiting { width: 100%; margin: 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
 
@@ -237,11 +270,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .die {
   width: 54px; height: 54px; display: grid; place-items: center;
   font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 24px; font-weight: 700;
-  background: #fff; color: #15101f;
-  box-shadow: inset -5px -5px 0 #c9c2dd, inset 5px 5px 0 #ffffff, 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 24px rgba(143, 123, 255, 0.45);
+  background: linear-gradient(135deg, var(--die-from, #ffffff), var(--die-to, #d9d2ec)); color: var(--die-ink, #15101f);
+  box-shadow: inset -5px -5px 0 rgba(0, 0, 0, 0.22), inset 5px 5px 0 rgba(255, 255, 255, 0.35), 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 24px rgba(143, 123, 255, 0.45);
   clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
 }
-.die.tens { background: #ffd86a; box-shadow: inset -5px -5px 0 #d1a640, inset 5px 5px 0 #fff1b8, 0 8px 18px rgba(0,0,0,.45); }
+.die.tens { background: linear-gradient(135deg, var(--die-from, #fff1b8), var(--die-to, #e0b040)); }
 .die.d6, .die.d3 { clip-path: none; border-radius: 6px; }
 .dice-label { color: var(--ink); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; text-shadow: 0 1px 3px #000; }
 .dice-verdict { font-size: 13px; padding: 3px 8px; background: #fff; color: #15101f; }
@@ -261,7 +294,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 340px; }
   .stats { margin-left: 0; }
   .stat { min-width: 0; flex: 1 1 28%; }
-  .board { width: 100%; }
   .dock-actions { width: 100%; }
   .dock-actions button { flex: 1; }
 }
@@ -326,12 +358,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   position: absolute; top: -9px; left: -9px; width: 22px; height: 22px; display: grid; place-items: center;
   background: var(--edge); color: #0b0b10; font: 700 12px 'Pixelify Sans', Inter, sans-serif; box-shadow: 0 0 0 2px #0b0b10;
 }
-.card-tag { position: absolute; top: -8px; right: 6px; background: #ff5a3a; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 5px; box-shadow: 0 0 0 2px #0b0b10; }
+.card-tags { position: absolute; top: -8px; right: 6px; display: flex; gap: 3px; }
+.card-face:not(.large) .card-tags { flex-direction: column; align-items: flex-end; gap: 2px; right: -6px; }
+.card-face:not(.large) .card-tag { font-size: 8px; padding: 1px 3px; }
+.card-tag { background: #ff5a3a; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 5px; box-shadow: 0 0 0 2px #0b0b10; }
 .card-art { flex: 1; display: grid; place-items: center; width: 100%; background: radial-gradient(circle, rgba(255, 255, 255, 0.12), transparent 70%); }
 .card-name { font: 700 11px/1.15 'Pixelify Sans', Inter, sans-serif; }
 .card-face.large { width: min(280px, 78vw); height: auto; min-height: 380px; padding: 22px 18px 20px; gap: 10px; justify-content: flex-start; }
 .card-face.large .card-level { width: 36px; height: 36px; font-size: 18px; top: -14px; left: -14px; }
-.card-face.large .card-tag { font-size: 12px; top: -12px; padding: 3px 8px; }
+.card-face.large .card-tags { top: -12px; }
+.card-face.large .card-tag { font-size: 12px; padding: 3px 8px; }
+.card-tag.passive { background: #3a8a6a; }
+/* A combat card outside a fight rests greyed: it cannot be used until a fight breaks out. */
+.hand-card.idle .card-face { filter: grayscale(0.9) brightness(0.55); animation: none; }
 .card-face.large .card-art { min-height: 140px; flex: none; }
 .card-face.large .card-name { font-size: 24px; }
 .card-prof { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
@@ -374,14 +413,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .target-shield span { position: relative; font: 700 22px 'Pixelify Sans', Inter, sans-serif; }
 .big-die-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 130px; }
 .big-die {
-  width: 96px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: #fff; color: #15101f; border: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-  font: 700 34px/1 'Pixelify Sans', Inter, sans-serif;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: none; color: var(--ink); border: 0; padding: 6px;
 }
-.big-die small { font: 600 10px Inter, sans-serif; opacity: 0.6; margin-top: 2px; }
-.big-die.ready { background: #ffe066; cursor: pointer; font-size: 22px; }
-.big-die.ok { background: #6ef0a0; }
-.big-die.bad { background: #ff8a7a; }
+.big-die-pair { display: flex; gap: 10px; }
+.die.big { width: 64px; height: 64px; font-size: 26px; }
+.big-die small { font: 600 11px Inter, sans-serif; opacity: 0.75; text-transform: uppercase; letter-spacing: 0.08em; }
+.big-die.ready { cursor: pointer; }
+.big-die.ready small { opacity: 1; color: #ffe066; font-size: 13px; }
+.big-die.ok .big-die-pair { filter: drop-shadow(0 0 10px #6ef0a0); }
+.big-die.bad .big-die-pair { filter: drop-shadow(0 0 10px #ff8a7a); }
+.big-die.ready .big-die-pair { filter: drop-shadow(0 0 10px #ffe066); }
 .big-die:disabled { opacity: 1; }
 .duel-note { font: 700 20px 'Pixelify Sans', Inter, sans-serif; margin: 0; text-align: center; }
 .duel-hint { text-align: center; color: #ffe066; min-height: 1.2em; margin: 4px 0 0; }

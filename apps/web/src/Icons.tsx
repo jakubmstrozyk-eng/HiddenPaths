@@ -2,7 +2,7 @@
  * Small pixel icons in the same retro style as the heroes. Each is a 9×9 grid:
  * '.' empty, 'o' outline, 'm' main colour, 'l' light, 'd' dark.
  */
-export type IconName = 'speed' | 'stamina' | 'vitality' | 'food' | 'gold' | 'xp' | 'bag' | 'map' | 'cards' | 'sword' | 'shield' | 'camp' | 'town' | 'menu';
+export type IconName = 'speed' | 'stamina' | 'vitality' | 'food' | 'gold' | 'xp' | 'bag' | 'map' | 'cards' | 'sword' | 'shield' | 'camp' | 'town' | 'menu' | 'hunt' | 'gather' | 'herbalism' | 'mine' | 'swim' | 'meditate';
 
 const ICONS: Record<IconName, { rows: string[]; main: string; light: string; dark: string }> = {
   speed: { main: '#7fd3ff', light: '#d8f3ff', dark: '#2a6f9a', rows: [
@@ -158,6 +158,72 @@ const ICONS: Record<IconName, { rows: string[]; main: string; light: string; dar
     '.........',
     '.ooooooo.',
     '.........',
+  ] },
+  hunt: { main: '#c89a5a', light: '#f0d8a8', dark: '#6a4220', rows: [
+    '......ooo',
+    '..oo..olo',
+    '.omo.oldo',
+    'omo.oldo.',
+    'om.oldo..',
+    'om.odo...',
+    'omo.o....',
+    '.omo.....',
+    '..oo.....',
+  ] },
+  gather: { main: '#d0405a', light: '#ffb0c0', dark: '#3a7a3a', rows: [
+    '....d....',
+    '...ddd...',
+    '..d.d.d..',
+    '.ooo.ooo.',
+    'omlmoomlm',
+    'ommmoommm',
+    '.ooooooo.',
+    '..omlmo..',
+    '...ooo...',
+  ] },
+  herbalism: { main: '#5ac05a', light: '#c0f0a0', dark: '#2a6a2a', rows: [
+    '......oo.',
+    '....oolmo',
+    '...olmmmo',
+    '..olmmdo.',
+    '..ommdo..',
+    '..omdo...',
+    '..odo....',
+    '.od......',
+    'od.......',
+  ] },
+  mine: { main: '#b8c0cc', light: '#ffffff', dark: '#6a4220', rows: [
+    '..ooooo..',
+    '.ollmmmo.',
+    'om.ooo.mo',
+    'o..odo..o',
+    '...odo...',
+    '...odo...',
+    '...odo...',
+    '...odo...',
+    '...ooo...',
+  ] },
+  swim: { main: '#4aa8e0', light: '#c8ecff', dark: '#1a5a8a', rows: [
+    '.........',
+    '.oo...oo.',
+    'olmo.olmo',
+    'm..omo..m',
+    '.........',
+    '.oo...oo.',
+    'olmo.olmo',
+    'd..odo..d',
+    '.........',
+  ] },
+  meditate: { main: '#c9a7ff', light: '#ffffff', dark: '#6a4aa8', rows: [
+    '....o....',
+    '...omo...',
+    '..omlmo..',
+    'oomllmmoo',
+    'omllllmmo',
+    'oommmmdoo',
+    '..ommdo..',
+    '...odo...',
+    '....o....',
   ] },
 };
 

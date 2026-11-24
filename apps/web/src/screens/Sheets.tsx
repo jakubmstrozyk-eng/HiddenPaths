@@ -7,6 +7,7 @@ import {
 } from '@hp/engine';
 import { useT } from '../i18n';
 import { attrShort, itemName } from '../logText';
+import { Icon } from '../Icons';
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { t } = useT();
@@ -118,42 +119,21 @@ function itemNote(id: string, t: ReturnType<typeof useT>['t']): string {
 
 /** Worn gear, the backpack, materials, herbs, effects and level-up points. */
 export function BagSheet({ game, me, act, onClose }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void }) {
-  const { t, tx, locale } = useT();
+  const { t, locale } = useT();
   const c = me.character;
   const legal = legalActions(game, me.id);
   const can = (type: string, item: string) => legal.some((a) => a.type === type && 'item' in a && a.item === item);
   const armour = heroArmour(me);
-  const [bonus, setBonus] = useState<Partial<Record<Attribute, number>>>({});
-  const spent = Object.values(bonus).reduce((a, b) => a + (b ?? 0), 0);
   const items = [...new Set(me.inventory.items)];
   const materials = Object.entries(me.inventory.materials).filter(([, n]) => (n ?? 0) > 0);
   const herbs = Object.entries(me.inventory.herbs).filter(([, n]) => (n ?? 0) > 0);
-  const effects = me.effects.filter((e) => e.untilRound >= game.round && e.id !== 'stuck');
 
   return (
     <Sheet title={t('bag')} onClose={onClose}>
-      <h3>{t('attributes')}{c.unspentPoints > 0 ? ` · ${t('levelPoints')}: ${c.unspentPoints - spent}` : ''}</h3>
-      <div className="attrs">
-        {ATTRIBUTES.map((a) => (
-          <div key={a} className="attr">
-            <span>{t(a)}</span>
-            {c.unspentPoints > 0 ? (
-              <>
-                <button disabled={!bonus[a]} onClick={() => setBonus({ ...bonus, [a]: (bonus[a] ?? 0) - 5 })}>−</button>
-                <b>{c.attributes[a] + (bonus[a] ?? 0)}</b>
-                <button disabled={spent + 5 > c.unspentPoints} onClick={() => setBonus({ ...bonus, [a]: (bonus[a] ?? 0) + 5 })}>+</button>
-              </>
-            ) : (
-              <b style={{ gridColumn: '2 / span 3' }}>{c.attributes[a]}</b>
-            )}
-          </div>
-        ))}
-      </div>
-      {c.unspentPoints > 0 && (
-        <button className="primary" style={{ marginTop: 10 }} disabled={spent === 0} onClick={() => { act({ type: 'spend', bonus }); setBonus({}); }}>
-          {t('confirm')}
-        </button>
-      )}
+      <ul className="kit purse">
+        <li><span><Icon name="gold" size={14} /> {t('gold')}</span><b>{Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)}</b></li>
+        <li><span><Icon name="food" size={14} /> {t('food')}</span><b>{c.food}</b></li>
+      </ul>
 
       <h3>{t('equipped')}</h3>
       <ul className="kit">
@@ -187,6 +167,43 @@ export function BagSheet({ game, me, act, onClose }: { game: GameState; me: Play
           <h3>{t('materials')} · {t('herbs')}</h3>
           <p className="muted">{[...materials, ...herbs].map(([id, n]) => `${itemName(id, locale)} ×${n}`).join(' · ')}</p>
         </>
+      )}
+
+    </Sheet>
+  );
+}
+
+/** The hero: attributes, level points to spend, and what is working on them now. */
+export function HeroSheet({ game, me, act, onClose }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void }) {
+  const { t, tx, locale } = useT();
+  const c = me.character;
+  const [bonus, setBonus] = useState<Partial<Record<Attribute, number>>>({});
+  const spent = Object.values(bonus).reduce((a, b) => a + (b ?? 0), 0);
+  const effects = me.effects.filter((e) => e.untilRound >= game.round && e.id !== 'stuck');
+
+  return (
+    <Sheet title={c.name} onClose={onClose}>
+      <h3>{t('attributes')}{c.unspentPoints > 0 ? ` · ${t('levelPoints')}: ${c.unspentPoints - spent}` : ''}</h3>
+      <div className="attrs">
+        {ATTRIBUTES.map((a) => (
+          <div key={a} className="attr">
+            <span>{t(a)}</span>
+            {c.unspentPoints > 0 ? (
+              <>
+                <button disabled={!bonus[a]} onClick={() => setBonus({ ...bonus, [a]: (bonus[a] ?? 0) - 5 })}>−</button>
+                <b>{c.attributes[a] + (bonus[a] ?? 0)}</b>
+                <button disabled={spent + 5 > c.unspentPoints} onClick={() => setBonus({ ...bonus, [a]: (bonus[a] ?? 0) + 5 })}>+</button>
+              </>
+            ) : (
+              <b style={{ gridColumn: '2 / span 3' }}>{c.attributes[a]}</b>
+            )}
+          </div>
+        ))}
+      </div>
+      {c.unspentPoints > 0 && (
+        <button className="primary" style={{ marginTop: 10 }} disabled={spent === 0} onClick={() => { act({ type: 'spend', bonus }); setBonus({}); }}>
+          {t('confirm')}
+        </button>
       )}
 
       {(effects.length > 0 || me.conditions.length > 0) && (

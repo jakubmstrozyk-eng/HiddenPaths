@@ -10,8 +10,9 @@ export * from './combat';
 export * from './cards';
 export * from './towns';
 export { eventOptions, drawEvent, ALL_EVENT_IDS } from './events';
-export type { Change, Service } from './state';
+export type { Change, Service, Side } from './state';
+export { OUTSIDE, SIDES } from './state';
 export {
-  createGame, applyAction, legalActions, currentPlayer, isStuck, timeoutTurn, grantXp, worldView, newEntries, WIN_XP, LOG_LIMIT,
+  createGame, applyAction, legalActions, currentPlayer, entryCell, isOutside, isStuck, timeoutTurn, grantXp, worldView, newEntries, WIN_XP, LOG_LIMIT,
   type GameState, type PlayerState, type Action, type LogEntry, type NewPlayer,
 } from './game';
