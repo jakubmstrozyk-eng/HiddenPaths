@@ -8,7 +8,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
   trapper: {
     id: 'trapper', race: 'nomads', mvp: true, name: { pl: 'Traper', en: 'Trapper' },
     cards: [
-      { id: 'trapper-hunter', level: 1, name: { pl: 'Łowca', en: 'Hunter' }, summary: { pl: 'Powtórz następny nieudany test polowania.', en: 'Reroll your next failed hunting test.' } },
+      { id: 'trapper-hunter', level: 1, name: { pl: 'Łowca', en: 'Hunter' }, summary: { pl: 'Każdy nieudany test polowania możesz raz powtórzyć.', en: 'Every failed hunting test may be rolled again once.' } },
       { id: 'trapper-trap', level: 1, combat: true, name: { pl: 'Zastawianie Pułapki', en: 'Set a Trap' }, summary: { pl: 'Przeciwnik testuje Zr.; porażka = -4 Żyw.', en: 'Enemy tests Dexterity; on failure it loses 4 Vitality.' } },
       { id: 'trapper-precise-shot', level: 1, combat: true, name: { pl: 'Precyzyjny Strzał', en: 'Precise Shot' }, summary: { pl: 'Trafienie długim łukiem o 15+ = +2 obrażeń.', en: 'A longbow hit by 15 or more deals +2 damage.' } },
     ],
@@ -17,7 +17,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
   diver: {
     id: 'diver', race: 'myrmids', mvp: true, name: { pl: 'Nurek', en: 'Diver' },
     cards: [
-      { id: 'diver-fish', level: 1, name: { pl: 'Ryba', en: 'Fish' }, summary: { pl: 'Powtórz nieudany test łowiectwa lub pływania.', en: 'Reroll a failed fishing or swimming test.' } },
+      { id: 'diver-fish', level: 1, name: { pl: 'Ryba', en: 'Fish' }, summary: { pl: 'Nieudany test łowiectwa na fragmencie z wodą lub test pływania możesz raz powtórzyć.', en: 'A failed hunt on a water fragment or a failed swim may be rolled again once.' } },
       { id: 'diver-waterborn', level: 1, name: { pl: 'Wodnik', en: 'Water-born' }, summary: { pl: '+10 do cech przy dostępie do wody.', en: '+10 to all attributes next to water.' } },
       { id: 'diver-blowpipe', level: 1, combat: true, name: { pl: 'Plujka', en: 'Blowpipe' }, summary: { pl: 'Zatruta strzałka (S-2), trafienie zatruwa.', en: 'Poison dart (Str-2); a hit poisons the target.' } },
     ],

@@ -149,13 +149,12 @@ export function cardBonus(world: WorldView, actor: Pick<ActorState, 'position' |
  * A free second try at a failed test from a skill card: Fish (hunting and swimming, every time)
  * or Hunter (hunting, once until the next camp). Returns the card used, if any.
  */
-export function rerollCard(actor: ActorState, action: TerrainAction): string | null {
+export function rerollCard(actor: ActorState, action: TerrainAction, terrain: string): string | null {
   const cards = actor.character.cards ?? [];
-  if ((action === 'hunt' || action === 'swim') && cards.includes('diver-fish')) return 'diver-fish';
-  if (action === 'hunt' && cards.includes('trapper-hunter') && !actor.counters['used:trapper-hunter']) {
-    actor.counters['used:trapper-hunter'] = 1;
-    return 'trapper-hunter';
-  }
+  // Fish: a failed hunt on a water fragment (river or lake) is rolled again once (Jacob, 2026-11-24).
+  if (action === 'hunt' && WATER.has(terrain) && cards.includes('diver-fish')) return 'diver-fish';
+  // Hunter: every failed hunt may be rolled again, once (Jacob, 2026-11-24).
+  if (action === 'hunt' && cards.includes('trapper-hunter')) return 'trapper-hunter';
   return null;
 }
 
@@ -197,7 +196,7 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
   switch (action) {
     case 'hunt': {
       let result = roll('dex');
-      const rerolled = result.success ? null : rerollCard(actor, 'hunt');
+      const rerolled = result.success ? null : rerollCard(actor, 'hunt', terrain);
       if (rerolled) result = roll('dex');
       if (result.success) {
         const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
@@ -258,18 +257,22 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
     }
     case 'swim': {
       const fish = (actor.character.cards ?? []).includes('diver-fish');
+      // Fish: each failed swim test is rolled again once.
       let dex = roll('dex');
-      if (!dex.success && fish) dex = roll('dex');
+      const dexAgain = !dex.success && fish;
+      if (dexAgain) dex = roll('dex');
       let str = roll('str');
-      if (!str.success && fish) str = roll('str');
+      const strAgain = !str.success && fish;
+      if (strAgain) str = roll('str');
+      const again = dexAgain || strAgain ? { rerolled: 'diver-fish' } : {};
       const result = dex.success && str.success ? dex : dex.success ? str : dex;
       if (dex.success && str.success) {
         actor.crossedRiver = true;
         gained.push('crossed');
-        return { type: 'test', action, attribute: 'dex', result, gained };
+        return { type: 'test', action, attribute: 'dex', result, gained, ...again };
       }
       actor.character.vitality -= 6;
-      return { type: 'test', action, attribute: dex.success ? 'str' : 'dex', result, gained, lost: ['vitality:6'] };
+      return { type: 'test', action, attribute: dex.success ? 'str' : 'dex', result, gained, lost: ['vitality:6'], ...again };
     }
     case 'meditate': {
       // Monument: +20 to a random base attribute for 3 rounds (k6 table in the rules).

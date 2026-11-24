@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProfessionId, RaceId } from '@hp/content';
 import {
-  applyAction, cardBonus, combatMoves, combatTurn, createGame, legalActions, Rng, startCombat, testModifier, worldView,
+  applyAction, cardBonus, runTerrainAction, combatMoves, combatTurn, createGame, legalActions, Rng, startCombat, testModifier, worldView,
   type GameState,
 } from '../src/index';
 
@@ -123,5 +123,38 @@ describe('skill cards (level 1)', () => {
     if (g.players[0]!.combat || g.players[0]!.pendingEvent) return;
     g = applyAction(g, 'p', { type: 'card', card: 'trapper-trap' });
     expect(g.players[0]!.counters[`trap:${g.players[0]!.position}`]).toBe(1);
+  });
+
+  it('Hunter: every failed hunt is rolled again once, with no limit per camp', () => {
+    const g = make('nomads', 'trapper');
+    const p = g.players[0]!;
+    p.position = g.map.cells.find((c) => c.terrain === 'forest')!.index;
+    let rerolls = 0;
+    for (let seed = 1; seed < 60; seed++) {
+      p.staminaLeft = 3;
+      const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(seed));
+      if (out.type === 'test' && out.rerolled === 'trapper-hunter') rerolls++;
+    }
+    expect(rerolls).toBeGreaterThan(1);
+  });
+
+  it('Fish: a failed hunt is rolled again once on water only', () => {
+    const g = make('myrmids', 'diver');
+    const p = g.players[0]!;
+    const count = (terrain: string) => {
+      const cell = g.map.cells.find((c) => c.terrain === terrain);
+      if (!cell) return null;
+      p.position = cell.index;
+      let rerolls = 0;
+      for (let seed = 1; seed < 60; seed++) {
+        p.staminaLeft = 3;
+        const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(seed));
+        if (out.type === 'test' && out.rerolled === 'diver-fish') rerolls++;
+      }
+      return rerolls;
+    };
+    const wet = count('river') ?? count('lake');
+    if (wet !== null) expect(wet).toBeGreaterThan(0);
+    expect(count('forest')).toBe(0);
   });
 });

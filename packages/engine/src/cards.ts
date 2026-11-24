@@ -15,7 +15,7 @@ import type { ActorState } from './terrain';
 /** Cards with a fixed number of uses per game. */
 export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3 };
 /** Cards that turn sideways when used and come back at the next camp. */
-export const CARDS_PER_CAMP = ['wraith-haste', 'trapper-hunter'];
+export const CARDS_PER_CAMP = ['wraith-haste'];
 
 export const has = (actor: Pick<ActorState, 'character'>, card: string) => actor.character.cards.includes(card);
 
