@@ -1,26 +1,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { EVENT_BY_ID, TERRAINS, type TerrainAction } from '@hp/content';
+import { EVENT_BY_ID, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, currentPlayer, legalActions, newEntries, successChance, testModifier, worldView,
-  type Action, type GameState, type LogEntry, type PlayerState,
+  applyAction, currentPlayer, entryCell, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  type Action, type GameState, type LogEntry, type PlayerState, type Side,
 } from '@hp/engine';
+import { TerrainArt } from '../TerrainArt';
+import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
 import { combatLine, describe, diceOf, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
-import { BagSheet, TownSheet } from './Sheets';
+import { BagSheet, HeroSheet, TownSheet } from './Sheets';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { SkillHand } from '../SkillCards';
 
-/** Placeholder terrain colours; pixel-art tiles replace them in a later milestone. */
-const TERRAIN_STYLE: Record<string, string> = {
-  forest: '#1f4d2b', mountains: '#5b5f6b', fields: '#7d8a3a', river: '#2b5f8a', lake: '#1e4f7a',
-  desert: '#b8934a', inn: '#7a4f2a', monument: '#6b5a8a', cave: '#3a3438', village: '#8a6a3a',
-  city: '#a08850', core: '#120c22',
+/** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
+const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W', flintborn: 'N', nomads: 'N', myrmids: 'E' };
+
+/** How far outside the board the starting places sit, in fragments. */
+const GATE_OUT = 0.9;
+
+/** Where a fragment (or a starting place outside the map) sits, in fragments from the board's top-left corner. */
+function spot(map: { width: number; height: number }, position: number, gate: Side) {
+  if (position !== OUTSIDE) return { x: position % map.width, y: Math.floor(position / map.width) };
+  const midX = Math.floor((map.width - 1) / 2);
+  const midY = Math.floor((map.height - 1) / 2);
+  if (gate === 'N') return { x: midX, y: -GATE_OUT };
+  if (gate === 'S') return { x: midX, y: map.height - 1 + GATE_OUT };
+  if (gate === 'W') return { x: -GATE_OUT, y: midY };
+  return { x: map.width - 1 + GATE_OUT, y: midY };
+}
+
+/** The icon shown on a fragment for each thing the hero can do there. */
+const TILE_ICONS: Partial<Record<string, IconName>> = {
+  hunt: 'hunt', gather: 'gather', herbalism: 'herbalism', mine: 'mine', swim: 'swim', meditate: 'meditate', camp: 'camp', market: 'town', meal: 'food',
 };
 
 /** How long the hero takes to walk to the next fragment. */
@@ -65,12 +82,26 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const { width, height, cells } = game.map;
   const actions = useMemo(() => legalActions(game, me.id), [game, me.id]);
   const moves = new Map(actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
+  const outside = isOutside(me);
+  // The board leaves a margin of about one fragment on each side for the starting places outside the map.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => e && setRoom({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const boardWidth = Math.max(160, Math.min(room.w * width / (width + 1.8), room.h * width / (height + 1.8), 720));
+  const [gate, setGate] = useState<Side>(HOME_SIDE[c.race]);
+  const enterable = new Set(actions.flatMap((a) => (a.type === 'enter' ? [a.side] : [])));
 
   const [last, setLast] = useState<LogEntry[]>([]);
   const [dice, setDice] = useState<DiceRoll[] | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
-  const [sheet, setSheet] = useState<'town' | 'bag' | null>(null);
+  const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | null>(null);
   const [storyTitle, setStoryTitle] = useState('');
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
@@ -83,11 +114,12 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     const from = lastPos.current;
     lastPos.current = me.position;
     if (from === me.position) return;
-    const dx = (me.position % width) - (from % width);
+    const dx = spot(game.map, me.position, gate).x - spot(game.map, from, gate).x;
     if (dx !== 0) setFacing(dx > 0 ? 1 : -1);
     setWalking(true);
     const timer = setTimeout(() => setWalking(false), WALK_MS);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.position, width]);
   // True from the very render in which the hero changes fragment, before the effect above runs.
   const onTheWay = walking || lastPos.current !== me.position;
@@ -134,7 +166,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       setLines(acc);
     } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken')) {
       // Plain actions only open a card for big moments: death, a new level, the Stone.
-      const terrain = cells[nextMe.position]!.terrain;
+      const terrain = cells[nextMe.position]?.terrain ?? 'core';
       setStory({ title: terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name), lines: fresh });
     }
     setStoryTitle(title);
@@ -144,17 +176,21 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
 
   // Fragments revealed by the last action dissolve from the side the hero came in.
   const revealedNow = new Set(last.flatMap((e) => (e.type === 'revealed' ? [e.cell] : [])));
+  const steppedIn = last.some((e) => e.type === 'moved' && e.player === me.id && e.from === OUTSIDE);
   const origin = (cell: number) => {
-    if (me.cameFrom === null || cell !== me.position) return { x: '50%', y: '50%' };
-    const dx = (me.cameFrom % width) - (cell % width);
-    const dy = Math.floor(me.cameFrom / width) - Math.floor(cell / width);
+    if (cell !== me.position || (me.cameFrom === null && !steppedIn)) return { x: '50%', y: '50%' };
+    const from = me.cameFrom ?? OUTSIDE;
+    const a = spot(game.map, from, gate);
+    const b = spot(game.map, cell, gate);
+    const dx = Math.sign(a.x - b.x);
+    const dy = Math.sign(a.y - b.y);
     return { x: `${50 + dx * 50}%`, y: `${50 + dy * 50}%` };
   };
 
-  const here = cells[me.position]!;
-  const hereTerrain = here.terrain === 'core' ? null : TERRAINS[here.terrain];
+  const here = outside ? null : cells[me.position]!;
+  const hereTerrain = !here || here.terrain === 'core' ? null : TERRAINS[here.terrain];
   const terrainActs = actions.flatMap((a) => (a.type === 'terrain' ? [a.action] : []));
-  const inTown = here.terrain === 'inn' || here.terrain === 'village' || here.terrain === 'city';
+  const inTown = !!here && (here.terrain === 'inn' || here.terrain === 'village' || here.terrain === 'city');
   const quiet = myTurn && !me.pendingEvent && !me.combat && !game.winner;
   const others = game.players.filter((p) => p.id !== me.id);
   const hoursLeft = deadline ? Math.max(0, Math.round((new Date(deadline).getTime() - Date.now()) / 3_600_000)) : null;
@@ -162,6 +198,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     if (me.combat) return ['combat'];
     if (me.pendingEvent) return ['event'];
     if (sheet) return [];
+    if (outside) return [];
     const out: TipId[] = ['move'];
     if (inTown) out.push('town');
     if (!actions.some((a) => a.type === 'move')) out.push('endTurn');
@@ -189,24 +226,31 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         </div>
       </header>
 
-      <div className="board-wrap">
-        <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, ['--ratio' as string]: width / height }}>
+      <div className="board-wrap" ref={wrapRef}>
+        <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
           {cells.map((cell) => {
             const seen = me.revealed.includes(cell.index);
             const move = quiet ? moves.get(cell.index) : undefined;
             const name = cell.terrain === 'core' ? (me.hasStone ? '◇' : '◆') : tx(TERRAINS[cell.terrain].name);
             const o = origin(cell.index);
+            const isHere = seen && cell.index === me.position;
+            const icons = seen && cell.terrain !== 'core'
+              ? [...new Set(TERRAINS[cell.terrain].actions.flatMap((x) => (TILE_ICONS[x] ? [TILE_ICONS[x]!] : [])))].slice(0, 4)
+              : [];
             return (
               <button
                 key={cell.index}
-                className={`frag ${move ? 'reachable' : ''}`}
-                style={{ background: TERRAIN_STYLE[cell.terrain] }}
+                className={`frag ${move ? 'reachable' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
                 disabled={!move}
                 onClick={() => move && act(move)}
                 aria-label={seen ? name : move ? `${t('tapToMove')}` : undefined}
               >
+                {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
                 {seen && <span className="frag-name">{name}</span>}
-                {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard">2</span>}
+                {icons.length > 0 && (
+                  <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={11} />)}</span>
+                )}
+                {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
                 {!seen && (
                   <span className="void-wrap">
                     <span className="void" />
@@ -220,7 +264,30 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               </button>
             );
           })}
-          {others.map((p) => (
+          {outside && SIDES.map((side) => {
+            const p = spot(game.map, OUTSIDE, side);
+            const open = quiet && enterable.has(side);
+            return (
+              <button
+                key={side}
+                className={`gate gate-${side} ${gate === side ? 'chosen' : ''}`}
+                style={{ left: `${(p.x / width) * 100}%`, top: `${(p.y / height) * 100}%`, width: `${100 / width}%`, height: `${100 / height}%` }}
+                disabled={!open}
+                onMouseEnter={() => setGate(side)}
+                onFocus={() => setGate(side)}
+                onClick={() => {
+                  setGate(side);
+                  const a = actions.find((x) => x.type === 'enter' && x.side === side);
+                  if (a) act(a);
+                }}
+                aria-label={`${t('enterFrom')} ${t(`side${side}` as const)}`}
+              >
+                <span className="gate-arrow" aria-hidden="true">{side === 'N' ? '▼' : side === 'S' ? '▲' : side === 'W' ? '▶' : '◀'}</span>
+                <small>{t(`side${side}` as const)}</small>
+              </button>
+            );
+          })}
+          {others.filter((p) => !isOutside(p)).map((p) => (
             <motion.div
               key={p.id}
               className="hero other"
@@ -230,21 +297,25 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
               title={names[p.id] ?? p.character.name}
             >
-              <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
+              <span className="figurine">
+                <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
+              </span>
               <small className="hero-tag">{p.character.name}</small>
             </motion.div>
           ))}
           <motion.div
-            className="hero"
+            className={`hero ${outside ? 'waiting-outside' : ''}`}
             initial={false}
             animate={{
-              left: `${((me.position % width) / width) * 100}%`,
-              top: `${(Math.floor(me.position / width) / height) * 100}%`,
+              left: `${(spot(game.map, me.position, gate).x / width) * 100}%`,
+              top: `${(spot(game.map, me.position, gate).y / height) * 100}%`,
             }}
-            transition={{ duration: WALK_MS / 1000, ease: 'linear' }}
+            transition={{ duration: (outside ? 0.35 : WALK_MS / 1000), ease: outside ? 'easeOut' : 'linear' }}
             style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
           >
-            <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
+            <span className="figurine">
+              <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
+            </span>
           </motion.div>
         </div>
       </div>
@@ -264,17 +335,27 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           onPlay={(card) => act({ type: 'card', card })}
         />
         <p className="here">
-          <Icon name="map" size={14} /> <b>{hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
-          {me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
+          <Icon name="map" size={14} /> <b>{outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
+          {outside ? ` · ${t('pickSide')}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
         </p>
         <div className="dock-actions">
-          {TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => (
-            <button key={a} className="ghost" onClick={() => act({ type: 'terrain', action: a })}>
-              {t(a)}{a !== 'meditate' && <small className="odds"> {Math.round(actionChance(game, me, a) * 100)}%</small>}
-            </button>
-          ))}
+          {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
+            const info = actionInfo(a, here.terrain as Exclude<typeof here.terrain, 'core'>);
+            return (
+              <button key={a} className="ghost act-btn" onClick={() => act({ type: 'terrain', action: a })}>
+                <span className="act-title"><Icon name={a} size={14} />{t(a)}</span>
+                <small className="act-test">
+                  {info.test ? `${tx({ pl: 'Test', en: 'Test' })}: ${tx(info.test)} · ${Math.round(actionChance(game, me, a) * 100)}%` : tx({ pl: 'Bez testu', en: 'No test' })}
+                </small>
+                <small className="act-reward">
+                  {tx(info.reward)}{info.risk ? ` · ${tx(info.risk)}` : ''}{info.cost ? ` · −${info.cost} ${t('staminaShort')}` : ''}
+                </small>
+              </button>
+            );
+          })}
           {inTown && quiet && <button className="ghost with-icon" onClick={() => setSheet('town')}><Icon name="town" />{t('town')}</button>}
-          <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
+          <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" />{t('heroSheet')}</button>
+          <button className="ghost with-icon" disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
           {myTurn && actions.some((a) => a.type === 'camp') && (
             <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
           )}
@@ -300,6 +381,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
+        {sheet === 'hero' && quiet && <HeroSheet key="hero" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {game.winner && !story && (
           <div className="overlay" key="won">
             <motion.article className="card victory" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
@@ -312,7 +394,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             </motion.article>
           </div>
         )}
-        {dice && <DiceTray key={`dice-${game.version}`} rolls={dice} onDone={() => setDice(null)} />}
+        {dice && <DiceTray key={`dice-${game.version}`} rolls={dice} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
       {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
     </div>

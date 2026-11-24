@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useT } from './i18n';
+import type { DiceLook } from '@hp/content';
 import type { DiceRoll } from './logText';
+import { diceVars } from './DiceFace';
 
 const ROLL_MS = 900;
 
@@ -9,7 +11,7 @@ const ROLL_MS = 900;
  * The dice tray: every die thrown by an action tumbles in from the side, bounces,
  * flickers through faces and lands on the engine's result. Tap anywhere to skip.
  */
-export function DiceTray({ rolls, onDone }: { rolls: DiceRoll[]; onDone: () => void }) {
+export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: () => void; dice?: DiceLook }) {
   const { t } = useT();
   const [landed, setLanded] = useState(false);
   const shown = rolls.slice(0, 6);
@@ -42,11 +44,11 @@ export function DiceTray({ rolls, onDone }: { rolls: DiceRoll[]; onDone: () => v
             <div className="dice-pair">
               {r.kind === 'd100' ? (
                 <>
-                  <Die face={r.value === 100 ? '00' : String(Math.floor(r.value / 10) * 10).padStart(2, '0')} sides={10} tens delay={i * 0.12} />
-                  <Die face={String(r.value % 10)} sides={10} delay={i * 0.12 + 0.05} />
+                  <Die face={r.value === 100 ? '00' : String(Math.floor(r.value / 10) * 10).padStart(2, '0')} sides={10} tens delay={i * 0.12} style={diceVars(dice, 'd100')} />
+                  <Die face={String(r.value % 10)} sides={10} delay={i * 0.12 + 0.05} style={diceVars(dice, 'd10')} />
                 </>
               ) : (
-                <Die face={String(r.value)} sides={r.sides} delay={i * 0.12} />
+                <Die face={String(r.value)} sides={r.sides} delay={i * 0.12} style={r.sides === 10 ? diceVars(dice, 'd10') : r.sides <= 6 ? diceVars(dice, 'd6') : undefined} />
               )}
             </div>
             <small className="dice-label">{r.label}</small>
@@ -76,7 +78,7 @@ export function DiceTray({ rolls, onDone }: { rolls: DiceRoll[]; onDone: () => v
   );
 }
 
-function Die({ face, sides, tens, delay }: { face: string; sides: number; tens?: boolean; delay: number }) {
+function Die({ face, sides, tens, delay, style }: { face: string; sides: number; tens?: boolean; delay: number; style?: React.CSSProperties }) {
   const [shown, setShown] = useState(face);
   useEffect(() => {
     // Flicker through random faces while the die tumbles, slowing down before it lands.
@@ -106,6 +108,7 @@ function Die({ face, sides, tens, delay }: { face: string; sides: number; tens?:
   return (
     <motion.span
       className={`die d${sides} ${tens ? 'tens' : ''}`}
+      style={style}
       initial={{ x: '-70vw', y: -60, rotate: spin, scale: 0.7 }}
       animate={{ x: 0, y: [-60, 0, -26, 0, -8, 0], rotate: 0, scale: 1 }}
       transition={{

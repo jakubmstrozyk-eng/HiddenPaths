@@ -9,6 +9,10 @@ import { Icon } from './Icons';
 const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap'];
 const FIGHT_PLAY = ['trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves'];
 
+/** A card that is never played: it works by itself whenever its moment comes. */
+export const isPassive = (card: string) =>
+  !MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card) && card !== 'cavedelver-craftsman' && card !== 'mystic-researcher';
+
 type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'map' | 'fight' | 'notNow' | 'passive';
 const NOTE: Record<Exclude<Status, 'play'>, UiKey> = {
   usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp',
@@ -52,7 +56,7 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
     <>
       <div className={`hand ${compact ? 'compact' : ''}`} aria-label={t('skillCards')}>
         {cards.map((card, i) => (
-          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} onOpen={() => setOpen(card)} />
+          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} idle={!!card.combat && !inFight && status(card.id) !== 'play'} onOpen={() => setOpen(card)} />
         ))}
       </div>
       <AnimatePresence>
@@ -88,7 +92,7 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
   );
 }
 
-function HandCard({ card, status, uses, tilt, lift, onOpen }: { card: ActionCard; status: Status; uses: string | null; tilt: number; lift: number; onOpen: () => void }) {
+function HandCard({ card, status, uses, tilt, lift, idle, onOpen }: { card: ActionCard; status: Status; uses: string | null; tilt: number; lift: number; idle: boolean; onOpen: () => void }) {
   const { tx } = useT();
   // The card leans toward the pointer while it hovers, like one picked up from the table.
   const px = useMotionValue(0);
@@ -100,7 +104,7 @@ function HandCard({ card, status, uses, tilt, lift, onOpen }: { card: ActionCard
   const rest = tilt + (sideways ? 90 : 0);
   return (
     <motion.button
-      className={`hand-card ${card.combat ? 'combat' : ''} ${status === 'play' ? 'playable' : ''} ${status === 'usedUp' || sideways ? 'spent' : ''}`}
+      className={`hand-card ${card.combat ? 'combat' : ''} ${status === 'play' ? 'playable' : ''} ${status === 'usedUp' || sideways ? 'spent' : ''} ${idle ? 'idle' : ''}`}
       style={{ rotateX, rotateY, transformPerspective: 600 }}
       initial={{ y: 80, opacity: 0, rotate: rest }}
       animate={{ y: lift + (status === 'play' ? -8 : 0), opacity: 1, rotate: rest }}
@@ -126,7 +130,10 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
   return (
     <div className={`card-face ${card.combat ? 'combat' : ''} ${large ? 'large' : ''}`}>
       <span className="card-level">{card.level}</span>
-      {card.combat && <span className="card-tag">{t('combatCard')}</span>}
+      <span className="card-tags">
+        {card.combat && <span className="card-tag">{t('combatCard')}</span>}
+        {isPassive(card.id) && <span className="card-tag passive">{t('passiveCard')}</span>}
+      </span>
       <span className="card-art"><Icon name={card.combat ? 'sword' : 'cards'} size={large ? 72 : 26} /></span>
       <b className="card-name">{tx(card.name)}</b>
       {uses && <span className="card-uses">{uses}</span>}
