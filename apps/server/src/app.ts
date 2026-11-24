@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import type { Action, CharacterInput, GameConfig } from '@hp/engine';
+import type { Action, CharacterInput, GameConfig, NewHero } from '@hp/engine';
 import { logout, startLogin, userForSession, validEmail, verifyLogin, type Mailer, type User } from './auth';
 import type { Db } from './db';
 import { ApiError, Games, type TurnNotifier } from './games';
+import { Heroes } from './heroes';
 
 export interface AppOptions {
   db: Db;
@@ -45,6 +46,7 @@ export async function buildApp(opts: AppOptions) {
     );
   };
   const games = new Games(db, opts.clock, notify);
+  const heroes = new Heroes(db, opts.clock ?? (() => new Date()));
   app.decorate('games', games);
 
   app.decorateRequest('user', null);
@@ -92,11 +94,22 @@ export async function buildApp(opts: AppOptions) {
     return { user: await userForSession(db, req.headers.authorization!.slice(7)) };
   });
 
-  // Games.
+  // Heroes, kept apart from games.
+  app.get('/api/heroes', async (req) => ({ heroes: await heroes.list(signedIn(req)) }));
+  app.post<{ Body: { hero: NewHero } }>('/api/heroes', async (req, reply) => reply.code(201).send({ hero: await heroes.create(signedIn(req), req.body?.hero) }));
+  app.delete<{ Params: { id: string } }>('/api/heroes/:id', async (req) => {
+    await heroes.remove(signedIn(req), req.params.id);
+    return { ok: true };
+  });
+
+  // Games. A game is started with one of the player's heroes and the missions kept for it.
   app.get('/api/games', async (req) => ({ games: await games.list(signedIn(req)) }));
-  app.post<{ Body: { config: GameConfig; character: CharacterInput; seed?: string; maxPlayers?: number } }>('/api/games', async (req, reply) => {
+  app.post<{ Body: { config: GameConfig; character?: CharacterInput; heroId?: string; missions?: string[]; seed?: string; maxPlayers?: number } }>('/api/games', async (req, reply) => {
     const user = signedIn(req);
-    const { config, character, seed, maxPlayers } = req.body ?? ({} as never);
+    const { config, seed, maxPlayers } = req.body ?? ({} as never);
+    const character = req.body?.heroId
+      ? await heroes.character(user, req.body.heroId, req.body.missions ?? [], !!config?.multiplayer)
+      : req.body?.character!;
     const created = config?.multiplayer
       ? await games.createLobby(user, config, character, maxPlayers ?? 2)
       : await games.createSolo(user, config, character, seed);
@@ -124,8 +137,10 @@ export async function buildApp(opts: AppOptions) {
     );
     return { id, ...g };
   });
-  app.post<{ Params: { code: string }; Body: { character: CharacterInput } }>('/api/invites/:code/join', async (req) => {
-    return games.join(signedIn(req), req.params.code, req.body?.character);
+  app.post<{ Params: { code: string }; Body: { character?: CharacterInput; heroId?: string; missions?: string[] } }>('/api/invites/:code/join', async (req) => {
+    const user = signedIn(req);
+    const character = req.body?.heroId ? await heroes.character(user, req.body.heroId, req.body.missions ?? [], true) : req.body?.character!;
+    return games.join(user, req.params.code, character);
   });
 
   // The web app, on the same origin so no cross-site setup is needed.

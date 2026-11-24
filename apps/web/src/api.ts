@@ -1,4 +1,4 @@
-import type { Action, CharacterInput, GameConfig, GameState, LogEntry } from '@hp/engine';
+import type { Action, CharacterInput, GameConfig, GameState, Hero, LogEntry, NewHero } from '@hp/engine';
 
 /** Talks to the game server on the same origin. Without a server the app plays solo games locally. */
 
@@ -98,4 +98,11 @@ export const api = {
   abandon: (id: string) => call('DELETE', `/games/${id}`),
   invite: (code: string) => call<{ id: string; config: GameConfig; max_players: number; players: number; host: string }>('GET', `/invites/${encodeURIComponent(code)}`),
   join: (code: string, character: CharacterInput) => call<{ id: string }>('POST', `/invites/${encodeURIComponent(code)}/join`, { character }),
+  heroes: () => call<{ heroes: Hero[] }>('GET', '/heroes'),
+  createHero: (hero: NewHero) => call<{ hero: Hero }>('POST', '/heroes', { hero }),
+  deleteHero: (id: string) => call('DELETE', `/heroes/${id}`),
+  createWithHero: (config: GameConfig, heroId: string, missions: string[], maxPlayers: number, seed?: string) =>
+    call<{ id: string; code?: string }>('POST', '/games', { config, heroId, missions, maxPlayers, seed }),
+  joinWithHero: (code: string, heroId: string, missions: string[]) =>
+    call<{ id: string }>('POST', `/invites/${encodeURIComponent(code)}/join`, { heroId, missions }),
 };

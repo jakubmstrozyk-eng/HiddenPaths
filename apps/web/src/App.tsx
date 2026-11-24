@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from 'motion/react';
 import type { Locale } from '@hp/content';
-import { createGame, type CharacterInput, type GameConfig, type GameState } from '@hp/engine';
+import { createGame, heroCharacter, type GameConfig, type GameState, type Hero } from '@hp/engine';
 import { api, getSession, serverAvailable, setSession, type Me } from './api';
 import { DarkMatter } from './DarkMatter';
 import { LocaleContext, useT, type UiKey } from './i18n';
 import { SetupScreen } from './screens/Setup';
-import { CharacterScreen } from './screens/Character';
+import { CreateHeroScreen, HeroPickScreen, HeroesScreen } from './screens/Heroes';
+import { deviceHeroes, serverHeroes } from './heroStore';
 import { GameScreen } from './screens/Game';
 import { AccountScreen, GamesScreen, MultiplayerScreen, OnlineGame, SignInScreen } from './screens/Online';
 
 type Screen =
   | { name: 'menu' }
   | { name: 'setup'; multi: boolean }
-  | { name: 'character'; config: GameConfig; maxPlayers: number; joinCode?: string }
+  | { name: 'pick'; config: GameConfig; maxPlayers: number; joinCode?: string }
+  | { name: 'heroes' }
+  | { name: 'createHero'; mode?: 'solo' | 'multi'; then?: Screen }
   | { name: 'game'; game: GameState }
   | { name: 'signin'; then: Screen }
   | { name: 'games' }
@@ -65,6 +68,7 @@ function afterOf(s: Screen): string {
   if (s.name === 'online') return `game:${s.id}`;
   if (s.name === 'multi') return s.code ? `join:${s.code}` : 'multi:';
   if (s.name === 'setup') return s.multi ? 'multi:' : 'new:';
+  if (s.name === 'createHero') return 'createHero:';
   return `${s.name}:`;
 }
 function screenOf(after: string): Screen {
@@ -75,6 +79,8 @@ function screenOf(after: string): Screen {
   if (kind === 'new') return { name: 'setup', multi: false };
   if (kind === 'games') return { name: 'games' };
   if (kind === 'account') return { name: 'account' };
+  if (kind === 'heroes') return { name: 'heroes' };
+  if (kind === 'createHero') return { name: 'createHero' };
   return { name: 'menu' };
 }
 
@@ -154,16 +160,19 @@ export function App() {
     setScreen({ name: 'game', game });
   };
 
-  const startGame = async (config: GameConfig, maxPlayers: number, joinCode: string | undefined, character: CharacterInput, seed: string) => {
-    if (!online) return play(createGame(seed, config, [{ id: 'you', character }]));
-    const { id } = joinCode ? await api.join(joinCode, character) : await api.create(config, character, maxPlayers, seed);
+  /** Heroes live on the server for a signed-in player, and on this device without a server. */
+  const heroStore = online && me ? serverHeroes : deviceHeroes;
+
+  const startGame = async (config: GameConfig, maxPlayers: number, joinCode: string | undefined, hero: Hero, missions: string[], seed: string) => {
+    if (!online) return play(createGame(seed, config, [{ id: 'you', character: heroCharacter(hero, missions) }]));
+    const { id } = joinCode ? await api.joinWithHero(joinCode, hero.id, missions) : await api.createWithHero(config, hero.id, missions, maxPlayers, seed);
     setScreen({ name: 'online', id });
   };
 
   const join = async (code: string) => {
     try {
       const info = await api.invite(code);
-      setScreen({ name: 'character', config: info.config, maxPlayers: info.max_players, joinCode: code });
+      setScreen({ name: 'pick', config: info.config, maxPlayers: info.max_players, joinCode: code });
     } catch (e) {
       setNotice((e as Error).message);
     }
@@ -195,6 +204,8 @@ export function App() {
                 onContinue={() => (online ? go({ name: 'games' }) : save && setScreen({ name: 'game', game: save }))}
                 onMulti={() => go({ name: 'multi' })}
                 onAccount={() => go({ name: 'account' })}
+                onHeroes={() => go({ name: 'heroes' })}
+                onCreateHero={() => go({ name: 'createHero' })}
               />
             )}
             {screen.name === 'signin' && (
@@ -207,16 +218,34 @@ export function App() {
                 <SetupScreen
                   multiplayer={screen.multi}
                   onBack={() => setScreen(screen.multi ? { name: 'multi' } : { name: 'menu' })}
-                  onNext={(config, maxPlayers) => setScreen({ name: 'character', config, maxPlayers })}
+                  onNext={(config, maxPlayers) => setScreen({ name: 'pick', config, maxPlayers })}
                 />
               </Opened>
             )}
-            {screen.name === 'character' && (
-              <Opened key="character">
-                <CharacterScreen
-                  config={screen.config}
+            {screen.name === 'pick' && (
+              <Opened key="pick">
+                <HeroPickScreen
+                  store={heroStore}
+                  multiplayer={screen.config.multiplayer}
                   onBack={() => setScreen(screen.joinCode ? { name: 'multi', code: screen.joinCode } : { name: 'setup', multi: screen.config.multiplayer })}
-                  onStart={(character, seed) => startGame(screen.config, screen.maxPlayers, screen.joinCode, character, seed)}
+                  onCreate={() => setScreen({ name: 'createHero', mode: screen.config.multiplayer ? 'multi' : 'solo', then: screen })}
+                  onStart={(hero, missions, seed) => startGame(screen.config, screen.maxPlayers, screen.joinCode, hero, missions, seed)}
+                />
+              </Opened>
+            )}
+            {screen.name === 'heroes' && (
+              <Opened key="heroes" tile="heroes">
+                <HeroesScreen store={heroStore} onBack={() => setScreen({ name: 'menu' })} onCreate={() => setScreen({ name: 'createHero', then: { name: 'heroes' } })} />
+              </Opened>
+            )}
+            {screen.name === 'createHero' && (
+              <Opened key="createHero" tile={screen.then ? undefined : 'createHero'}>
+                <CreateHeroScreen
+                  store={heroStore}
+                  mode={screen.mode}
+                  multiAllowed={!!online}
+                  onBack={() => setScreen(screen.then ?? { name: 'menu' })}
+                  onSaved={() => setScreen(screen.then ?? { name: 'heroes' })}
                 />
               </Opened>
             )}
@@ -308,7 +337,7 @@ function Opened({ tile, children }: { tile?: UiKey; children: React.ReactNode })
   );
 }
 
-function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount }: {
+function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, onHeroes, onCreateHero }: {
   online: boolean | null;
   me: Me | null;
   hasSave: boolean;
@@ -316,6 +345,8 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount }
   onContinue: () => void;
   onMulti: () => void;
   onAccount: () => void;
+  onHeroes: () => void;
+  onCreateHero: () => void;
 }) {
   const { t } = useT();
   const checking = online === null;
@@ -324,12 +355,16 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount }
         { key: 'newGame', onClick: onNew },
         { key: 'continue', onClick: onContinue, note: t('yourGames') },
         { key: 'multiplayer', onClick: onMulti },
+        { key: 'heroes', onClick: onHeroes },
+        { key: 'createHero', onClick: onCreateHero },
         { key: 'settings', onClick: onAccount, note: me ? me.display_name : t('signIn') },
       ]
     : [
         { key: 'newGame', onClick: checking ? undefined : onNew },
         { key: 'continue', onClick: hasSave && !checking ? onContinue : undefined, note: hasSave ? undefined : t('noGames') },
         { key: 'multiplayer', note: checking ? t('loading') : t('needsServer') },
+        { key: 'heroes', onClick: checking ? undefined : onHeroes },
+        { key: 'createHero', onClick: checking ? undefined : onCreateHero },
         { key: 'settings', note: t('soon') },
       ];
   return (

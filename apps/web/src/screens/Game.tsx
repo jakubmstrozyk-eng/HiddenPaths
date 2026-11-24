@@ -174,7 +174,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       <header className="hud">
         <button className="ghost small with-icon" onClick={onMenu}><Icon name="menu" />{t('menu')}</button>
         <div className="who">
-          <PixelHero race={c.race} size={28} />
+          <PixelHero race={c.race} profession={c.profession} look={c.look} size={28} />
           <span>
             <b>{c.name}</b> · {t('level')} {c.level} · {t('round')} {game.round}
           </span>
@@ -230,7 +230,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
               title={names[p.id] ?? p.character.name}
             >
-              <PixelHero race={p.character.race} size={28} />
+              <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
               <small className="hero-tag">{p.character.name}</small>
             </motion.div>
           ))}
@@ -244,7 +244,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             transition={{ duration: WALK_MS / 1000, ease: 'linear' }}
             style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
           >
-            <PixelHero race={c.race} size={40} walking={walking} facing={facing} />
+            <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
           </motion.div>
         </div>
       </div>
