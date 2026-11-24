@@ -9,7 +9,7 @@ import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
-import { combatLine, describe, diceOf, type DiceRoll } from '../logText';
+import { attrShort, combatLine, describe, diceOf, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
@@ -101,7 +101,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const enterable = new Set(actions.flatMap((a) => (a.type === 'enter' ? [a.side] : [])));
 
   const [last, setLast] = useState<LogEntry[]>([]);
-  const [dice, setDice] = useState<DiceRoll[] | null>(null);
+  const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
   const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | null>(null);
@@ -127,6 +127,22 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   // True from the very render in which the hero changes fragment, before the effect above runs.
   const onTheWay = walking || lastPos.current !== me.position;
 
+  /** What a throw is for, shown above the dice: the action, the service or the event that asked for it. */
+  const rollHeading = (a: Action, who: PlayerState, entries: LogEntry[]): string | null => {
+    const drawn = entries.find((e) => e.type === 'eventDrawn');
+    if (drawn && drawn.type === 'eventDrawn') return tx(EVENT_BY_ID[drawn.card]!.title);
+    if (who.pendingEvent) return tx(EVENT_BY_ID[who.pendingEvent.card]!.title);
+    if (a.type === 'terrain') return t(a.action as (typeof TERRAIN_ACTIONS)[number]);
+    if (a.type === 'service') return t(a.service);
+    if (a.type === 'camp') return a.research ? t('campResearch') : t('camp');
+    if (a.type === 'read') return t('read');
+    // At the start of a turn each lasting condition (plague, nightmare...) is tested again: a pass ends it.
+    if (a.type === 'endTurn' && who.conditions.length) {
+      return `${who.conditions.map((cd) => tx(cd.name)).join(', ')} · ${tx({ pl: 'próba pozbycia się stanu', en: 'trying to shake it off' })}`;
+    }
+    return null;
+  };
+
   const act = useCallback((a: Action) => {
     if (currentPlayer(game).id !== me.id) return;
     // The engine is deterministic, so playing the action here gives the same result the server will save.
@@ -143,8 +159,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       for (const e of entries) if (e.type === 'combat' && e.event.type === 'trap') foes.find((f) => f.uid === (e.event as { uid: string }).uid)!.vitality += (e.event as { damage: number }).damage;
       setReplay({ before, entries: entries.filter((e) => e.type === 'combat') });
     } else {
-      const rolls = diceOf(entries, T);
-      if (rolls.length) setDice(rolls);
+      // Only this hero's own throws: another player's rolls at the turn change are not ours to watch.
+      const rolls = diceOf(entries.filter((e) => !('player' in e) || e.player === me.id), T);
+      if (rolls.length) setDice({ rolls, heading: rollHeading(a, me, entries) });
     }
 
     const nextMe = next.players.find((p) => p.id === me.id)!;
@@ -335,6 +352,15 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             <Icon name="map" size={14} /> <b>{outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
             {outside ? ` · ${t('pickSide')}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
           </p>
+          {me.conditions.length > 0 && (
+            <p className="conditions-note">
+              {me.conditions.map((cd) => (
+                <span key={cd.id} className="condition-tag" title={tx({ pl: 'Na początku każdej tury rzucasz na tę cechę; sukces kończy stan.', en: 'At the start of each turn you roll this attribute; a pass ends it.' })}>
+                  {tx(cd.name)} · {tx({ pl: 'test', en: 'test' })} {attrShort(cd.test, locale)} {tx({ pl: 'na początku tury', en: 'each turn' })}
+                </span>
+              ))}
+            </p>
+          )}
           <small className="frag-panel-head">{tx({ pl: 'Co możesz tu zrobić', en: 'What you can do here' })}</small>
           <div className="frag-actions">
             {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
@@ -420,7 +446,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             </motion.article>
           </div>
         )}
-        {dice && <DiceTray key={`dice-${game.version}`} rolls={dice} dice={c.dice} onDone={() => setDice(null)} />}
+        {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
       {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
     </div>

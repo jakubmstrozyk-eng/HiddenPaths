@@ -40,7 +40,7 @@ export function DieFace({ kind, value, style, size = 56 }: { kind: 'd6' | 'd10' 
         <>
           <path d="M50,4 L94,40 L50,96 L6,40 Z" fill={`url(#${id})`} stroke="#0b0b10" strokeWidth="4" strokeLinejoin="round" />
           <path d="M6,40 L50,58 L94,40 M50,58 L50,96" stroke="#0b0b10" strokeOpacity="0.25" strokeWidth="2" fill="none" />
-          <text x="50" y="50" textAnchor="middle" fontSize={kind === 'd100' ? 26 : 30} fontWeight="700" fill={style.ink} fontFamily="'Pixelify Sans', Inter, sans-serif">
+          <text x="50" y="50" textAnchor="middle" fontSize={kind === 'd100' ? 26 : 30} fontWeight="800" fill={style.ink} fontFamily="Inter, system-ui, sans-serif">
             {kind === 'd100' ? `${value % 10}0` : value % 10}
           </text>
         </>
