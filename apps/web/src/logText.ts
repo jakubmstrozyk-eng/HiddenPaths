@@ -6,7 +6,7 @@ type T = ReturnType<typeof useT>;
 
 /** One die thrown on screen. A d100 test shows as two d10s (tens and units). */
 export type DiceRoll =
-  | { kind: 'd100'; value: number; target: number; success: boolean; label: string }
+  | { kind: 'd100'; value: number; target: number; success: boolean; label: string; attr?: Attribute }
   | { kind: 'plain'; sides: number; value: number; label: string };
 
 const ATTR: Record<Attribute, Text> = {
@@ -41,15 +41,15 @@ export function foeName(uid: string, locale: Locale): string {
 export function diceOf(entries: LogEntry[], { locale }: T): DiceRoll[] {
   const out: DiceRoll[] = [];
   for (const e of entries) {
-    if (e.type === 'check') out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale) });
-    if (e.type === 'test' && e.result.roll > 0) out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale) });
+    if (e.type === 'check') out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale), attr: e.attribute });
+    if (e.type === 'test' && e.result.roll > 0) out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale), attr: e.attribute });
     if (e.type === 'roll') out.push({ kind: 'plain', sides: e.die, value: e.value, label: `k${e.die}` });
     if (e.type === 'combat' && e.event.type === 'strike') {
       const by = e.event.by === 'hero' ? (locale === 'pl' ? 'Ty' : 'You') : foeName(e.event.by, locale);
       out.push({ kind: 'd100', value: e.event.result.roll, target: e.event.result.target, success: e.event.result.success, label: by });
     }
     if (e.type === 'combat' && e.event.type === 'flee') {
-      out.push({ kind: 'd100', value: e.event.hero.roll, target: e.event.hero.target, success: e.event.hero.success, label: attrShort('dex', locale) });
+      out.push({ kind: 'd100', value: e.event.hero.roll, target: e.event.hero.target, success: e.event.hero.success, label: attrShort('dex', locale), attr: 'dex' });
     }
   }
   return out;
@@ -63,7 +63,7 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
   const pl = locale === 'pl';
   switch (e.type) {
     case 'check':
-      return `${attrShort(e.attribute, locale)}: ${e.result.roll} / ${e.result.target} · ${e.result.success ? t('success') : t('failure')}`;
+      return `Test ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}`;
     case 'roll':
       return `k${e.die}: ${e.value}`;
     case 'change': {

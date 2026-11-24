@@ -1,4 +1,6 @@
 :root {
+  --display: 'Cinzel', Georgia, serif;
+  --num: Inter, system-ui, sans-serif;
   --ink: #f4f2ff;
   --muted: #9a94b8;
   --line: rgba(255, 255, 255, 0.14);
@@ -34,7 +36,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   padding: 48px 16px; gap: 12px; text-align: center;
 }
 .title {
-  font-family: 'Pixelify Sans', Inter, sans-serif; font-weight: 700; text-transform: uppercase;
+  font-family: var(--display); font-weight: 700; text-transform: uppercase;
   font-size: clamp(32px, 9vw, 72px); margin: 0;
   text-shadow: 0 0 24px rgba(143, 123, 255, 0.55);
 }
@@ -59,7 +61,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .panel {
   max-width: 760px; margin: 0 auto; padding: 56px 16px 32px;
 }
-.panel h2 { font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 28px; margin: 0 0 8px; }
+.panel h2 { font-family: var(--display); font-size: 28px; margin: 0 0 8px; }
 .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 28px 0 10px; }
 .muted { color: var(--muted); text-transform: none; letter-spacing: 0; }
 .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -208,7 +210,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   box-shadow: 0 0 0 3px #15101f, 0 0 0 5px #f6f3ea, 0 24px 60px rgba(0, 0, 0, 0.6), 0 0 80px rgba(143, 123, 255, 0.35);
 }
 .card-head small { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.55; }
-.card-head h2 { font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 26px; margin: 2px 0 10px; }
+.card-head h2 { font-family: var(--display); font-size: 26px; margin: 2px 0 10px; }
 .card-text { line-height: 1.55; margin: 0 0 14px; }
 .card-lines { list-style: none; padding: 10px 12px; margin: 0 0 14px; background: rgba(21, 16, 31, 0.07); font-size: 14px; display: grid; gap: 4px; }
 .card-lines li::before { content: '› '; opacity: 0.5; }
@@ -252,7 +254,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   background: #0b0916; border: 1px solid var(--line); border-bottom: 0;
 }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
-.sheet-head h2 { font-family: 'Pixelify Sans', Inter, sans-serif; margin: 0; }
+.sheet-head h2 { font-family: var(--display); margin: 0; }
 .sheet h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 22px 0 8px; }
 .kit { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .kit li { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; flex-wrap: wrap; }
@@ -269,7 +271,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .dice-pair { display: flex; gap: 8px; }
 .die {
   width: 54px; height: 54px; display: grid; place-items: center;
-  font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 24px; font-weight: 700;
+  font-family: var(--num); font-size: 24px; font-weight: 800;
   background: linear-gradient(135deg, var(--die-from, #ffffff), var(--die-to, #d9d2ec)); color: var(--die-ink, #15101f);
   box-shadow: inset -5px -5px 0 rgba(0, 0, 0, 0.22), inset 5px 5px 0 rgba(255, 255, 255, 0.35), 0 8px 18px rgba(0, 0, 0, 0.45), 0 0 24px rgba(143, 123, 255, 0.45);
   clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
@@ -314,7 +316,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .game-open small { color: var(--muted); }
 .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .confirm small { color: #ff8a8a; }
-.invite-code { font-family: 'Pixelify Sans', Inter, sans-serif; font-size: 40px; letter-spacing: 0.3em; margin: 0 0 12px; }
+.invite-code { font-family: var(--num); font-size: 40px; letter-spacing: 0.3em; margin: 0 0 12px; }
 .lobby-players { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .lobby-players li { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); padding: 6px 10px; }
 .toast { position: fixed; z-index: 50; left: 50%; transform: translateX(-50%); top: 12px; max-width: calc(100% - 32px); background: #1a1020; border: 1px solid #ff8a8a; padding: 10px 14px; margin: 0; cursor: pointer; }
@@ -356,14 +358,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 @keyframes combat-glow { 50% { box-shadow: 0 0 0 2px #0b0b10, 0 0 0 3px var(--edge), 0 10px 20px rgba(0, 0, 0, 0.55), 0 0 30px rgba(255, 120, 60, 0.85); } }
 .card-level {
   position: absolute; top: -9px; left: -9px; width: 22px; height: 22px; display: grid; place-items: center;
-  background: var(--edge); color: #0b0b10; font: 700 12px 'Pixelify Sans', Inter, sans-serif; box-shadow: 0 0 0 2px #0b0b10;
+  background: var(--edge); color: #0b0b10; font: 800 12px var(--num); box-shadow: 0 0 0 2px #0b0b10;
 }
 .card-tags { position: absolute; top: -8px; right: 6px; display: flex; gap: 3px; }
 .card-face:not(.large) .card-tags { flex-direction: column; align-items: flex-end; gap: 2px; right: -6px; }
 .card-face:not(.large) .card-tag { font-size: 8px; padding: 1px 3px; }
 .card-tag { background: #ff5a3a; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 5px; box-shadow: 0 0 0 2px #0b0b10; }
 .card-art { flex: 1; display: grid; place-items: center; width: 100%; background: radial-gradient(circle, rgba(255, 255, 255, 0.12), transparent 70%); }
-.card-name { font: 700 11px/1.15 'Pixelify Sans', Inter, sans-serif; }
+.card-name { font: 700 12px/1.15 var(--display); letter-spacing: 0.01em; }
 .card-face.large { width: min(280px, 78vw); height: auto; min-height: 380px; padding: 22px 18px 20px; gap: 10px; justify-content: flex-start; }
 .card-face.large .card-level { width: 36px; height: 36px; font-size: 18px; top: -14px; left: -14px; }
 .card-face.large .card-tags { top: -12px; }
@@ -379,7 +381,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .card-zoom > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .card-zoom-note { max-width: 280px; margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
 .card-zoom-actions { display: flex; gap: 10px; }
-.card-uses { position: absolute; bottom: -8px; right: -6px; background: #0b0b10; color: var(--ink); border: 1px solid var(--edge); font: 700 10px 'Pixelify Sans', Inter, sans-serif; padding: 1px 4px; }
+.card-uses { position: absolute; bottom: -8px; right: -6px; background: #0b0b10; color: var(--ink); border: 1px solid var(--edge); font: 800 10px var(--num); padding: 1px 4px; }
 .card-face.large .card-uses { font-size: 14px; bottom: -12px; right: -10px; padding: 2px 8px; }
 .hand-card.playable .card-face { --edge: #ffe27a; animation: card-ready 1.6s ease-in-out infinite; }
 .hand-card.playable .card-face.combat { --edge: #ffe27a; }
@@ -404,13 +406,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .duel-centre { display: grid; place-items: center; min-height: 230px; }
 .throw { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .test-title { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
-.test-title > b { font: 700 18px 'Pixelify Sans', Inter, sans-serif; }
+.test-title > b { font: 700 18px var(--display); }
 .test-title > small { color: var(--muted); font-size: 11px; }
 .target-shield { position: relative; width: 54px; height: 62px; display: grid; place-items: center; }
 .target-shield svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .target-shield path { fill: #2a2050; stroke: #c9b8ff; stroke-width: 2.5; }
 .throw.theirs .target-shield path { fill: #3a1418; stroke: #ffb347; }
-.target-shield span { position: relative; font: 700 22px 'Pixelify Sans', Inter, sans-serif; }
+.target-shield span { position: relative; font: 800 22px var(--num); }
 .big-die-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 130px; }
 .big-die {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
@@ -425,9 +427,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .big-die.bad .big-die-pair { filter: drop-shadow(0 0 10px #ff8a7a); }
 .big-die.ready .big-die-pair { filter: drop-shadow(0 0 10px #ffe066); }
 .big-die:disabled { opacity: 1; }
-.duel-note { font: 700 20px 'Pixelify Sans', Inter, sans-serif; margin: 0; text-align: center; }
+.duel-note { font: 700 20px var(--display); margin: 0; text-align: center; }
 .duel-hint { text-align: center; color: #ffe066; min-height: 1.2em; margin: 4px 0 0; }
-.damage-pop { position: absolute; top: 20%; left: 50%; translate: -50% 0; font: 700 26px 'Pixelify Sans', Inter, sans-serif; color: #ff6a5a; text-shadow: 0 2px 0 #000; pointer-events: none; white-space: nowrap; }
+.damage-pop { position: absolute; top: 20%; left: 50%; translate: -50% 0; font: 800 26px var(--num); color: #ff6a5a; text-shadow: 0 2px 0 #000; pointer-events: none; white-space: nowrap; }
 .damage-pop small { font-size: 12px; color: #ffd0c8; }
 .hand.compact { min-height: 96px; }
 .hand.compact .card-face { width: 64px; height: 90px; }
@@ -453,7 +455,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .hero-card.active { border-color: var(--tile); box-shadow: 0 0 0 1px var(--tile), 0 0 24px rgba(255, 255, 255, 0.15); }
 .hero-card-avatar { width: 80px; height: 80px; display: grid; place-items: center; background: radial-gradient(circle, rgba(143, 123, 255, 0.25), transparent 70%); flex: none; }
 .hero-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.hero-card-body b { font: 700 18px 'Pixelify Sans', Inter, sans-serif; }
+.hero-card-body b { font: 700 18px var(--display); }
 .hero-card-body small { color: var(--muted); }
 .hero-card > button { align-self: flex-start; }
 .hero-dice { display: flex; gap: 4px; margin-top: 2px; }
@@ -481,7 +483,7 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   clip-path: polygon(0 2%, 4% 0, 12% 1.5%, 22% 0.3%, 35% 1.8%, 48% 0.4%, 60% 1.6%, 72% 0.2%, 86% 1.4%, 96% 0.3%, 100% 2.5%, 99.2% 20%, 100% 42%, 99% 64%, 100% 86%, 98.6% 100%, 88% 98.6%, 74% 100%, 60% 98.4%, 46% 100%, 32% 98.6%, 18% 100%, 6% 98.8%, 0 100%, 0.8% 78%, 0 56%, 1% 34%);
 }
 @media (max-width: 520px) { .parchment { padding: 28px 22px 36px; } }
-.parchment-title { font: 700 34px 'Pixelify Sans', Georgia, serif; text-align: center; margin: 0 0 18px; color: #5a3a14; letter-spacing: 0.1em; }
+.parchment-title { font: 700 34px var(--display); text-align: center; margin: 0 0 18px; color: #5a3a14; letter-spacing: 0.1em; }
 .parchment-text { font: italic 18px/1.65 Georgia, 'Times New Roman', serif; min-height: 300px; }
 .parchment-text p { margin: 0 0 14px; }
 .parchment-text p:first-child::first-letter { float: left; font: 700 52px/0.9 Georgia, serif; color: #8a2a14; margin: 4px 8px 0 0; }
@@ -497,13 +499,13 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .world-map .land.focus { filter: brightness(1.12) saturate(1.15); }
 .world-map .land-label { cursor: pointer; }
 .world-map .land-label rect { fill: #f2e8cc; stroke: #5a4628; stroke-width: 2; transition: fill 0.2s; }
-.world-map .land-label text { font: 700 20px 'Pixelify Sans', Georgia, serif; fill: #3a2a14; }
+.world-map .land-label text { font: 700 20px var(--display); fill: #3a2a14; }
 .world-map .land-label.focus rect { fill: #3a2a14; stroke: #f2e8cc; }
 .world-map .land-label.focus text { fill: #f2e8cc; }
 .world-map .compass { font: 700 14px Georgia, serif; fill: #5a4628; }
 .race-info { border: 1px solid var(--line); background: rgba(10, 8, 20, 0.85); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
 .race-info-head { display: flex; align-items: center; gap: 10px; }
-.race-info h3 { margin: 0; font: 700 22px 'Pixelify Sans', Inter, sans-serif; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.race-info h3 { margin: 0; font: 700 22px var(--display); color: var(--ink); text-transform: none; letter-spacing: 0; }
 .race-info p { margin: 0; line-height: 1.5; font-size: 14px; }
 .race-info .passives { margin: 0; }
 
@@ -694,7 +696,17 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 @keyframes die-wait { 50% { transform: translateY(-6px) rotate(-6deg); } }
 .dice-tray.ready { cursor: default; background: rgba(0, 0, 0, 0.55); }
 .dice-skip-btn { opacity: 0.7; }
-.dice-verdict.big { font: 700 26px 'Pixelify Sans', Inter, sans-serif; padding: 4px 16px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+.dice-verdict.big { font: 700 26px var(--display); padding: 4px 16px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
 .dice-verdict.big.ok { box-shadow: 0 0 26px rgba(110, 240, 160, 0.7); }
 .dice-verdict.big.bad { box-shadow: 0 0 22px rgba(255, 138, 122, 0.6); }
 @media (prefers-reduced-motion: reduce) { .die.shaking, .shake-throw:not(.held) .shake-dice .die { animation: none !important; } }
+
+/* Crisp numbers everywhere dice and shields show them. */
+.die, .target-shield span, .damage-pop, .card-cost, .card-uses { font-variant-numeric: tabular-nums; }
+.tray-head { background: rgba(11, 9, 22, 0.88); border: 1px solid var(--line); padding: 12px 22px; min-width: 220px; }
+.tray-head .tray-heading { font: 700 14px var(--display); color: #ffe066; letter-spacing: 0.06em; text-transform: uppercase; }
+.tray-head > b { font-size: 22px; }
+.target-shield.big { width: 70px; height: 80px; }
+.target-shield.big span { font-size: 28px; }
+.conditions-note { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.condition-tag { font-size: 12px; padding: 3px 8px; background: rgba(255, 106, 90, 0.15); border: 1px solid #ff8a7a; color: #ffd0c8; }

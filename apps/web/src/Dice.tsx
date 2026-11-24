@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useT } from './i18n';
-import type { DiceLook } from '@hp/content';
+import type { Attribute, DiceLook } from '@hp/content';
+import { attrName } from './outcomeText';
 import type { DiceRoll } from './logText';
 import { diceVars } from './DiceFace';
 import { buzz, clack, ShakeToThrow, Verdict } from './Throw';
@@ -12,8 +13,17 @@ const ROLL_MS = 900;
  * The dice tray. A test waits in the player's hand: hold, shake and let go (or just click) to throw.
  * Every die then tumbles, flickers through faces and lands on the engine's result, with Success! or Failure under it.
  */
-export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: () => void; dice?: DiceLook }) {
-  const { t, tx } = useT();
+export function DiceTray({ rolls, onDone, dice, heading, base }: {
+  rolls: DiceRoll[];
+  onDone: () => void;
+  dice?: DiceLook;
+  /** What the throw is for: "Polowanie", an event's title... */
+  heading?: string | null;
+  /** The hero's attributes, to show how the number on the shield is made up. */
+  base?: Record<Attribute, number>;
+}) {
+  const { t, tx, locale } = useT();
+  const head = <TrayHead rolls={rolls} heading={heading ?? null} base={base} locale={locale} />;
   const shown = rolls.slice(0, 6);
   const [thrown, setThrown] = useState(() => !shown.some((r) => r.kind === 'd100'));
   const [landed, setLanded] = useState(false);
@@ -39,6 +49,7 @@ export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: (
   if (!thrown) {
     return (
       <motion.div className="dice-tray ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        {head}
         <ShakeToThrow onThrow={() => setThrown(true)} hint={tx({ pl: 'Przytrzymaj kości, potrząśnij i puść', en: 'Hold the dice, shake and let go' })}>
           {(shaking) => (
             <span className="dice-row">
@@ -75,6 +86,7 @@ export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: (
       role="status"
       aria-live="polite"
     >
+      {head}
       <div className="dice-row">
         {shown.map((r, i) => (
           <div className="dice-group" key={i}>
@@ -166,4 +178,32 @@ function HeldDie({ sides, tens, shaking, style }: { sides: number; tens?: boolea
     return () => clearInterval(timer);
   }, [shaking, sides, tens]);
   return <span className={`die d${sides} ${tens ? 'tens' : ''} ${shaking ? 'shaking' : ''}`} style={style}>{face}</span>;
+}
+
+/** Above the dice: what the test is for, which attribute it checks, and on the shield the number to roll at or under. */
+function TrayHead({ rolls, heading, base, locale }: { rolls: DiceRoll[]; heading: string | null; base?: Record<Attribute, number>; locale: string }) {
+  const tests = rolls.filter((r): r is Extract<DiceRoll, { kind: 'd100' }> => r.kind === 'd100');
+  if (!tests.length && !heading) return null;
+  const pl = locale === 'pl';
+  const first = tests[0];
+  const attr = first?.attr ? attrName(first.attr, locale as 'pl' | 'en') : first?.label;
+  const own = first?.attr && base ? base[first.attr] : undefined;
+  const diff = own !== undefined && first ? first.target - own : 0;
+  return (
+    <div className="test-title tray-head" onClick={(e) => e.stopPropagation()}>
+      {heading && <small className="tray-heading">{heading}</small>}
+      {first && <b>{pl ? 'Test' : 'Test'}: {attr}</b>}
+      {tests.length === 1 && first && (
+        <>
+          <span className="target-shield big" title={pl ? 'Rzuć tyle lub mniej' : 'Roll this or lower'}>
+            <svg viewBox="0 0 40 46" aria-hidden="true"><path d="M20 2 L37 8 V22 C37 34 29 41 20 44 C11 41 3 34 3 22 V8 Z" /></svg>
+            <span>{first.target}</span>
+          </span>
+          {own !== undefined && diff !== 0 && (
+            <small>{attr} {own} · {pl ? 'modyfikatory' : 'modifiers'} {diff > 0 ? `+${diff}` : diff}</small>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
