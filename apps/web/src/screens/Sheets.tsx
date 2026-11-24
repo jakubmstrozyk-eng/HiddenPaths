@@ -8,6 +8,8 @@ import {
 import { useT } from '../i18n';
 import { attrShort, itemName } from '../logText';
 import { Icon } from '../Icons';
+import { PixelHero } from '../PixelHero';
+import { SPOT_NAME, SPOTS, TownScene, type Spot } from '../TownScene';
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { t } = useT();
@@ -33,15 +35,24 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 
 const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(/0$/, ''));
 
-/** Inn, village and city services, the market, the shops and the portal. */
+/** What each spot in the picture offers. */
+const SPOT_SERVICES: Partial<Record<Spot, Service[]>> = {
+  bar: ['meal'], table: ['gossip'], rooms: ['stay'], tavern: ['meal', 'stay', 'gossip'], smith: ['sharpen'], yard: ['train'],
+};
+
+/** Inn, village and city as a picture: click a building or a corner and its services, wares or portals open below. */
 export function TownSheet({ game, me, act, onClose }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void }) {
   const { t, tx, locale } = useT();
   const legal = legalActions(game, me.id);
   const services = legal.flatMap((a) => (a.type === 'service' ? [a.service] : []));
   const portals = legal.flatMap((a) => (a.type === 'portal' ? [a.to] : []));
   const terrain = game.map.cells[me.position]!.terrain;
-  const all: Service[] = terrain === 'inn' ? ['meal', 'stay', 'gossip'] : ['meal', 'stay', 'gossip', 'train', 'sharpen'];
-  const stock = ['food', ...shopStock(game, me)];
+  const place = terrain === 'inn' || terrain === 'city' ? terrain : 'village';
+  const [chosen, setChosen] = useState<Spot>(SPOTS[place][0]!);
+  const name = (s: Spot) => tx(SPOT_NAME[s]);
+  const stock = shopStock(game, me);
+  const atSmith = stock.filter((id) => ['weapon', 'armour', 'shield'].includes(ITEMS[id]?.kind ?? ''));
+  const atShop = stock.filter((id) => !atSmith.includes(id));
   const inv = me.inventory;
   const sellable = [
     ...(me.character.food > 0 ? ['food'] : []),
@@ -49,58 +60,70 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
     ...Object.entries(inv.herbs).filter(([, n]) => (n ?? 0) > 0).map(([id]) => id),
     ...new Set(inv.items),
   ].filter((id) => sellPrice(game, me, id) !== null);
+  const gold = `${fmt(me.character.gold)} ${t('gold').toLowerCase()}`;
+
+  const serviceButtons = (list: Service[]) => (
+    <div className="choices">
+      {list.map((s) => (
+        <button key={s} className="choice" disabled={!services.includes(s)} onClick={() => act({ type: 'service', service: s })}>
+          <span>{t(s)}</span>
+          <small className="act-test">{serviceTest(s, game, me, locale)}</small>
+          <small className="act-reward">{serviceReward(s, terrain === 'inn', locale)}</small>
+        </button>
+      ))}
+    </div>
+  );
+  const wares = (ids: string[]) => (
+    <>
+      <h3>{t('shop')} · {gold}</h3>
+      <div className="choices">
+        {ids.map((id) => {
+          const price = buyPrice(game, me, id);
+          return (
+            <button key={id} className="choice" disabled={price === null || price > me.character.gold} onClick={() => act({ type: 'buy', item: id })}>
+              <span>{itemName(id, locale)}</span>
+              <small className="act-test">{price === null ? '—' : `${fmt(price)} ${t('gold').toLowerCase()}`}</small>
+              {itemNote(id, t) && <small className="act-reward">{itemNote(id, t).replace(/^ · /, '')}</small>}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
 
   return (
     <Sheet title={terrain === 'core' ? t('town') : tx(TERRAINS[terrain].name)} onClose={onClose}>
-      <h3>{t('services')}</h3>
-      <div className="choices">
-        {all.map((s) => (
-          <button key={s} className="choice" disabled={!services.includes(s)} onClick={() => act({ type: 'service', service: s })}>
-            <span>{t(s)}</span>
-            <small className="act-test">{serviceTest(s, game, me, locale)}</small>
-            <small className="act-reward">{serviceReward(s, terrain === 'inn', locale)}</small>
-          </button>
-        ))}
-      </div>
-      {terrain !== 'inn' && (
+      <TownScene place={place} chosen={chosen} onPick={setChosen} name={name} />
+      <p className="muted scene-hint">{tx({ pl: 'Kliknij miejsce na obrazku, żeby tam wejść.', en: 'Click a place in the picture to go there.' })}</p>
+      <h3 className="spot-title">{name(chosen)}</h3>
+      {SPOT_SERVICES[chosen] && serviceButtons(SPOT_SERVICES[chosen]!)}
+      {chosen === 'smith' && wares(atSmith)}
+      {chosen === 'shop' && wares(atShop)}
+      {chosen === 'market' && (
         <>
-          <h3>{t('shop')} · {fmt(me.character.gold)} {t('gold').toLowerCase()}</h3>
-          <div className="choices">
-            {stock.map((id) => {
-              const price = buyPrice(game, me, id);
-              return (
-                <button key={id} className="choice" disabled={price === null || price > me.character.gold} onClick={() => act({ type: 'buy', item: id })}>
-                  <span>{itemName(id, locale)}</span>
-                  <small>{price === null ? '—' : `${fmt(price)} ${t('gold').toLowerCase()}`}{itemNote(id, t)}</small>
-                </button>
-              );
-            })}
-          </div>
+          {wares(['food'])}
           <h3>{t('sellTitle')}</h3>
           {sellable.length === 0 ? <p className="muted">{t('nothingToSell')}</p> : (
             <div className="choices">
               {sellable.map((id) => (
                 <button key={id} className="choice" onClick={() => act({ type: 'sell', item: id })}>
                   <span>{itemName(id, locale)}{countOf(me, id) > 1 ? ` ×${countOf(me, id)}` : ''}</span>
-                  <small>+{fmt(sellPrice(game, me, id)!)} {t('gold').toLowerCase()}</small>
+                  <small className="act-reward">+{fmt(sellPrice(game, me, id)!)} {t('gold').toLowerCase()}</small>
                 </button>
               ))}
             </div>
           )}
         </>
       )}
-      {portals.length > 0 && (
-        <>
-          <h3>{t('portal')}</h3>
-          <div className="choices">
-            {portals.map((to) => (
-              <button key={to} className="choice" onClick={() => { act({ type: 'portal', to }); onClose(); }}>
-                <span>{tx(TERRAINS.city.name)} ({to % game.map.width + 1}, {Math.floor(to / game.map.width) + 1})</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+      {chosen === 'portal' && (portals.length === 0 ? <p className="muted">{tx({ pl: 'Portal milczy: nie znasz innego miasta albo był już użyty w tej rundzie.', en: 'The portal is silent: you know no other city, or it was used this round.' })}</p> : (
+        <div className="choices">
+          {portals.map((to) => (
+            <button key={to} className="choice" onClick={() => { act({ type: 'portal', to }); onClose(); }}>
+              <span>{tx(TERRAINS.city.name)} ({to % game.map.width + 1}, {Math.floor(to / game.map.width) + 1})</span>
+            </button>
+          ))}
+        </div>
+      ))}
     </Sheet>
   );
 }
@@ -141,13 +164,77 @@ function itemNote(id: string, t: ReturnType<typeof useT>['t']): string {
   return '';
 }
 
+/** The hero drawn in what they wear, with each piece and what it does beside them. */
+export function HeroDoll({ me }: { me: PlayerState }) {
+  const { t, tx, locale } = useT();
+  const c = me.character;
+  const armour = heroArmour(me);
+  const pieceOn = (slot: 'head' | 'arms' | 'torso' | 'legs') => {
+    let best: string | null = null;
+    for (const id of c.equipment.armour) {
+      const it = ITEMS[id];
+      if (it?.kind === 'armour' && it.covers.includes(slot) && (!best || (ITEMS[best] as { value: number }).value < it.value)) best = id;
+    }
+    return best;
+  };
+  const weapon = ITEMS[c.equipment.weapon];
+  const w = weapon?.kind === 'weapon' ? weapon : null;
+  const pl = locale === 'pl';
+  const slot = (key: 'head' | 'arms' | 'torso' | 'legs') => {
+    const id = pieceOn(key);
+    return (
+      <li key={key} className={`doll-slot doll-${key} ${id ? '' : 'bare'}`}>
+        <small>{t(key)}</small>
+        <b>{id ? itemName(id, locale) : (pl ? 'nic' : 'nothing')}</b>
+        <span>{t('armour')} {armour[key]}</span>
+      </li>
+    );
+  };
+  return (
+    <div className="doll">
+      <ul className="doll-side">
+        {slot('head')}
+        {slot('arms')}
+        <li className={`doll-slot doll-shield ${c.equipment.shield ? '' : 'bare'}`}>
+          <small>{t('shield')}</small>
+          <b>{c.equipment.shield ? itemName('shield', locale) : (pl ? 'brak' : 'none')}</b>
+          {c.equipment.shield && <span>+15 {t('parry').toLowerCase()}</span>}
+        </li>
+      </ul>
+      <div className="doll-figure">
+        <PixelHero
+          race={c.race} profession={c.profession} look={c.look} size={150}
+          gear={{ ...armour, shield: c.equipment.shield, weapon: c.equipment.weapon }}
+        />
+      </div>
+      <ul className="doll-side">
+        <li className="doll-slot doll-weapon">
+          <small>{t('weapon')}</small>
+          <b>{itemName(c.equipment.weapon, locale)}</b>
+          {w && (
+            <span>
+              {t('damage')}: S{w.power >= 0 ? '+' : ''}{w.power}
+              {w.ranged ? (pl ? ' · dystansowa' : ' · ranged') : ''}
+              {w.reload ? (pl ? ' · 1 strzał na turę' : ' · 1 shot a turn') : ''}
+              {w.penetrating ? (pl ? ' · przebijająca' : ' · penetrating') : ''}
+            </span>
+          )}
+          {c.equipment.rune && <span>{t('rune')}: {c.equipment.rune}</span>}
+        </li>
+        {slot('torso')}
+        {slot('legs')}
+      </ul>
+      <p className="doll-note muted">{tx({ pl: 'Pancerz odejmuje się od obrażeń w trafione miejsce.', en: 'Armour is taken off the damage of a hit on that spot.' })}</p>
+    </div>
+  );
+}
+
 /** Worn gear, the backpack, materials, herbs, effects and level-up points. */
 export function BagSheet({ game, me, act, onClose }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void }) {
   const { t, locale } = useT();
   const c = me.character;
   const legal = legalActions(game, me.id);
   const can = (type: string, item: string) => legal.some((a) => a.type === type && 'item' in a && a.item === item);
-  const armour = heroArmour(me);
   const items = [...new Set(me.inventory.items)];
   const materials = Object.entries(me.inventory.materials).filter(([, n]) => (n ?? 0) > 0);
   const herbs = Object.entries(me.inventory.herbs).filter(([, n]) => (n ?? 0) > 0);
@@ -160,11 +247,7 @@ export function BagSheet({ game, me, act, onClose }: { game: GameState; me: Play
       </ul>
 
       <h3>{t('equipped')}</h3>
-      <ul className="kit">
-        <li><span>{t('weapon')}</span><b>{itemName(c.equipment.weapon, locale)}{c.equipment.rune ? ` · ${t('rune')}: ${c.equipment.rune}` : ''}</b></li>
-        <li><span>{t('armour')}</span><b>{t('head')} {armour.head} · {t('arms')} {armour.arms} · {t('torso')} {armour.torso} · {t('legs')} {armour.legs}</b></li>
-        {c.equipment.shield && <li><span>{t('shield')}</span><b>+15 {t('parry').toLowerCase()}</b></li>}
-      </ul>
+      <HeroDoll me={me} />
 
       <h3>{t('carried')}</h3>
       {items.length === 0 ? <p className="muted">{t('empty')}</p> : (
@@ -207,6 +290,7 @@ export function HeroSheet({ game, me, act, onClose }: { game: GameState; me: Pla
 
   return (
     <Sheet title={c.name} onClose={onClose}>
+      <HeroDoll me={me} />
       <h3>{t('attributes')}{c.unspentPoints > 0 ? ` · ${t('levelPoints')}: ${c.unspentPoints - spent}` : ''}</h3>
       <div className="attrs">
         {ATTRIBUTES.map((a) => (

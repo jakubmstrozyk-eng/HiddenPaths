@@ -228,7 +228,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           <MoveBar icon="speed" label={t('speed')} left={me.speedLeft} max={c.speed} kind="speed" />
           <MoveBar icon="stamina" label={t('stamina')} left={me.staminaLeft} max={c.stamina} kind="stamina" />
           <Stat icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} />
-          <Stat icon="food" label={t('food')} value={c.food} warn={c.food === 0} />
+          <FoodBar food={c.food} meals={mealsToday(game, me)} label={t('food')} />
           <Stat icon="gold" label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
           <Stat icon="xp" label={t('xp')} value={Math.floor(c.xp)} />
         </div>
@@ -236,98 +236,139 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
 
       <GoalsPanel game={game} me={me} />
 
-      <div className="board-wrap" ref={wrapRef}>
-        <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
-          {cells.map((cell) => {
-            const seen = me.revealed.includes(cell.index);
-            const move = quiet ? moves.get(cell.index) : undefined;
-            const name = cell.terrain === 'core' ? (me.hasStone ? '◇' : '◆') : tx(TERRAINS[cell.terrain].name);
-            const o = origin(cell.index);
-            const isHere = seen && cell.index === me.position;
-            const icons = seen && cell.terrain !== 'core'
-              ? [...new Set(TERRAINS[cell.terrain].actions.flatMap((x) => (TILE_ICONS[x] ? [TILE_ICONS[x]!] : [])))].slice(0, 4)
-              : [];
-            return (
-              <button
-                key={cell.index}
-                className={`frag ${move ? 'reachable' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
-                disabled={!move}
-                onClick={() => move && act(move)}
-                aria-label={seen ? name : move ? `${t('tapToMove')}` : undefined}
+      <div className="play-area">
+        <div className="board-wrap" ref={wrapRef}>
+          <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
+            {cells.map((cell) => {
+              const seen = me.revealed.includes(cell.index);
+              const move = quiet ? moves.get(cell.index) : undefined;
+              const name = cell.terrain === 'core' ? (me.hasStone ? '◇' : '◆') : tx(TERRAINS[cell.terrain].name);
+              const o = origin(cell.index);
+              const isHere = seen && cell.index === me.position;
+              const icons = seen && cell.terrain !== 'core'
+                ? [...new Set(TERRAINS[cell.terrain].actions.flatMap((x) => (TILE_ICONS[x] ? [TILE_ICONS[x]!] : [])))].slice(0, 4)
+                : [];
+              return (
+                <button
+                  key={cell.index}
+                  className={`frag ${move ? 'reachable' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
+                  disabled={!move}
+                  onClick={() => move && act(move)}
+                  aria-label={seen ? name : move ? `${t('tapToMove')}` : undefined}
+                >
+                  {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
+                  {seen && <span className="frag-name">{name}</span>}
+                  {icons.length > 0 && (
+                    <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={16} />)}</span>
+                  )}
+                  {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
+                  {!seen && (
+                    <span className="void-wrap">
+                      <span className="void" />
+                    </span>
+                  )}
+                  {revealedNow.has(cell.index) && (
+                    <span key={game.version} className="void-wrap dissolving" style={{ ['--ox' as string]: o.x, ['--oy' as string]: o.y }}>
+                      <span className="void" />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {outside && SIDES.map((side) => {
+              const p = spot(game.map, OUTSIDE, side);
+              const open = quiet && enterable.has(side);
+              return (
+                <button
+                  key={side}
+                  className={`gate gate-${side} ${gate === side ? 'chosen' : ''}`}
+                  style={{ left: `${(p.x / width) * 100}%`, top: `${(p.y / height) * 100}%`, width: `${100 / width}%`, height: `${100 / height}%` }}
+                  disabled={!open}
+                  onMouseEnter={() => setGate(side)}
+                  onFocus={() => setGate(side)}
+                  onClick={() => {
+                    setGate(side);
+                    const a = actions.find((x) => x.type === 'enter' && x.side === side);
+                    if (a) act(a);
+                  }}
+                  aria-label={`${t('enterFrom')} ${t(`side${side}` as const)}`}
+                >
+                  <span className="gate-arrow" aria-hidden="true">{side === 'N' ? '▼' : side === 'S' ? '▲' : side === 'W' ? '▶' : '◀'}</span>
+                  <small>{t(`side${side}` as const)}</small>
+                </button>
+              );
+            })}
+            {others.filter((p) => !isOutside(p)).map((p) => (
+              <motion.div
+                key={p.id}
+                className="hero other"
+                initial={false}
+                animate={{ left: `${((p.position % width) / width) * 100}%`, top: `${(Math.floor(p.position / width) / height) * 100}%` }}
+                transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+                style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
+                title={names[p.id] ?? p.character.name}
               >
-                {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
-                {seen && <span className="frag-name">{name}</span>}
-                {icons.length > 0 && (
-                  <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={16} />)}</span>
-                )}
-                {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
-                {!seen && (
-                  <span className="void-wrap">
-                    <span className="void" />
-                  </span>
-                )}
-                {revealedNow.has(cell.index) && (
-                  <span key={game.version} className="void-wrap dissolving" style={{ ['--ox' as string]: o.x, ['--oy' as string]: o.y }}>
-                    <span className="void" />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          {outside && SIDES.map((side) => {
-            const p = spot(game.map, OUTSIDE, side);
-            const open = quiet && enterable.has(side);
-            return (
-              <button
-                key={side}
-                className={`gate gate-${side} ${gate === side ? 'chosen' : ''}`}
-                style={{ left: `${(p.x / width) * 100}%`, top: `${(p.y / height) * 100}%`, width: `${100 / width}%`, height: `${100 / height}%` }}
-                disabled={!open}
-                onMouseEnter={() => setGate(side)}
-                onFocus={() => setGate(side)}
-                onClick={() => {
-                  setGate(side);
-                  const a = actions.find((x) => x.type === 'enter' && x.side === side);
-                  if (a) act(a);
-                }}
-                aria-label={`${t('enterFrom')} ${t(`side${side}` as const)}`}
-              >
-                <span className="gate-arrow" aria-hidden="true">{side === 'N' ? '▼' : side === 'S' ? '▲' : side === 'W' ? '▶' : '◀'}</span>
-                <small>{t(`side${side}` as const)}</small>
-              </button>
-            );
-          })}
-          {others.filter((p) => !isOutside(p)).map((p) => (
+                <span className="figurine">
+                  <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
+                </span>
+                <small className="hero-tag">{p.character.name}</small>
+              </motion.div>
+            ))}
             <motion.div
-              key={p.id}
-              className="hero other"
+              className={`hero ${outside ? 'waiting-outside' : ''}`}
               initial={false}
-              animate={{ left: `${((p.position % width) / width) * 100}%`, top: `${(Math.floor(p.position / width) / height) * 100}%` }}
-              transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+              animate={{
+                left: `${(spot(game.map, me.position, gate).x / width) * 100}%`,
+                top: `${(spot(game.map, me.position, gate).y / height) * 100}%`,
+              }}
+              transition={{ duration: (outside ? 0.35 : WALK_MS / 1000), ease: outside ? 'easeOut' : 'linear' }}
               style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
-              title={names[p.id] ?? p.character.name}
             >
               <span className="figurine">
-                <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
+                <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
               </span>
-              <small className="hero-tag">{p.character.name}</small>
             </motion.div>
-          ))}
-          <motion.div
-            className={`hero ${outside ? 'waiting-outside' : ''}`}
-            initial={false}
-            animate={{
-              left: `${(spot(game.map, me.position, gate).x / width) * 100}%`,
-              top: `${(spot(game.map, me.position, gate).y / height) * 100}%`,
-            }}
-            transition={{ duration: (outside ? 0.35 : WALK_MS / 1000), ease: outside ? 'easeOut' : 'linear' }}
-            style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
-          >
-            <span className="figurine">
-              <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
-            </span>
-          </motion.div>
+          </div>
         </div>
+        <aside className="frag-panel" aria-label={tx({ pl: 'Na tym fragmencie', en: 'On this fragment' })}>
+          <p className="here">
+            <Icon name="map" size={14} /> <b>{outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
+            {outside ? ` · ${t('pickSide')}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
+          </p>
+          <small className="frag-panel-head">{tx({ pl: 'Co możesz tu zrobić', en: 'What you can do here' })}</small>
+          <div className="frag-actions">
+            {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
+              const info = actionInfo(a, here.terrain as Exclude<typeof here.terrain, 'core'>);
+              return (
+                <button key={a} className="ghost act-btn" onClick={() => act({ type: 'terrain', action: a })}>
+                  <span className="act-title"><Icon name={a} size={14} />{t(a)}</span>
+                  <small className="act-test">
+                    {info.test ? `${tx({ pl: 'Test', en: 'Test' })}: ${tx(info.test)} · ${Math.round(actionChance(game, me, a) * 100)}%` : tx({ pl: 'Bez testu', en: 'No test' })}
+                  </small>
+                  <small className="act-reward">
+                    {tx(info.reward)}{info.risk ? ` · ${tx(info.risk)}` : ''}{info.cost ? ` · −${info.cost} ${t('staminaShort')}` : ''}
+                  </small>
+                </button>
+              );
+            })}
+            {inTown && quiet && (
+              <button className="ghost act-btn town-btn" onClick={() => setSheet('town')}>
+                <span className="act-title"><Icon name="town" size={14} />{tx({ pl: 'Wejdź', en: 'Go in' })}: {hereTerrain ? tx(hereTerrain.name) : t('town')}</span>
+                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
+              </button>
+            )}
+            {myTurn && actions.some((a) => a.type === 'camp') && (
+              <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
+            )}
+            {myTurn && actions.some((a) => a.type === 'camp' && a.research) && (
+              <button className="ghost with-icon" onClick={() => act({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
+            )}
+            <button className="primary end-turn" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>
+              {t('endTurn')}
+              <small>{mealNote(mealsToday(game, me), c.food, locale)}</small>
+            </button>
+          </div>
+        </aside>
       </div>
 
       <footer className="dock">
@@ -344,35 +385,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
           onPlay={(card) => act({ type: 'card', card })}
         />
-        <p className="here">
-          <Icon name="map" size={14} /> <b>{outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
-          {outside ? ` · ${t('pickSide')}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
-        </p>
         <div className="dock-actions">
-          {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
-            const info = actionInfo(a, here.terrain as Exclude<typeof here.terrain, 'core'>);
-            return (
-              <button key={a} className="ghost act-btn" onClick={() => act({ type: 'terrain', action: a })}>
-                <span className="act-title"><Icon name={a} size={14} />{t(a)}</span>
-                <small className="act-test">
-                  {info.test ? `${tx({ pl: 'Test', en: 'Test' })}: ${tx(info.test)} · ${Math.round(actionChance(game, me, a) * 100)}%` : tx({ pl: 'Bez testu', en: 'No test' })}
-                </small>
-                <small className="act-reward">
-                  {tx(info.reward)}{info.risk ? ` · ${tx(info.risk)}` : ''}{info.cost ? ` · −${info.cost} ${t('staminaShort')}` : ''}
-                </small>
-              </button>
-            );
-          })}
-          {inTown && quiet && <button className="ghost with-icon" onClick={() => setSheet('town')}><Icon name="town" />{t('town')}</button>}
           <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" />{t('heroSheet')}</button>
           <button className="ghost with-icon" disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
-          {myTurn && actions.some((a) => a.type === 'camp') && (
-            <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
-          )}
-          {myTurn && actions.some((a) => a.type === 'camp' && a.research) && (
-            <button className="ghost with-icon" onClick={() => act({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
-          )}
-          <button className="primary" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>{t('endTurn')}</button>
         </div>
       </footer>
 
@@ -417,6 +432,41 @@ function Stat({ icon, label, value, warn }: { icon: IconName; label: string; val
     <span className={`stat ${warn ? 'warn' : ''}`}>
       <small>{label}</small>
       <b><Icon name={icon} size={14} /> {value}</b>
+    </span>
+  );
+}
+
+/** Food the hero eats when this turn ends: 0 for the Sunborn on an even round, 2 in the desert, else 1. Mirrors endTurn in the engine. */
+function mealsToday(game: GameState, me: PlayerState): number {
+  if (me.character.race === 'sunborn' && game.round % 2 === 0) return 0;
+  return !isOutside(me) && game.map.cells[me.position]!.terrain === 'desert' ? 2 : 1;
+}
+
+/** What the end of the turn does to the food bag, in words. */
+function mealNote(meals: number, food: number, locale: string): string {
+  const pl = locale === 'pl';
+  if (meals === 0) return pl ? 'dziś bez posiłku' : 'no meal today';
+  if (food < meals) return pl ? 'brak jedzenia: głód!' : 'no food: hunger!';
+  return pl ? `−${meals} jedzenia` : `−${meals} food`;
+}
+
+/** Food as a row of rations; the ones the hero eats at the end of the turn are marked. */
+function FoodBar({ food, meals, label }: { food: number; meals: number; label: string }) {
+  const { locale } = useT();
+  const pl = locale === 'pl';
+  const shown = Math.min(food, 12);
+  const days = meals === 0 ? null : Math.floor(food / Math.max(1, meals));
+  return (
+    <span className={`stat movebar food ${food < Math.max(1, meals) ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuenow={food}>
+      <small>{label} · {meals === 0 ? (pl ? 'dziś bez posiłku' : 'no meal today') : `−${meals}/${pl ? 'dzień' : 'day'}`}</small>
+      <b><Icon name="food" size={14} /> {food}{days !== null ? <em className="food-days">{pl ? ` · na ${days} ${days === 1 ? 'dzień' : 'dni'}` : ` · ${days} ${days === 1 ? 'day' : 'days'}`}</em> : null}</b>
+      <span className="pips" aria-hidden="true">
+        {food === 0 && <i className="empty" />}
+        {Array.from({ length: shown }, (_, i) => (
+          <motion.i key={i} className={`on ${i >= shown - meals ? 'eaten' : ''}`} initial={false} animate={{ scaleY: 1, opacity: 1 }} />
+        ))}
+        {food > shown && <small className="more">+{food - shown}</small>}
+      </span>
     </span>
   );
 }

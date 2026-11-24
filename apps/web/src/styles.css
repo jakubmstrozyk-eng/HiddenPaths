@@ -609,3 +609,68 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .card .choice .act-reward { color: #2f6b2a; }
 .card .choice .act-risk { color: #a8401a; }
 .frag-icons .icon { width: clamp(11px, 2.4vw, 16px); height: auto; }
+
+/* The map with what can be done on the current fragment right beside it. */
+.play-area { flex: 1; display: grid; grid-template-columns: minmax(0, 780px) 290px; justify-content: center; gap: 14px; align-items: stretch; min-height: 0; width: 100%; }
+.play-area .board-wrap { justify-items: end; }
+.play-area .board-wrap { min-width: 0; }
+.frag-panel {
+  align-self: center; display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  background: var(--panel); border: 1px solid var(--line); max-height: 100%; overflow: auto;
+}
+.frag-panel .here { font-size: 14px; }
+.frag-panel-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.frag-actions { display: flex; flex-direction: column; gap: 8px; }
+.frag-actions button { width: 100%; }
+.frag-actions .act-btn { min-width: 0; padding: 8px 12px; }
+.frag-actions .act-title { font-size: 15px; }
+.town-btn { border-color: #ffd34d; box-shadow: 0 0 12px rgba(255, 211, 77, 0.25); }
+.end-turn { display: grid; gap: 2px; justify-items: center; }
+.end-turn small { font-size: 11px; font-weight: 500; opacity: 0.85; }
+.dock .dock-actions { margin-left: auto; }
+@media (max-width: 900px) {
+  .play-area { grid-template-columns: 1fr; }
+  .play-area .board-wrap { justify-items: center; }
+  .frag-panel { align-self: stretch; }
+  .frag-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .frag-actions .end-turn { grid-column: 1 / -1; }
+}
+
+/* Food shown like the move bars: each ration a block, the ones eaten at the end of the turn marked. */
+.movebar.food .pips i.on { background: linear-gradient(#ffd9a8, #d9822b); box-shadow: 0 0 6px rgba(240, 160, 70, 0.6); }
+.movebar.food .pips i.eaten { background: repeating-linear-gradient(45deg, #ff8a6a 0 3px, #8a3a2a 3px 6px); animation: eat-pulse 1.4s ease-in-out infinite; }
+.movebar.food .pips i.empty { background: transparent; outline: 1px dashed #ff9a8a; }
+.movebar.food .pips .more { font-size: 10px; color: var(--muted); line-height: 8px; }
+.food-days { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); }
+@keyframes eat-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .movebar.food .pips i.eaten { animation: none; } }
+
+/* Settlement picture with buildings to click. */
+.town-scene { width: 100%; height: auto; display: block; border: 1px solid var(--line); margin-top: 12px; background: #120c22; }
+.town-scene .hot { cursor: pointer; outline: none; }
+.town-scene .hot > :not(.hot-tag) { transition: filter 0.15s; }
+.town-scene .hot:hover > :not(.hot-tag), .town-scene .hot:focus-visible > :not(.hot-tag) { filter: brightness(1.25) drop-shadow(0 0 6px #ffd34d); }
+.town-scene .hot.chosen > :not(.hot-tag) { filter: brightness(1.3) drop-shadow(0 0 8px #ffd34d); }
+.town-scene .hot-tag rect { fill: rgba(11, 9, 22, 0.85); stroke: #6a5a8a; }
+.town-scene .hot-tag text { fill: #f4ecd8; font: 600 12px Inter, sans-serif; }
+.town-scene .hot.chosen .hot-tag rect, .town-scene .hot:hover .hot-tag rect { fill: #ffd34d; stroke: #1a120c; }
+.town-scene .hot.chosen .hot-tag text, .town-scene .hot:hover .hot-tag text { fill: #1a120c; }
+.scene-hint { margin: 6px 0 0; font-size: 12px; }
+.sheet h3.spot-title { color: var(--ink); font-size: 14px; }
+
+/* The hero drawn in their gear, pieces listed on both sides. */
+.doll { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-top: 12px; }
+.doll-figure { display: grid; place-items: center; padding: 10px; background: radial-gradient(circle, rgba(255, 211, 77, 0.12), transparent 70%); }
+.doll-side { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.doll-slot { display: grid; gap: 1px; padding: 6px 8px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); }
+.doll-slot small { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.doll-slot b { font-size: 13px; }
+.doll-slot span { font-size: 12px; color: #ffd34d; }
+.doll-slot.bare b { color: var(--muted); font-weight: 500; }
+.doll-note { grid-column: 1 / -1; margin: 0; font-size: 12px; }
+@media (max-width: 560px) {
+  .doll { grid-template-columns: 1fr 1fr; }
+  .doll-figure { grid-column: 1 / -1; grid-row: 1; }
+  .doll-figure svg { width: 110px; height: 110px; }
+}
+@media (max-width: 560px) { .food-days { display: none; } .movebar.food small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
