@@ -79,6 +79,13 @@ export interface Terrain {
 export interface Mission {
   id: string;
   name: Text;
+  /** What to do; {n} stands for the number to reach. */
   goal: Text;
   xp: number;
+  /** A goal for one game, chosen at its start, or a career goal counted across all of a hero's games. */
+  scope: 'game' | 'career';
+  /** How many: for a game goal one number per map size (short, medium, long, epic); for a career goal one number. */
+  targets: [number, number, number, number] | number;
+  /** Career goals give the hero a title instead of XP. */
+  title?: Text;
 }

@@ -73,6 +73,8 @@ export type LogEntry =
   /** A skill card was used or fired: `ok` says whether it worked, `roll` is its d6 or test roll. */
   | { type: 'card'; player: string; card: string; ok?: boolean; roll?: number; amount?: number }
   | { type: 'turnEnded'; player: string; next: string; round: number }
+  /** A game mission was reached and paid its XP. */
+  | { type: 'mission'; player: string; mission: string; xp: number }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {

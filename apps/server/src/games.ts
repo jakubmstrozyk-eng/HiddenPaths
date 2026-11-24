@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
-  applyAction, createGame, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
+  applyAction, careerOf, createGame, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
   type Action, type CharacterInput, type GameConfig, type GameState, type LogEntry,
 } from '@hp/engine';
 import type { User } from './auth';
@@ -221,6 +221,15 @@ export class Games {
       const turnPassed = entries.some((e) => e.type === 'turnEnded');
       if (turnPassed) next = await this.finishTurn(tx, game, next, user.id, false);
       await this.save(tx, game, next, turnPassed);
+      // Career goals: the hero keeps this game's latest share of them.
+      const me = next.players.find((p) => p.id === user.id);
+      if (me?.character.heroId) {
+        await tx.query(
+          `update heroes set data = data || jsonb_build_object('career', coalesce(data->'career', '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb))
+            where id::text = $1 and user_id = $2`,
+          [me.character.heroId, user.id, gameId, JSON.stringify(careerOf(me))],
+        );
+      }
       return { state: next, entries, nextPlayer: turnPassed && game.mode === 'multi' ? currentPlayer(next).id : null };
     });
     if (result.nextPlayer && result.nextPlayer !== user.id) await this.notify(result.nextPlayer, gameId).catch(() => {});

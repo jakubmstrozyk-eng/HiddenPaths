@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute } from '@hp/content';
 import {
-  buyPrice, heroArmour, legalActions, sellPrice, shopStock,
+  buyPrice, heroArmour, legalActions, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
   type Action, type GameState, type PlayerState, type Service,
 } from '@hp/engine';
 import { useT } from '../i18n';
@@ -57,6 +57,8 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
         {all.map((s) => (
           <button key={s} className="choice" disabled={!services.includes(s)} onClick={() => act({ type: 'service', service: s })}>
             <span>{t(s)}</span>
+            <small className="act-test">{serviceTest(s, game, me, locale)}</small>
+            <small className="act-reward">{serviceReward(s, terrain === 'inn', locale)}</small>
           </button>
         ))}
       </div>
@@ -101,6 +103,28 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
       )}
     </Sheet>
   );
+}
+
+/** The test a service asks for, with its odds, or that it needs none. */
+function serviceTest(s: Service, game: GameState, me: PlayerState, locale: string): string {
+  const pl = locale === 'pl';
+  if (s !== 'gossip') return pl ? 'Bez testu' : 'No test';
+  const odds = Math.round(successChance(me.character.attributes.cha, testModifier(worldView(game), me, 'cha')) * 100);
+  return `${pl ? 'Test: Charyzma' : 'Test: Charisma'} · ${odds}%`;
+}
+
+/** What a service costs and gives. Mirrors useService in the engine. */
+function serviceReward(s: Service, inn: boolean, locale: string): string {
+  const pl = locale === 'pl';
+  switch (s) {
+    case 'meal': return pl ? `${TOWN.meal} zł → +1 jedzenia` : `${TOWN.meal} gold → +1 food`;
+    case 'stay': return (pl ? `${TOWN.stay} zł → odpoczynek jak w obozie i +10 do wszystkich cech na 2 rundy` : `${TOWN.stay} gold → rest as at a camp and +10 to all attributes for 2 rounds`)
+      + (inn ? (pl ? ' · w gospodzie bywają kłopoty' : ' · inns can bring trouble') : '');
+    case 'gossip': return pl ? 'sukces: +10 Charyzmy na 2 rundy' : 'success: +10 Charisma for 2 rounds';
+    case 'train': return pl ? `−${TOWN.train.stamina} Wt → +1 Walki na stałe` : `−${TOWN.train.stamina} Sta → +1 Combat for good`;
+    case 'sharpen': return pl ? `${TOWN.sharpen} zł → +1 obrażeń na 2 rundy` : `${TOWN.sharpen} gold → +1 damage for 2 rounds`;
+    default: return '';
+  }
 }
 
 function countOf(me: PlayerState, id: string): number {

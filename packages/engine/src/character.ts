@@ -1,5 +1,5 @@
 import {
-  ATTRIBUTES, DICE_STYLE_IDS, LOOK_OPTIONS, MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  ATTRIBUTES, DICE_STYLE_IDS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
   type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
@@ -21,6 +21,8 @@ export interface CharacterInput {
   /** How the hero looks and the dice they roll; only for show. */
   look?: HeroLook;
   dice?: DiceLook;
+  /** The kept hero this character was made from, for career goals. */
+  heroId?: string;
 }
 
 export interface Character {
@@ -44,11 +46,13 @@ export interface Character {
   unspentPoints: number;
   look?: HeroLook;
   dice?: DiceLook;
+  /** The kept hero this character was made from, for career goals. */
+  heroId?: string;
 }
 
 /** Draws the 4 mission cards a new character chooses from. */
 export function drawMissionChoices(rng: Rng): string[] {
-  return rng.shuffle(MISSIONS.map((m) => m.id)).slice(0, MISSIONS_DRAWN);
+  return rng.shuffle(GAME_MISSIONS.map((m) => m.id)).slice(0, MISSIONS_DRAWN);
 }
 
 export function validateCharacter(input: CharacterInput, offered?: string[]): void {
@@ -79,7 +83,7 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
   if (spent > BONUS_POINTS) throw new EngineError('character.bonus', `Only ${BONUS_POINTS} bonus points can be spent.`);
   if (new Set(input.missions).size !== MISSIONS_KEPT) throw new EngineError('character.missions', `Keep exactly ${MISSIONS_KEPT} missions.`);
   for (const m of input.missions) {
-    if (!MISSIONS.some((x) => x.id === m)) throw new EngineError('character.missions', `Unknown mission ${m}.`);
+    if (!GAME_MISSIONS.some((x) => x.id === m)) throw new EngineError('character.missions', `Unknown mission ${m}.`);
     if (offered && !offered.includes(m)) throw new EngineError('character.missions', `Mission ${m} was not drawn.`);
   }
 }
@@ -110,6 +114,7 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     unspentPoints: 0,
     ...(input.look ? { look: { head: input.look.head, torso: input.look.torso, legs: input.look.legs } } : {}),
     ...(input.dice ? { dice: { d6: input.dice.d6, d10: input.dice.d10, d100: input.dice.d100 } } : {}),
+    ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
   };
 }
 

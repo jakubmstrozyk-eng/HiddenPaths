@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from 'motion/react';
 import type { Locale } from '@hp/content';
-import { createGame, heroCharacter, type GameConfig, type GameState, type Hero } from '@hp/engine';
+import { careerOf, createGame, heroCharacter, type GameConfig, type GameState, type Hero } from '@hp/engine';
 import { api, getSession, serverAvailable, setSession, type Me } from './api';
 import { DarkMatter } from './DarkMatter';
 import { LocaleContext, useT, type UiKey } from './i18n';
 import { SetupScreen } from './screens/Setup';
 import { CreateHeroScreen, HeroPickScreen, HeroesScreen } from './screens/Heroes';
-import { deviceHeroes, serverHeroes } from './heroStore';
+import { deviceHeroes, recordDeviceCareer, serverHeroes } from './heroStore';
 import { GameScreen } from './screens/Game';
 import { SavesScreen } from './screens/Saves';
 import { autosave, listSaves } from './saves';
@@ -210,6 +210,7 @@ export function App() {
                 <HeroPickScreen
                   store={heroStore}
                   multiplayer={screen.config.multiplayer}
+                  size={screen.config.size}
                   onBack={() => setScreen(screen.joinCode ? { name: 'multi', code: screen.joinCode } : { name: 'setup', multi: screen.config.multiplayer })}
                   onCreate={() => setScreen({ name: 'createHero', mode: screen.config.multiplayer ? 'multi' : 'solo', then: screen })}
                   onStart={(hero, missions, seed) => startGame(screen.config, screen.maxPlayers, screen.joinCode, hero, missions, seed)}
@@ -238,6 +239,7 @@ export function App() {
                   game={screen.game}
                   onChange={(g) => {
                     autosave(g);
+                    for (const p of g.players) if (p.character.heroId) recordDeviceCareer(p.character.heroId, g.seed, careerOf(p));
                     setScreen({ name: 'game', game: g });
                   }}
                   canSave

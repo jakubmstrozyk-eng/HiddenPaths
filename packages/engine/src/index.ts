@@ -16,3 +16,4 @@ export {
   createGame, applyAction, legalActions, currentPlayer, entryCell, isOutside, isStuck, timeoutTurn, grantXp, worldView, newEntries, WIN_XP, LOG_LIMIT,
   type GameState, type PlayerState, type Action, type LogEntry, type NewPlayer,
 } from './game';
+export * from './missions';

@@ -8,6 +8,7 @@ import {
 import { useT, type UiKey } from '../i18n';
 import { Icon } from '../Icons';
 import { diceVars } from '../DiceFace';
+import { HitFx, hitKind } from '../HitFx';
 import { PixelFoe, PixelHero } from '../PixelHero';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
@@ -21,12 +22,22 @@ import { SkillHand } from '../SkillCards';
 
 type Step =
   | { kind: 'roll'; who: string; test: UiKey; result: TestResult; vs?: string; card?: string }
-  | { kind: 'hit'; who: string; target: string; damage: number; location?: string }
+  | { kind: 'hit'; who: string; target: string; damage: number; location?: string; card?: string }
   | { kind: 'note'; who: string; text: string };
 
 const HERO = 'hero';
 const ROLL_MS = 1100;
 const PAUSE_MS = 650;
+/** How long each step of the foes' moves stays on screen, at normal pace; "faster" shortens it. */
+const FOE_PAUSE_MS = 1500;
+const PACE_KEY = 'hidden-paths.fightPace';
+function readPace(): 'normal' | 'fast' {
+  try {
+    return localStorage.getItem(PACE_KEY) === 'fast' ? 'fast' : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
 
 function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
   const { t, locale } = T;
@@ -44,7 +55,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         if (ev.parried) out.push({ kind: 'note', who: HERO, text: t('parried') });
         else if (ev.dodged) out.push({ kind: 'note', who: ev.target, text: pl ? 'Unik!' : 'Dodged!' });
         else if (ev.blocked) out.push({ kind: 'note', who: HERO, text: pl ? 'Bariera zatrzymuje cios!' : 'The barrier stops the blow!' });
-        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location });
+        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, card: ev.card });
         break;
       }
       case 'flee':
@@ -89,7 +100,14 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const world = worldView(game);
   const alive = combat.foes.filter((f) => f.vitality > 0);
   const [target, setTarget] = useState<string | null>(null);
-  const chosen = alive.find((f) => f.uid === target) ?? alive[0];
+  // With several foes the player picks whom to strike; a lone foe is the target by itself.
+  const chosen = alive.find((f) => f.uid === target) ?? (alive.length === 1 ? alive[0] : undefined);
+  const [pace, setPace] = useState(readPace);
+  const togglePace = () => {
+    const next = pace === 'fast' ? 'normal' : 'fast';
+    setPace(next);
+    try { localStorage.setItem(PACE_KEY, next); } catch { /* ignore */ }
+  };
   /** The throw waiting for the player's tap: an attack, a flight, or a card that tests (Heavy Swing, Barrier...). */
   const [prompt, setPrompt] = useState<'attack' | 'flee' | { card: string } | null>(null);
 
@@ -116,10 +134,13 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
       setRolled(true);
       return;
     }
-    const wait = step?.kind === 'roll' ? ROLL_MS + PAUSE_MS : step?.kind === 'hit' ? 900 : 800;
+    // The foes' moves play slowly enough to follow; the player can speed them up.
+    const foeStep = !!step && step.who !== HERO;
+    const base = step?.kind === 'roll' ? ROLL_MS + (foeStep ? FOE_PAUSE_MS : PAUSE_MS) : step?.kind === 'hit' ? (foeStep ? 1500 : 1100) : (foeStep ? 1300 : 900);
+    const wait = pace === 'fast' ? Math.round(base * 0.45) : base;
     const next = setTimeout(() => { setAt((i) => i + 1); setRolled(false); }, wait);
     return () => clearTimeout(next);
-  }, [entries, at, steps.length, step, rolled, waitingForTap, onReplayDone]);
+  }, [entries, at, steps.length, step, rolled, waitingForTap, onReplayDone, pace]);
 
   // Vitality as it stands at this point of the playback.
   const lost = (who: string) => steps.slice(0, entries ? at + (step?.kind === 'hit' ? 1 : 0) : 0)
@@ -146,6 +167,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const potions = [...new Set(me.inventory.items.filter((i) => ITEMS[i]?.kind === 'potion'))];
   const busy = !!entries;
   const active = step?.who;
+  const hitFx = step?.kind === 'hit'
+    ? hitKind(step.who, combat.foes.find((f) => f.uid === step.who)?.enemy, { weaponId: weapon.id, weaponName: weapon.name.en, ranged: !!weapon.ranged }, step.card)
+    : null;
 
   const throwDie = () => {
     if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid } });
@@ -157,9 +181,14 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   return (
     <div className="overlay combat">
       <motion.section className="arena duel" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}>
-        <header className="card-head">
-          <small>{t('round')} {combat.turn}</small>
-          <h2>{t('fight')}</h2>
+        <header className="card-head duel-head">
+          <div>
+            <small>{t('round')} {combat.turn}</small>
+            <h2>{t('fight')}</h2>
+          </div>
+          <button className={`ghost small pace ${pace === 'fast' ? 'on' : ''}`} onClick={togglePace} aria-pressed={pace === 'fast'}>
+            {pace === 'fast' ? '▶▶' : '▶'} {pace === 'fast' ? (locale === 'pl' ? 'Szybko' : 'Fast') : (locale === 'pl' ? 'Przyspiesz' : 'Speed up')}
+          </button>
         </header>
 
         <div className="duel-field">
@@ -171,6 +200,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
             <small><Icon name="vitality" size={12} /> {heroVit}/{c.maxVitality}</small>
             <small><Icon name="sword" size={12} /> {itemName(weapon.id, locale)} S{signed(strengthStep(c.attributes.str) + weapon.power)}+k6</small>
+            {hitFx && step?.kind === 'hit' && step.target === HERO && <HitFx key={`fx-${at}`} kind={hitFx} />}
             <AnimatePresence>{step?.kind === 'hit' && step.target === HERO && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
           </div>
 
@@ -203,15 +233,18 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               return (
                 <motion.button
                   key={f.uid}
-                  className={`foe-card ${chosen?.uid === f.uid ? 'chosen' : ''} ${active === f.uid ? 'active' : ''} ${down ? 'down' : ''}`}
+                  className={`foe-card ${chosen?.uid === f.uid ? 'chosen' : ''} ${active === f.uid ? 'active attacking' : ''} ${down ? 'down' : ''} ${!busy && !chosen && !down ? 'pickable' : ''}`}
                   disabled={down || busy}
                   onClick={() => setTarget(f.uid)}
                   animate={down ? { opacity: 0.3, scale: 0.9 } : step?.kind === 'hit' && step.target === f.uid ? { x: [0, 10, -8, 4, 0] } : { opacity: 1, scale: 1, x: 0 }}
                 >
+                  {active === f.uid && !down && <span className="foe-flag attack">{locale === 'pl' ? 'Atakuje!' : 'Attacking!'}</span>}
+                  {chosen?.uid === f.uid && !down && active !== f.uid && alive.length > 1 && <span className="foe-flag target">◎ {locale === 'pl' ? 'Twój cel' : 'Your target'}</span>}
                   <PixelFoe kind={enemy.kind} size={combat.foes.length > 1 ? 48 : 72} />
                   <b>{foeName(f.uid, locale)}</b>
                   <span className="bar"><motion.span animate={{ width: `${(vit / f.maxVitality) * 100}%` }} /></span>
                   <small><Icon name="vitality" size={12} /> {vit}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
+                  {hitFx && step?.kind === 'hit' && step.target === f.uid && <HitFx key={`fx-${at}`} kind={hitFx} />}
                   <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
                 </motion.button>
               );
@@ -221,6 +254,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
 
         {!busy && !prompt && (
           <>
+            {!chosen && alive.length > 1 && <p className="duel-hint pick-hint">{locale === 'pl' ? 'Wybierz przeciwnika, którego chcesz zaatakować.' : 'Pick the foe you want to strike.'}</p>}
             <p className={`odds ${oddsPct < 50 ? 'grim' : ''}`}>
               {t('winOdds')} ~{oddsPct}%{oddsPct < 50 ? ` · ${t('fleeHint')}` : ''} · {attacksPerTurn(me)} {t('attacksPerTurn')}
             </p>
