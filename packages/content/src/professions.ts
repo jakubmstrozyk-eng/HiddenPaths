@@ -9,7 +9,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
     id: 'trapper', race: 'nomads', mvp: true, name: { pl: 'Traper', en: 'Trapper' },
     cards: [
       { id: 'trapper-hunter', level: 1, name: { pl: 'Łowca', en: 'Hunter' }, summary: { pl: 'Każdy nieudany test polowania możesz raz powtórzyć.', en: 'Every failed hunting test may be rolled again once.' } },
-      { id: 'trapper-trap', level: 1, combat: true, name: { pl: 'Zastawianie Pułapki', en: 'Set a Trap' }, summary: { pl: 'Przeciwnik testuje Zr.; porażka = -4 Żyw.', en: 'Enemy tests Dexterity; on failure it loses 4 Vitality.' } },
+      { id: 'trapper-trap', level: 1, combat: true, name: { pl: 'Zastawianie Pułapki', en: 'Set a Trap' }, summary: { pl: 'Na mapie za darmo, w walce za całą rundę. Wróg testuje Zr.; porażka = -4 Żyw. i unieruchomienie na rundę.', en: 'Free on the map, a whole round in a fight. Each foe tests Dexterity; on failure it loses 4 Vitality and is held for a round.' } },
       { id: 'trapper-precise-shot', level: 1, combat: true, name: { pl: 'Precyzyjny Strzał', en: 'Precise Shot' }, summary: { pl: 'Trafienie długim łukiem o 15+ = +2 obrażeń.', en: 'A longbow hit by 15 or more deals +2 damage.' } },
     ],
   },

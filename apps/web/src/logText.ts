@@ -143,7 +143,7 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'foeDown': return `${foeName(ev.uid, locale)} ✕`;
     case 'poisoned': return locale === 'pl' ? 'Trucizna!' : 'Poisoned!';
     case 'bleed': return `${foeName(ev.uid, locale)} −${ev.damage}`;
-    case 'trap': return `${cardName('trapper-trap', locale)}: ${foeName(ev.uid, locale)} ${ev.damage ? `−${ev.damage}` : pl ? 'unika' : 'dodges'}`;
+    case 'trap': return `${cardName('trapper-trap', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'unika' : 'dodges') : `−${ev.damage}, ${pl ? 'unieruchomiony na rundę' : 'held for a round'}`}`;
     case 'barrier': return `${cardName('mystic-barrier', locale)}: ${ev.result.success ? (pl ? 'stoi' : 'raised') : t('failure')}`;
     case 'card': return cardLine(ev.card, ev, locale);
   }

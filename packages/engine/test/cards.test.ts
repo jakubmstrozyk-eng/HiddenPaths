@@ -157,4 +157,31 @@ describe('skill cards (level 1)', () => {
     if (wet !== null) expect(wet).toBeGreaterThan(0);
     expect(count('forest')).toBe(0);
   });
+
+  it('Set a Trap in a fight: takes the round, springs next round, a caught foe loses 4 and skips its attack', () => {
+    const g = make('nomads', 'trapper');
+    const p = g.players[0]!;
+    let seen = false;
+    for (let seed = 1; seed < 80 && !seen; seed++) {
+      const c = startCombat(worldView(g), ['wolf']);
+      const a = structuredClone(p);
+      a.character.vitality = 99;
+      const first = combatTurn(worldView(g), a, c, { move: 'card', card: 'trapper-trap' }, new Rng(seed));
+      expect(first.events.some((e) => e.type === 'strike' && e.by === 'hero')).toBe(false);
+      expect(c.trap).toBe(true);
+      expect(combatMoves(a, c).some((m) => m.move === 'card' && m.card === 'trapper-trap')).toBe(false);
+      const before = c.foes[0]!.vitality;
+      const second = combatTurn(worldView(g), a, c, { move: 'focus' }, new Rng(seed + 1000));
+      const trap = second.events.find((e) => e.type === 'trap');
+      expect(trap).toBeDefined();
+      expect(c.trap).toBe(false);
+      if (trap && trap.type === 'trap' && !trap.result.success) {
+        expect(c.foes[0]!.vitality).toBe(before - 4);
+        expect(second.events.some((e) => e.type === 'strike' && e.by !== 'hero')).toBe(false);
+        expect(second.events.some((e) => e.type === 'stunned' && e.who === c.foes[0]!.uid)).toBe(true);
+        seen = true;
+      }
+    }
+    expect(seen).toBe(true);
+  });
 });

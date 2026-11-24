@@ -5,6 +5,7 @@ import { log } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
 import type { ActorState } from './terrain';
+import type { CombatEvent, Foe } from './combat';
 
 /**
  * Skill cards from the profession sheets (level 1). Passive cards live where they act:
@@ -88,16 +89,28 @@ export function playCard(state: GameState, player: PlayerState, card: string) {
   }
 }
 
-/** Set a Trap: when a fight breaks out on a trapped fragment, every foe tests Dexterity or loses 4 Vitality. */
+/**
+ * Set a Trap: every foe caught tests Dexterity; on a failure it loses 4 Vitality and is held
+ * fast for a round, so it skips its next attack (Jacob, 2026-11-24).
+ */
+export function trapFoes(foes: Foe[], rng: Rng): CombatEvent[] {
+  const events: CombatEvent[] = [];
+  for (const foe of foes) {
+    if (foe.vitality <= 0) continue;
+    const result = test(rng, ENEMIES[foe.enemy]!.dex);
+    const damage = result.success ? 0 : 4;
+    foe.vitality -= damage;
+    if (!result.success) foe.stunned = true;
+    events.push({ type: 'trap', uid: foe.uid, result, damage });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
+  return events;
+}
+
+/** A trap set on the map springs when a fight breaks out on its fragment. */
 export function springTrap(state: GameState, player: PlayerState, rng: Rng) {
   const key = trapKey(player.position);
   if (!player.combat || !player.counters[key]) return;
   delete player.counters[key];
-  for (const foe of player.combat.foes) {
-    const result = test(rng, ENEMIES[foe.enemy]!.dex);
-    const damage = result.success ? 0 : 4;
-    foe.vitality -= damage;
-    log(state, { type: 'combat', player: player.id, event: { type: 'trap', uid: foe.uid, result, damage } });
-    if (foe.vitality <= 0) log(state, { type: 'combat', player: player.id, event: { type: 'foeDown', uid: foe.uid, enemy: foe.enemy } });
-  }
+  for (const event of trapFoes(player.combat.foes, rng)) log(state, { type: 'combat', player: player.id, event });
 }

@@ -61,6 +61,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
       case 'trap':
         out.push({ kind: 'roll', who: ev.uid, test: 'foeTrap', result: ev.result });
         if (ev.damage) out.push({ kind: 'hit', who: 'trap', target: ev.uid, damage: ev.damage });
+        if (!ev.result.success) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Unieruchomiony na rundę!' : 'Held fast for a round!' });
         break;
       case 'barrier':
         out.push({ kind: 'roll', who: HERO, test: 'testIntBarrier', result: ev.result, card: 'mystic-barrier' });
@@ -132,7 +133,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const barrierTarget = Math.round(successChance(c.attributes.int, testModifier(world, me, 'int', focus)) * 100);
   const cardMoves = combatMoves(me, combat).flatMap((m) => (m.move === 'card' ? [m.card] : []));
   const playCard = (card: string) => {
-    if (card === 'warrior-rations' || card === 'wraith-leaves') act({ type: 'combat', move: { move: 'card', card } });
+    if (card === 'warrior-rations' || card === 'wraith-leaves' || card === 'trapper-trap') act({ type: 'combat', move: { move: 'card', card } });
     else setPrompt({ card });
   };
   const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : typeof prompt === 'object' && prompt?.card === 'mystic-barrier' ? 'testIntBarrier' : 'testCombat';
