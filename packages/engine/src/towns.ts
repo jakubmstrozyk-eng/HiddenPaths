@@ -1,11 +1,10 @@
-import { HERBS, ITEMS, MATERIALS, TERRAINS, type HerbId, type MaterialId } from '@hp/content';
-import { test } from './dice';
+import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, TERRAINS, type HerbId, type MaterialId } from '@hp/content';
 import { EngineError } from './errors';
 import { giveItem, runOutcomes } from './events';
 import { log, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState, Service } from './state';
-import { testModifier } from './terrain';
+import { heroTest } from './terrain';
 
 /** Settlement prices and limits from the "Fragmenty" and "Bohaterowie Niezależni" chapters. */
 export const TOWN = {
@@ -51,7 +50,7 @@ function innTrouble(state: GameState, player: PlayerState, rng: Rng) {
   } else if (value === 2) {
     runOutcomes(state, player, rng, [{ do: 'fight', enemies: ['bandit'] }]);
   } else if (value === 3) {
-    const result = test(rng, player.character.attributes.int, testModifier(worldView(state), player, 'int'));
+    const result = heroTest(worldView(state), player, 'int', rng);
     log(state, { type: 'check', player: player.id, attribute: 'int', result });
     if (!result.success) runOutcomes(state, player, rng, [{ do: 'gold', amount: -player.character.gold }, { do: 'food', amount: -player.character.food }]);
   }
@@ -77,7 +76,7 @@ export function useService(state: GameState, player: PlayerState, rng: Rng, serv
     }
     case 'gossip': {
       player.counters[onceKey(state, 'gossip')] = 1;
-      const result = test(rng, c.attributes.cha, testModifier(world, player, 'cha'));
+      const result = heroTest(world, player, 'cha', rng);
       log(state, { type: 'service', player: player.id, service, cost: 0 });
       log(state, { type: 'check', player: player.id, attribute: 'cha', result });
       if (result.success) runOutcomes(state, player, rng, [{ do: 'effect', target: 'cha', amount: 10, rounds: 2 }]);
@@ -180,3 +179,33 @@ export const isSettlement = (state: GameState, cell: number) => {
   const t = state.map.cells[cell]!.terrain;
   return t !== 'core' && !!TERRAINS[t].settlement;
 };
+
+/** Smelting takes this many carried weapons or armour pieces. */
+export const SMELT_PIECES = 3;
+
+/** Gear the Runemaster could melt: carried (not worn) weapons and armour, cheapest first. */
+export function smeltable(player: PlayerState): string[] {
+  return player.inventory.items
+    .filter((id) => ITEMS[id]?.kind === 'weapon' || ITEMS[id]?.kind === 'armour')
+    .sort((a, b) => ITEMS[a]!.sell - ITEMS[b]!.sell);
+}
+
+export function canSmelt(state: GameState, player: PlayerState): boolean {
+  return player.character.cards.includes('runemaster-smelt') && placeOf(state, player) === 'city' && smeltable(player).length >= SMELT_PIECES;
+}
+
+/** Runemaster's Smelting: in a city, 3 pieces of gear become 1 iron ore or a new common item. */
+export function smelt(state: GameState, player: PlayerState, rng: Rng, into: 'ore' | 'item') {
+  if (!canSmelt(state, player)) throw new EngineError('card.notNow', 'You cannot smelt here.');
+  const items = smeltable(player).slice(0, SMELT_PIECES);
+  for (const id of items) player.inventory.items.splice(player.inventory.items.indexOf(id), 1);
+  if (into === 'ore') {
+    player.inventory.materials.iron = (player.inventory.materials.iron ?? 0) + 1;
+    log(state, { type: 'smelted', player: player.id, items, into: 'iron' });
+  } else {
+    const item = LOOT_COMMON[rng.int(LOOT_COMMON.length)]!;
+    player.inventory.items.push(item);
+    log(state, { type: 'smelted', player: player.id, items, into: item });
+  }
+  log(state, { type: 'card', player: player.id, card: 'runemaster-smelt', ok: true });
+}

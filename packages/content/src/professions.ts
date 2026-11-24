@@ -1,8 +1,8 @@
 import type { Profession, ProfessionId } from './types';
 
 /**
- * Professions, two per race. The MVP ships one per race with its level 1 cards filled in;
- * the remaining cards (levels 3 to 9) and professions are added as data in later milestones.
+ * Professions, two per race, each with its level 1 cards from the profession sheets.
+ * The cards for levels 3 to 9 are added as data in later milestones.
  */
 export const PROFESSIONS: Record<ProfessionId, Profession> = {
   trapper: {
@@ -13,7 +13,14 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
       { id: 'trapper-precise-shot', level: 1, combat: true, name: { pl: 'Precyzyjny Strzał', en: 'Precise Shot' }, summary: { pl: 'Trafienie długim łukiem o 15+ = +2 obrażeń.', en: 'A longbow hit by 15 or more deals +2 damage.' } },
     ],
   },
-  elder: { id: 'elder', race: 'nomads', mvp: false, name: { pl: 'Starszy', en: 'Elder' }, cards: [] },
+  elder: {
+    id: 'elder', race: 'nomads', mvp: true, name: { pl: 'Starszy', en: 'Elder' },
+    cards: [
+      { id: 'elder-wisdom', level: 1, name: { pl: 'Mądrość Wieków', en: 'Wisdom of Ages' }, summary: { pl: 'Następny nieudany test Int. powtarzasz raz (odnawia się po obozowisku).', en: 'The next failed Intelligence test is rolled again once (renews at camp).' } },
+      { id: 'elder-nature', level: 1, name: { pl: 'Bliskość Natury', en: 'Close to Nature' }, summary: { pl: 'Przy obozowisku medytujesz: +10 do następnego testu cechy.', en: 'At camp you meditate: +10 to your next attribute test.' } },
+      { id: 'elder-herb', level: 1, name: { pl: 'Lecznicze Ziele', en: 'Healing Herb' }, summary: { pl: 'Tamuje krwawienie, leczy zatrucie i +2 Żyw. (odnawia się po obozowisku).', en: 'Stops bleeding, cures poison and heals 2 Vitality (renews at camp).' } },
+    ],
+  },
   diver: {
     id: 'diver', race: 'myrmids', mvp: true, name: { pl: 'Nurek', en: 'Diver' },
     cards: [
@@ -22,8 +29,22 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
       { id: 'diver-blowpipe', level: 1, combat: true, name: { pl: 'Plujka', en: 'Blowpipe' }, summary: { pl: 'Zatruta strzałka (S-2), trafienie zatruwa.', en: 'Poison dart (Str-2); a hit poisons the target.' } },
     ],
   },
-  gourmet: { id: 'gourmet', race: 'myrmids', mvp: false, name: { pl: 'Smakosz', en: 'Gourmet' }, cards: [] },
-  explorer: { id: 'explorer', race: 'humans', mvp: false, name: { pl: 'Odkrywca', en: 'Explorer' }, cards: [] },
+  gourmet: {
+    id: 'gourmet', race: 'myrmids', mvp: true, name: { pl: 'Smakosz', en: 'Gourmet' },
+    cards: [
+      { id: 'gourmet-fish', level: 1, name: { pl: 'Ryba', en: 'Fish' }, summary: { pl: 'Nieudany test łowiectwa na fragmencie z wodą lub test pływania możesz raz powtórzyć.', en: 'A failed hunt on a water fragment or a failed swim may be rolled again once.' } },
+      { id: 'gourmet-seasoning', level: 1, name: { pl: 'Przyprawianie', en: 'Seasoning' }, summary: { pl: 'Przyrządzając pożywienie dodajesz przyprawę: +5 do wybranej cechy na rundę po zjedzeniu (1 na rundę).', en: 'When you prepare food you season it: +5 to a chosen attribute for the round after eating (1 a round).' } },
+      { id: 'gourmet-stew', level: 1, name: { pl: 'Lecznicza Potrawka', en: 'Healing Stew' }, summary: { pl: 'Test Int.: porcja staje się potrawką (max 3). Zjedzona leczy +2 Żyw.', en: 'Intelligence test: a portion becomes a stew (up to 3). Eaten, it heals 2 Vitality.' } },
+    ],
+  },
+  explorer: {
+    id: 'explorer', race: 'humans', mvp: true, name: { pl: 'Odkrywca', en: 'Explorer' },
+    cards: [
+      { id: 'explorer-traveller', level: 1, name: { pl: 'Podróżnik', en: 'Traveller' }, summary: { pl: 'Co 2 nowe fragmenty odkryte w jednej turze = +1 PD.', en: 'Every 2 new fragments revealed in one turn give +1 XP.' } },
+      { id: 'explorer-bandages', level: 1, name: { pl: 'Opatrunki', en: 'Bandages' }, summary: { pl: '1 Wt. (w walce cała tura): +2 Żyw. i tamuje krwawienie.', en: '1 Stamina (in a fight, your move): +2 Vitality and stops bleeding.' } },
+      { id: 'explorer-disarm', level: 1, combat: true, name: { pl: 'Rozbrojenie', en: 'Disarm' }, summary: { pl: 'Atak; trafiony wróg testuje Zr. Porażka = traci broń, póki nie wygra przeciwstawnego testu Zr.', en: 'An attack; a foe hit tests Dexterity. On a failure it loses its weapon until it wins an opposed Dexterity test.' } },
+    ],
+  },
   warrior: {
     id: 'warrior', race: 'humans', mvp: true, name: { pl: 'Wojownik', en: 'Warrior' },
     cards: [
@@ -40,7 +61,14 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
       { id: 'mystic-researcher', level: 1, name: { pl: 'Badacz', en: 'Researcher' }, summary: { pl: 'Przy obozowisku 1 Wt. = stałe +1 Int.', en: 'At camp, spend 1 Stamina for a permanent +1 Intelligence.' } },
     ],
   },
-  guardian: { id: 'guardian', race: 'sunborn', mvp: false, name: { pl: 'Strażnik', en: 'Guardian' }, cards: [] },
+  guardian: {
+    id: 'guardian', race: 'sunborn', mvp: true, name: { pl: 'Strażnik', en: 'Guardian' },
+    cards: [
+      { id: 'guardian-stance', level: 1, combat: true, name: { pl: 'Postawa Obronna', en: 'Defensive Stance' }, summary: { pl: 'Raz na walkę: przez rundę blokujesz każdy cios, ale nie atakujesz.', en: 'Once a fight: for a round you block every blow, but do not attack.' } },
+      { id: 'guardian-riposte', level: 1, combat: true, name: { pl: 'Odpowiedź', en: 'Riposte' }, summary: { pl: 'W postawie obronnej odpowiadasz włócznią na każdy atak: Walka -10, siła S+1.', en: 'In the defensive stance you answer every attack with your spear: Combat -10, power S+1.' } },
+      { id: 'guardian-hide', level: 1, combat: true, name: { pl: 'Twarda Skóra', en: 'Hard Hide' }, summary: { pl: 'Stały +1 pancerza na każdej lokacji ciała, ponad zbroję.', en: 'A permanent +1 armour on every part of the body, on top of armour.' } },
+    ],
+  },
   wraith: {
     id: 'wraith', race: 'keepers', mvp: true, name: { pl: 'Zjawa', en: 'Wraith' },
     cards: [
@@ -49,8 +77,22 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
       { id: 'wraith-leaves', level: 1, name: { pl: 'Liście Świętego Drzewa', en: 'Sacred Tree Leaves' }, summary: { pl: '3 na grę: usuwa negatywne efekty i leczy 4 Żyw.', en: '3 per game: removes negative effects and heals 4 Vitality.' } },
     ],
   },
-  druid: { id: 'druid', race: 'keepers', mvp: false, name: { pl: 'Druid', en: 'Druid' }, cards: [] },
-  runemaster: { id: 'runemaster', race: 'flintborn', mvp: false, name: { pl: 'Runmistrz', en: 'Runemaster' }, cards: [] },
+  druid: {
+    id: 'druid', race: 'keepers', mvp: true, name: { pl: 'Druid', en: 'Druid' },
+    cards: [
+      { id: 'druid-herbalist', level: 1, name: { pl: 'Zielarz', en: 'Herbalist' }, summary: { pl: '+20 do testu Int. przy zbieraniu ziół i owoców.', en: '+20 to the Intelligence test when gathering herbs and fruit.' } },
+      { id: 'druid-forest', level: 1, name: { pl: 'Siła Lasu', en: 'Strength of the Forest' }, summary: { pl: 'W lesie +20 do testów formowania magii (bariera, zwoje).', en: 'In a forest +20 to tests of shaping magic (barrier, scrolls).' } },
+      { id: 'druid-companion', level: 1, combat: true, name: { pl: 'Towarzysz', en: 'Companion' }, summary: { pl: 'Bestia poniżej 10 Żyw.: test Ch. oswaja ją. 3 udane testy (co rundę) = towarzysz na zawsze. Max 2.', en: 'A beast under 10 Vitality: a Charisma test tames it. 3 passed tests (one a round) make it a companion for good. Up to 2.' } },
+    ],
+  },
+  runemaster: {
+    id: 'runemaster', race: 'flintborn', mvp: true, name: { pl: 'Runmistrz', en: 'Runemaster' },
+    cards: [
+      { id: 'runemaster-empower', level: 1, combat: true, name: { pl: 'Wzmocnienie Broni', en: 'Empowered Weapon' }, summary: { pl: 'Na 3 rundy każde trafienie +2 Obr. (odnawia się po obozowisku).', en: 'For 3 rounds every hit deals +2 damage (renews at camp).' } },
+      { id: 'runemaster-vise', level: 1, name: { pl: 'Imadło', en: 'Vise' }, summary: { pl: 'Nieudany test wydobycia surowców możesz raz powtórzyć.', en: 'A failed test for gathering materials may be rolled again once.' } },
+      { id: 'runemaster-smelt', level: 1, name: { pl: 'Przetapianie', en: 'Smelting' }, summary: { pl: 'W mieście 3 sztuki broni lub zbroi przetapiasz na rudę żelaza albo nowy zwykły przedmiot.', en: 'In a city, melt 3 weapons or armour pieces into iron ore or a new common item.' } },
+    ],
+  },
   cavedelver: {
     id: 'cavedelver', race: 'flintborn', mvp: true, name: { pl: 'Grotołaz', en: 'Cave Delver' },
     cards: [

@@ -31,6 +31,11 @@ export function cardName(id: string, locale: Locale): string {
 }
 
 export function foeName(uid: string, locale: Locale): string {
+  // A companion: "pet-wolf-1" is the hero's tamed Wolf.
+  if (uid.startsWith('pet-')) {
+    const enemy = ENEMIES[uid.slice(4).replace(/-\d+$/, '')];
+    return `${enemy ? enemy.name[locale] : uid} (${locale === 'pl' ? 'towarzysz' : 'companion'})`;
+  }
   const id = uid.replace(/-\d+$/, '');
   const n = uid.match(/-(\d+)$/)?.[1];
   const name = ENEMIES[id]?.name[locale] ?? uid;
@@ -114,6 +119,18 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${e.rerolled ? `${cardName(e.rerolled, locale)} ↻ · ` : ''}${tx({ pl: 'Test', en: 'Test' })} ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}${e.gained.length ? ` · ${e.gained.map((g) => g.split(':').slice(-1)[0]).join(', ')}` : ''}`;
     case 'card':
       return cardLine(e.card, e, locale);
+    case 'cooked':
+      return e.meal.kind === 'stew'
+        ? (pl ? 'Lecznicza potrawka gotowa' : 'A healing stew is ready')
+        : `${pl ? 'Pożywienie przyrządzone' : 'Food prepared'}${e.meal.spice ? ` · ${pl ? 'przyprawa' : 'spice'}: ${attrShort(e.meal.spice, locale)}` : ''}`;
+    case 'mealEaten':
+      return e.meal.kind === 'stew' ? null : `${pl ? 'Przyrządzony posiłek: +2 do cech' : 'A prepared meal: +2 to attributes'}${e.meal.spice ? `, +5 ${attrShort(e.meal.spice, locale)}` : ''}`;
+    case 'companion':
+      return e.left
+        ? `${foeName(e.uid, locale)}: ${pl ? 'uwalnia się i odchodzi' : 'breaks free and leaves'}`
+        : `${foeName(e.uid, locale)}: ${e.tame ? (pl ? 'zostaje na zawsze!' : 'stays for good!') : `${pl ? 'więź' : 'bond'} ${e.bond}/3`}`;
+    case 'smelted':
+      return `${pl ? 'Przetopione' : 'Smelted'}: ${e.items.map((i) => itemName(i, locale)).join(', ')} → ${itemName(e.into, locale)}`;
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:
@@ -150,6 +167,11 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'trap': return `${cardName('trapper-trap', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'unika' : 'dodges') : `−${ev.damage}, ${pl ? 'unieruchomiony na rundę' : 'held for a round'}`}`;
     case 'barrier': return `${cardName('mystic-barrier', locale)}: ${ev.result.success ? (pl ? 'stoi' : 'raised') : t('failure')}`;
     case 'card': return cardLine(ev.card, ev, locale);
+    case 'stance': return `${cardName('guardian-stance', locale)}: ${pl ? 'blokujesz ciosy w tej rundzie' : 'you block blows this round'}`;
+    case 'disarm': return `${cardName('explorer-disarm', locale)}: ${foeName(ev.uid, locale)} ${ev.kept ? (pl ? 'utrzymuje broń' : 'keeps its weapon') : (pl ? 'traci broń!' : 'loses its weapon!')}`;
+    case 'rearm': return `${foeName(ev.uid, locale)}: ${ev.success ? (pl ? 'odzyskuje broń' : 'gets its weapon back') : (pl ? 'nie odzyskuje broni' : 'fails to get its weapon back')}`;
+    case 'tame': return `${cardName('druid-companion', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'oswojony!' : 'tamed!') : (pl ? 'nie daje się oswoić' : 'will not be tamed')}`;
+    case 'companionDown': return `${foeName(ev.uid, locale)} ✕`;
   }
 }
 
@@ -164,6 +186,12 @@ function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: numbe
     case 'warrior-veteran': return `${name}: +1 ${pl ? 'PD' : 'XP'}`;
     case 'mystic-researcher': return `${name}: +1 Int`;
     case 'trapper-trap': return `${name}: ${pl ? 'pułapka zastawiona' : 'trap set'}`;
+    case 'elder-nature': return `${name}: +10 ${pl ? 'do następnego testu' : 'to the next test'}`;
+    case 'elder-herb': case 'explorer-bandages': case 'gourmet-stew': return `${name}: +${e.amount ?? 0} ${pl ? 'Żyw.' : 'Vit'}`;
+    case 'explorer-traveller': return `${name}: +1 ${pl ? 'PD' : 'XP'}`;
+    case 'runemaster-empower': return `${name}: +2 ${pl ? 'Obr. na 3 rundy' : 'damage for 3 rounds'}`;
+    case 'gourmet-seasoning': return `${name}: +5`;
+    case 'runemaster-smelt': return name;
     default: return name;
   }
 }

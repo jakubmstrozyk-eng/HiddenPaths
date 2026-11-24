@@ -1,9 +1,8 @@
-import { BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
+import { ATTRIBUTES, BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
 import { createCharacter, spendPoints } from './character';
-import { playCard, playableCards, refreshCards } from './cards';
+import { bondCompanions, canCook, canSeason, cook, eatMeal, playCard, playableCards, refreshCards, trimMeals } from './cards';
 import { combatMoves, combatTurn, drinkPotion, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
-import { test } from './dice';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
 import { generateMap, neighbours } from './mapgen';
@@ -11,9 +10,9 @@ import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
-import { availableTerrainActions, effectBonus, runTerrainAction, testModifier } from './terrain';
+import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
 import {
-  availableServices, buy, buyPrice, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, useService, usePortal,
+  availableServices, buy, buyPrice, canSmelt, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
 
 export type { Action, GameState, LogEntry, NewPlayer, PlayerState } from './state';
@@ -137,6 +136,11 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     if (canResearch(state, player)) actions.push({ type: 'camp', research: true });
   }
   for (const card of playableCards(state, player)) actions.push({ type: 'card', card });
+  if (canCook(player)) {
+    actions.push({ type: 'cook' });
+    if (canSeason(state, player)) for (const spice of ATTRIBUTES) actions.push({ type: 'cook', spice });
+  }
+  if (canSmelt(state, player)) actions.push({ type: 'smelt', into: 'ore' }, { type: 'smelt', into: 'item' });
   for (const service of availableServices(state, player)) actions.push({ type: 'service', service });
   for (const to of portalTargets(state, player)) actions.push({ type: 'portal', to });
   for (const item of ['food', ...shopStock(state, player)]) {
@@ -168,7 +172,17 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   player.cameFrom = isOutside(player) ? null : player.position;
   player.position = to;
   const terrain = state.map.cells[to]!.terrain;
-  if (reveal(state, player, to, rng) && drawsEvent(terrain)) {
+  const fresh = reveal(state, player, to, rng);
+  // Traveller: every second new fragment found in one turn gives the Explorer +1 XP.
+  if (fresh && player.character.cards.includes('explorer-traveller')) {
+    const key = `found@${state.round}`;
+    player.counters[key] = (player.counters[key] ?? 0) + 1;
+    if (player.counters[key] % 2 === 0) {
+      gainXp(state, player, 1);
+      log(state, { type: 'card', player: player.id, card: 'explorer-traveller', ok: true, amount: 1 });
+    }
+  }
+  if (fresh && drawsEvent(terrain)) {
     const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
     if (card !== null) startEvent(state, player, card);
   }
@@ -228,6 +242,13 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       player.character.vitality += healed;
       player.actionsSinceCamp = 0;
       log(state, { type: 'camped', player: player.id, cell: player.position, healed });
+      // Companions rest too.
+      for (const pet of player.companions ?? []) pet.vitality = Math.min(pet.maxVitality, pet.vitality + 2);
+      // Close to Nature: the Elder meditates at camp, +10 to the next attribute test.
+      if (player.character.cards.includes('elder-nature')) {
+        player.counters.nature = 1;
+        log(state, { type: 'card', player: player.id, card: 'elder-nature', ok: true, amount: 10 });
+      }
       endTurn(state, player, rng);
       break;
     }
@@ -243,7 +264,13 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       fight(state, player, rng, action.move);
       break;
     case 'card':
-      playCard(state, player, action.card);
+      playCard(state, player, action.card, rng);
+      break;
+    case 'cook':
+      cook(state, player, rng, action.spice);
+      break;
+    case 'smelt':
+      smelt(state, player, rng, action.into);
       break;
     case 'service':
       useService(state, player, rng, action.service);
@@ -358,7 +385,7 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
   const key = readKey(state, id);
   if (player.counters[key]) throw new EngineError('book.once', 'You can read this book once a round.');
   player.counters[key] = 1;
-  const result = test(rng, player.character.attributes.int, testModifier(worldView(state), player, 'int'));
+  const result = heroTest(worldView(state), player, 'int', rng);
   log(state, { type: 'check', player: player.id, attribute: 'int', result });
   if (!result.success) return;
   const count = (player.counters[`book:${id}`] ?? 0) + 1;
@@ -373,6 +400,7 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
 
 /** Death, the Stone of Beginnings, the Fountain of rebirth and the win conditions. */
 function afterAction(state: GameState, player: PlayerState) {
+  trimMeals(player);
   if (player.character.vitality <= 0) respawn(state, player);
   if (isOutside(player)) return;
   const cell = state.map.cells[player.position]!;
@@ -402,7 +430,9 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   const meals = !isOutside(player) && state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
   if (needsFood) {
     if (c.food >= meals) {
+      eatMeal(state, player, meals);
       c.food -= meals;
+      trimMeals(player);
       player.roundsWithoutFood = 0;
       log(state, { type: 'ate', player: player.id, foodLeft: c.food });
     } else {
@@ -431,6 +461,7 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   log(state, { type: 'turnEnded', player: player.id, next: next.id, round: state.round });
   // Poison, nightmares and the like strike at the start of the hero's turn.
   tickConditions(state, next, rng);
+  bondCompanions(state, next, rng);
   if (next.character.vitality <= 0) respawn(state, next);
 }
 

@@ -8,6 +8,9 @@ export interface TestResult {
   success: boolean;
   /** How far under the target the roll landed (negative on failure). Used for hit location and criticals. */
   margin: number;
+  /** A skill card that gave a failed test a second throw, and what the first throw was. */
+  rerolled?: string;
+  first?: number;
 }
 
 /** A d100 test: roll at or under the attribute plus modifiers. A 1 always succeeds and 100 always fails. */
