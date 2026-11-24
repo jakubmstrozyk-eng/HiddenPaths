@@ -129,6 +129,8 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return e.left
         ? `${foeName(e.uid, locale)}: ${pl ? 'uwalnia się i odchodzi' : 'breaks free and leaves'}`
         : `${foeName(e.uid, locale)}: ${e.tame ? (pl ? 'zostaje na zawsze!' : 'stays for good!') : `${pl ? 'więź' : 'bond'} ${e.bond}/3`}`;
+    case 'scroll':
+      return `${itemName(e.item, locale)}${e.amount ? `: +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
     case 'smelted':
       return `${pl ? 'Przetopione' : 'Smelted'}: ${e.items.map((i) => itemName(i, locale)).join(', ')} → ${itemName(e.into, locale)}`;
     case 'hungry':
@@ -147,13 +149,13 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'strike': {
       const by = ev.by === 'hero' ? t('you') : foeName(ev.by, locale);
       const on = ev.target === 'hero' ? t('you').toLowerCase() : foeName(ev.target, locale);
-      const tag = ev.card ? `${cardName(ev.card, locale)} · ` : '';
+      const tag = ev.card ? `${cardName(ev.card, locale)} · ` : ev.scroll ? `${itemName(ev.scroll, locale)} · ` : '';
       if (ev.dodged) return `${tag}${on}: ${pl ? 'unik' : 'dodged'} (${ev.dodge!.roll}/${ev.dodge!.target})`;
       if (!ev.result.success) return `${tag}${by} → ${on}: ${t('miss')} (${ev.result.roll}/${ev.result.target})`;
       if (ev.parried) return `${by} → ${on}: ${t('parried')}`;
       if (ev.blocked) return `${by} → ${on}: ${pl ? 'bariera zatrzymuje cios' : 'the barrier stops the blow'}`;
       if (ev.barrier) return `${by} → ${on}: ${pl ? 'przebija barierę' : 'breaks the barrier'}, −${ev.damage ?? 0}`;
-      if (ev.card) return `${tag}${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
+      if (ev.card || ev.scroll) return `${tag}${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
       return `${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
     }
     case 'flee': return ev.success ? t('fled') : `${t('flee')}: ${t('failure')}`;
@@ -172,6 +174,8 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'rearm': return `${foeName(ev.uid, locale)}: ${ev.success ? (pl ? 'odzyskuje broń' : 'gets its weapon back') : (pl ? 'nie odzyskuje broni' : 'fails to get its weapon back')}`;
     case 'tame': return `${cardName('druid-companion', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'oswojony!' : 'tamed!') : (pl ? 'nie daje się oswoić' : 'will not be tamed')}`;
     case 'companionDown': return `${foeName(ev.uid, locale)} ✕`;
+    case 'scroll': return `${itemName(ev.item, locale)}${ev.amount ? `: +${ev.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'burn': return `${foeName(ev.uid, locale)}: ${ev.dead ? (pl ? 'spłonął!' : 'burnt to death!') : ev.out ? (pl ? 'gasi ogień, −1' : 'puts the fire out, −1') : (pl ? 'płonie, −1' : 'burns, −1')}`;
   }
 }
 

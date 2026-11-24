@@ -1,4 +1,4 @@
-import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, TERRAINS, type HerbId, type MaterialId } from '@hp/content';
+import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, TERRAINS, type HerbId, type MaterialId } from '@hp/content';
 import { EngineError } from './errors';
 import { giveItem, runOutcomes } from './events';
 import { log, worldView } from './progress';
@@ -108,6 +108,11 @@ export function shopStock(state: GameState, player: PlayerState): string[] {
     .filter((id) => !['reinforcedBoots', 'chainmail', 'healingElixir'].includes(id));
 }
 
+/** The Mystic's scrolls: only in a city. */
+export function mysticStock(state: GameState, player: PlayerState): string[] {
+  return placeOf(state, player) === 'city' ? [...SCROLLS] : [];
+}
+
 export function buyPrice(state: GameState, player: PlayerState, item: string): number | null {
   const place = placeOf(state, player);
   if (item === 'food') {
@@ -115,7 +120,7 @@ export function buyPrice(state: GameState, player: PlayerState, item: string): n
     const m = TOWN.market[place];
     return (player.counters[onceKey(state, 'market')] ?? 0) < m.max ? m.price : null;
   }
-  if (!shopStock(state, player).includes(item)) return null;
+  if (!shopStock(state, player).includes(item) && !mysticStock(state, player).includes(item)) return null;
   return ITEMS[item]!.sell;
 }
 

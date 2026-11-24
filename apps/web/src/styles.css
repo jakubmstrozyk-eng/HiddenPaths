@@ -741,3 +741,6 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .cook-spices small { grid-column: 1 / -1; font-size: 11px; opacity: 0.85; }
 .frag-actions .cook-spices button { width: auto; min-width: 0; padding: 4px 2px; font-size: 11px; }
 .companions-note { font-size: 12px; opacity: 0.9; margin: 4px 0; }
+.kit-note { display: block; font-size: 11px; }
+.frag.aim { outline: 2px solid #b080ff; box-shadow: 0 0 14px rgba(176, 128, 255, 0.7); }
+.aim-note { color: #c9b8ff; }

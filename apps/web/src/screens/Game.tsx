@@ -9,7 +9,7 @@ import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
-import { attrShort, cardName, combatLine, describe, diceOf, foeName, type DiceRoll } from '../logText';
+import { attrShort, cardName, combatLine, describe, diceOf, foeName, itemName, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
@@ -85,7 +85,11 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const c = me.character;
   const { width, height, cells } = game.map;
   const actions = useMemo(() => legalActions(game, me.id), [game, me.id]);
-  const moves = new Map(actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
+  // A Teleport scroll being aimed: its targets take the place of ordinary moves on the board.
+  const [aim, setAim] = useState<string | null>(null);
+  const moves = new Map<number, Action>(aim
+    ? actions.flatMap((a) => (a.type === 'scroll' && a.item === aim && a.to !== undefined ? [[a.to, a] as const] : []))
+    : actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
   const outside = isOutside(me);
   // The board leaves a margin of about one fragment on each side for the starting places outside the map.
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -137,6 +141,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     if (a.type === 'service') return t(a.service);
     if (a.type === 'camp') return a.research ? t('campResearch') : t('camp');
     if (a.type === 'read') return t('read');
+    if (a.type === 'scroll') return itemName(a.item, locale);
     if (a.type === 'cook') return tx({ pl: 'Przyrządzanie pożywienia · Zręczność', en: 'Preparing food · Dexterity' });
     if (a.type === 'card') return `${cardName(a.card, locale)}${a.card === 'gourmet-stew' ? ` · ${tx({ pl: 'Inteligencja', en: 'Intelligence' })}` : ''}`;
     // At the start of a turn each lasting condition (plague, nightmare...) is tested again: a pass ends it.
@@ -271,9 +276,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               return (
                 <button
                   key={cell.index}
-                  className={`frag ${move ? 'reachable' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
+                  className={`frag ${move ? 'reachable' : ''} ${move && aim ? 'aim' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
                   disabled={!move}
-                  onClick={() => move && act(move)}
+                  onClick={() => { if (!move) return; setAim(null); act(move); }}
                   aria-label={seen ? name : move ? `${t('tapToMove')}` : undefined}
                 >
                   {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
@@ -364,6 +369,12 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               ))}
             </p>
           )}
+          {aim && (
+            <p className="conditions-note aim-note">
+              {tx({ pl: 'Teleportacja: wybierz fragment do 2 pól stąd.', en: 'Teleport: pick a fragment up to 2 steps away.' })}{' '}
+              <button className="ghost small" onClick={() => setAim(null)}>{t('back')}</button>
+            </p>
+          )}
           {(me.companions?.length ?? 0) > 0 && (
             <p className="companions-note">
               🐾 {me.companions!.map((pet) => `${foeName(pet.uid, locale)} ${pet.vitality}/${pet.maxVitality}${pet.tame ? '' : ` · ${tx({ pl: 'więź', en: 'bond' })} ${pet.bond}/3`}`).join(' · ')}
@@ -393,7 +404,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             {inTown && quiet && (
               <button className="ghost act-btn town-btn" onClick={() => setSheet('town')}>
                 <span className="act-title"><Icon name="town" size={14} />{tx({ pl: 'Wejdź', en: 'Go in' })}: {hereTerrain ? tx(hereTerrain.name) : t('town')}</span>
-                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
+                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : here?.terrain === 'city' ? tx({ pl: 'karczma, kuźnia, plac, targ, kupiec, wieża mistyka', en: 'tavern, smithy, yard, market, merchant, mystic' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
               </button>
             )}
             {myTurn && actions.some((a) => a.type === 'camp') && (
@@ -473,7 +484,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         )}
         {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
-        {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
+        {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
         {sheet === 'hero' && quiet && <HeroSheet key="hero" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {game.winner && !story && (

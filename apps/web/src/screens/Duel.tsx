@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ENEMIES, ITEMS, type DiceLook } from '@hp/content';
 import {
-  attacksPerTurn, canDisarm, canTame, combatMoves, fightOdds, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  attacksPerTurn, canDisarm, canTame, combatMoves, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
@@ -51,8 +51,8 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
     const ev = e.event;
     switch (ev.type) {
       case 'strike': {
-        const test: UiKey = ev.by.startsWith('pet-') ? 'companionAttack' : ev.by !== HERO ? 'foeAttack' : ev.card === 'guardian-riposte' ? 'testRiposte' : 'testCombat';
-        out.push({ kind: 'roll', who: ev.by, test, result: ev.result, vs: ev.target, card: ev.by === HERO ? ev.card : undefined });
+        const test: UiKey = ev.by.startsWith('pet-') ? 'companionAttack' : ev.by !== HERO ? 'foeAttack' : ev.card === 'guardian-riposte' ? 'testRiposte' : ev.scroll ? 'testScroll' : 'testCombat';
+        out.push({ kind: 'roll', who: ev.by, test, result: ev.result, vs: ev.target, card: ev.by === HERO ? ev.card ?? ev.scroll : undefined });
         if (ev.parry) out.push({ kind: 'roll', who: HERO, test: 'parry', result: ev.parry, vs: ev.by });
         if (ev.dodge) out.push({ kind: 'roll', who: ev.target, test: 'foeDodge', result: ev.dodge });
         if (ev.barrier) out.push({ kind: 'roll', who: ev.by, test: 'foeBreak', result: ev.barrier });
@@ -60,7 +60,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         else if (ev.dodged) out.push({ kind: 'note', who: ev.target, text: pl ? 'Unik!' : 'Dodged!' });
         else if (ev.blocked && ev.card === 'guardian-stance') out.push({ kind: 'note', who: HERO, text: pl ? 'Tarcza blokuje cios!' : 'The shield blocks the blow!' });
         else if (ev.blocked) out.push({ kind: 'note', who: HERO, text: pl ? 'Bariera zatrzymuje cios!' : 'The barrier stops the blow!' });
-        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, card: ev.card });
+        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, card: ev.card ?? ev.scroll });
         break;
       }
       case 'flee':
@@ -99,6 +99,12 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         out.push({ kind: 'roll', who: HERO, test: 'testChaTame', result: ev.result, card: 'druid-companion' });
         out.push({ kind: 'note', who: ev.uid, text: ev.result.success ? (pl ? 'Oswojony! Walczy po Twojej stronie' : 'Tamed! It fights on your side') : (pl ? 'Nie daje się oswoić' : 'Will not be tamed') });
         break;
+      case 'scroll': out.push({ kind: 'note', who: HERO, text: combatLine(e, T) ?? itemName(ev.item, locale) }); break;
+      case 'burn':
+        out.push({ kind: 'roll', who: ev.uid, test: 'foeBurn', result: ev.result });
+        out.push({ kind: 'hit', who: 'fire', target: ev.uid, damage: ev.damage });
+        out.push({ kind: 'note', who: ev.uid, text: ev.dead ? (pl ? 'Spłonął!' : 'Burnt to death!') : ev.out ? (pl ? 'Gasi ogień' : 'Puts the fire out') : (pl ? 'Płonie!' : 'Burning!') });
+        break;
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
     }
   }
@@ -129,7 +135,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     try { localStorage.setItem(PACE_KEY, next); } catch { /* ignore */ }
   };
   /** The throw waiting for the player's tap: an attack, a flight, or a card that tests (Heavy Swing, Barrier...). */
-  const [prompt, setPrompt] = useState<'attack' | 'flee' | { card: string } | null>(null);
+  const [prompt, setPrompt] = useState<'attack' | 'flee' | { card: string } | { scroll: string } | null>(null);
 
   // Playback of the round: which step is showing and whether its die has landed.
   const steps = useMemo(() => (entries ? stepsOf(entries, T) : []), [entries]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -179,7 +185,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     if (INSTANT.includes(card)) act({ type: 'combat', move: { move: 'card', card } });
     else setPrompt({ card });
   };
-  const promptCard = typeof prompt === 'object' && prompt ? prompt.card : undefined;
+  const promptCard = typeof prompt === 'object' && prompt && 'card' in prompt ? prompt.card : undefined;
+  const promptScroll = typeof prompt === 'object' && prompt && 'scroll' in prompt ? prompt.scroll : undefined;
+  const scrollMoves = moves.flatMap((m) => (m.move === 'scroll' ? [m] : []));
   // Disarm and Companion work only on some foes: the chosen one if it fits, otherwise the first that does.
   const fits = (card: string, f: (typeof alive)[number]) => (card === 'explorer-disarm' ? canDisarm(f) : card === 'druid-companion' ? canTame(me, f) : true);
   const cardFoe = promptCard && chosen && fits(promptCard, chosen) ? chosen
@@ -187,8 +195,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     : chosen;
   const hitOn = (f: typeof chosen) => (f ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + (c.equipment.rune === 'precise' ? 5 : 0), ENEMIES[f.enemy]!.kind))) : 0);
   const tameTarget = Math.round(successChance(c.attributes.cha, testModifier(world, me, 'cha', focus)) * 100);
-  const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : promptCard === 'mystic-barrier' ? 'testIntBarrier' : promptCard === 'druid-companion' ? 'testChaTame' : 'testCombat';
+  const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : promptScroll ? 'testScroll' : promptCard === 'mystic-barrier' ? 'testIntBarrier' : promptCard === 'druid-companion' ? 'testChaTame' : 'testCombat';
   const promptTarget = prompt === 'flee' ? fleeTarget
+    : promptScroll ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + magicBonus(world, me), ENEMIES[(chosen ?? alive[0])?.enemy ?? 'wolf']!.kind)))
     : promptCard === 'mystic-barrier' ? barrierTarget
     : promptCard === 'druid-companion' ? tameTarget
     : promptCard ? Math.max(1, hitOn(cardFoe) - (promptCard === 'warrior-heavy-swing' ? 10 : 0))
@@ -200,7 +209,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const active = step?.who;
   const strike = weaponStrike(weapon.id, locale);
   // The hero's own blow: a lunge with a blade or axe, an arrow or bolt flying across with a bow.
-  const heroBlow = step?.kind === 'hit' && step.who === HERO && !step.card?.startsWith('trapper-trap') ? (weapon.ranged ? 'ranged' : 'melee') : null;
+  const heroBlow = step?.kind === 'hit' && step.who === HERO && !step.card?.startsWith('trapper-trap') ? (weapon.ranged || step.card?.startsWith('scroll') ? 'ranged' : 'melee') : null;
   const hitFx = step?.kind === 'hit'
     ? hitKind(step.who, combat.foes.find((f) => f.uid === step.who)?.enemy, { weaponId: weapon.id, weaponName: weapon.name.en, ranged: !!weapon.ranged }, step.card)
     : null;
@@ -211,7 +220,8 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const throwDie = () => {
     if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid } });
     if (prompt === 'flee') act({ type: 'combat', move: { move: 'flee' } });
-    if (typeof prompt === 'object' && prompt) act({ type: 'combat', move: { move: 'card', card: prompt.card, ...(cardFoe ? { target: cardFoe.uid } : {}) } });
+    if (promptCard) act({ type: 'combat', move: { move: 'card', card: promptCard, ...(cardFoe ? { target: cardFoe.uid } : {}) } });
+    if (promptScroll) act({ type: 'combat', move: { move: 'scroll', item: promptScroll, target: (chosen ?? alive[0])!.uid } });
     setPrompt(null);
   };
 
@@ -280,7 +290,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
             <AnimatePresence mode="wait">
               {step?.kind === 'roll' && (
                 <motion.div key={`roll-${at}`} className={`throw ${step.who === HERO ? 'mine' : 'theirs'}`} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                  <TestTitle test={step.test} target={step.result.target} who={`${step.who === HERO ? c.name : step.who === 'foe' ? t('foe') : foeName(step.who, locale)}${step.card ? ` · ${cardName(step.card, locale)}` : ''}`} />
+                  <TestTitle test={step.test} target={step.result.target} who={`${step.who === HERO ? c.name : step.who === 'foe' ? t('foe') : foeName(step.who, locale)}${step.card ? ` · ${step.card.startsWith('scroll') ? itemName(step.card, locale) : cardName(step.card, locale)}` : ''}`} />
                   <BigDie dice={c.dice} result={step.result} rolling={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} />
                 </motion.div>
               )}
@@ -289,7 +299,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               )}
               {!busy && prompt && (
                 <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                  <TestTitle test={promptTest} target={promptTarget} who={`${c.name} · ${promptCard ? cardName(promptCard, locale) : prompt === 'attack' ? strike : t('flee')}`} />
+                  <TestTitle test={promptTest} target={promptTarget} who={`${c.name} · ${promptCard ? cardName(promptCard, locale) : promptScroll ? itemName(promptScroll, locale) : prompt === 'attack' ? strike : t('flee')}`} />
                   <BigDie dice={c.dice} onTap={throwDie} />
                   <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
                 </motion.div>
@@ -339,6 +349,16 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               <button className="ghost" onClick={() => setPrompt('flee')}>{t('flee')}</button>
               {potions.map((p) => (
                 <button key={p} className="ghost small" onClick={() => act({ type: 'combat', move: { move: 'potion', item: p } })}>{itemName(p, locale)}</button>
+              ))}
+              {scrollMoves.map((m) => (
+                <button
+                  key={m.item}
+                  className="ghost small scroll-btn"
+                  disabled={!!m.target && !chosen && alive.length > 1}
+                  onClick={() => (m.target ? setPrompt({ scroll: m.item }) : act({ type: 'combat', move: { move: 'scroll', item: m.item } }))}
+                >
+                  📜 {itemName(m.item, locale)}
+                </button>
               ))}
             </div>
             <SkillHand profession={c.profession} owned={c.cards} actor={me} playable={cardMoves} onPlay={playCard} inFight compact />

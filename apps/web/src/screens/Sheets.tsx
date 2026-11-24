@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute } from '@hp/content';
+import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute, type ScrollItem } from '@hp/content';
 import {
-  buyPrice, heroArmour, legalActions, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
+  buyPrice, heroArmour, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
   type Action, type GameState, type PlayerState, type Service,
 } from '@hp/engine';
 import { useT } from '../i18n';
@@ -53,6 +53,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
   const stock = shopStock(game, me);
   const atSmith = stock.filter((id) => ['weapon', 'armour', 'shield'].includes(ITEMS[id]?.kind ?? ''));
   const atShop = stock.filter((id) => !atSmith.includes(id));
+  const atMystic = mysticStock(game, me);
   const inv = me.inventory;
   const sellable = [
     ...(me.character.food > 0 ? ['food'] : []),
@@ -84,6 +85,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
               <span>{itemName(id, locale)}</span>
               <small className="act-test">{price === null ? '—' : `${fmt(price)} ${t('gold').toLowerCase()}`}</small>
               {itemNote(id, t) && <small className="act-reward">{itemNote(id, t).replace(/^ · /, '')}</small>}
+              {ITEMS[id]?.kind === 'scroll' && <small className="act-reward">{tx((ITEMS[id] as ScrollItem).effect)}</small>}
             </button>
           );
         })}
@@ -99,6 +101,12 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
       {SPOT_SERVICES[chosen] && serviceButtons(SPOT_SERVICES[chosen]!)}
       {chosen === 'smith' && wares(atSmith)}
       {chosen === 'shop' && wares(atShop)}
+      {chosen === 'mystic' && (
+        <>
+          {wares(atMystic)}
+          <p className="muted">{tx({ pl: 'Zwój czyta się raz; w jednej rundzie możesz przeczytać jeden zwój.', en: 'A scroll is read once; you can read one scroll a round.' })}</p>
+        </>
+      )}
       {chosen === 'market' && (
         <>
           {wares(['food'])}
@@ -230,8 +238,8 @@ export function HeroDoll({ me }: { me: PlayerState }) {
 }
 
 /** Worn gear, the backpack, materials, herbs, effects and level-up points. */
-export function BagSheet({ game, me, act, onClose }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void }) {
-  const { t, locale } = useT();
+export function BagSheet({ game, me, act, onClose, onAim }: { game: GameState; me: PlayerState; act: (a: Action) => void; onClose: () => void; onAim?: (scroll: string) => void }) {
+  const { t, tx, locale } = useT();
   const c = me.character;
   const legal = legalActions(game, me.id);
   const can = (type: string, item: string) => legal.some((a) => a.type === type && 'item' in a && a.item === item);
@@ -254,8 +262,21 @@ export function BagSheet({ game, me, act, onClose }: { game: GameState; me: Play
         <ul className="kit">
           {items.map((id) => (
             <li key={id}>
-              <span>{itemName(id, locale)}{me.inventory.items.filter((x) => x === id).length > 1 ? ` ×${me.inventory.items.filter((x) => x === id).length}` : ''}</span>
+              <span>
+                {itemName(id, locale)}{me.inventory.items.filter((x) => x === id).length > 1 ? ` ×${me.inventory.items.filter((x) => x === id).length}` : ''}
+                {ITEMS[id]?.kind === 'scroll' && <small className="muted kit-note">{tx((ITEMS[id] as ScrollItem).effect)}</small>}
+              </span>
               <span className="kit-actions">
+                {ITEMS[id]?.kind === 'scroll' && (ITEMS[id] as ScrollItem).spell !== 'teleport' && (
+                  <button className="ghost small" disabled={!legal.some((a) => a.type === 'scroll' && a.item === id)} onClick={() => act({ type: 'scroll', item: id })}>
+                    {tx({ pl: 'Czytaj', en: 'Read' })}
+                  </button>
+                )}
+                {ITEMS[id]?.kind === 'scroll' && (ITEMS[id] as ScrollItem).spell === 'teleport' && onAim && (
+                  <button className="ghost small" disabled={!legal.some((a) => a.type === 'scroll' && a.item === id)} onClick={() => onAim(id)}>
+                    {tx({ pl: 'Wybierz cel na mapie', en: 'Pick the place on the map' })}
+                  </button>
+                )}
                 {can('use', id) && <button className="ghost small" onClick={() => act({ type: 'use', item: id })}>{t('use')}</button>}
                 {can('equip', id) && <button className="ghost small" onClick={() => act({ type: 'equip', item: id })}>{t('equip')}</button>}
                 {ITEMS[id]?.kind === 'book' && (

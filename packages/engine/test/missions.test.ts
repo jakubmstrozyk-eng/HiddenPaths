@@ -9,7 +9,8 @@ const game = (missions = ['warrior', 'hunter']) => onMap(createGame('missions', 
 
 describe('missions', () => {
   it('splits game goals from career goals and scales game goals with the map', () => {
-    expect(GAME_MISSIONS.length + CAREER_MISSIONS.length + 1).toBe(MISSIONS.length); // the Magician waits for scrolls
+    expect(GAME_MISSIONS.length + CAREER_MISSIONS.length).toBe(MISSIONS.length);
+    expect(GAME_MISSIONS.some((m) => m.id === 'magician')).toBe(true); // scrolls are in the game
     const warrior = MISSIONS.find((m) => m.id === 'warrior')!;
     expect(missionTarget(warrior, 'short')).toBe(3);
     expect(missionTarget(warrior, 'epic')).toBe(10);

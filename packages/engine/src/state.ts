@@ -92,6 +92,8 @@ export type LogEntry =
   | { type: 'mealEaten'; player: string; meal: Meal }
   /** A tamed beast's bond was tested at the start of the turn: it grew, became lasting, or the beast left. */
   | { type: 'companion'; player: string; uid: string; enemy: string; bond: number; tame: boolean; left: boolean }
+  /** A magic scroll read on the map; `amount` is Vitality healed. */
+  | { type: 'scroll'; player: string; item: string; amount?: number; to?: number }
   /** Smelting: 3 pieces of gear melted into iron ore or a new common item. */
   | { type: 'smelted'; player: string; items: string[]; into: string }
   /** A game mission was reached and paid its XP. */
@@ -150,6 +152,8 @@ export type Action =
   | { type: 'portal'; to: number }
   /** Myrmids prepare a portion of food; a Gourmet may season it with an attribute. */
   | { type: 'cook'; spice?: Attribute }
+  /** Read a magic scroll on the map: Healing, Renewal, or Teleport to `to`. */
+  | { type: 'scroll'; item: string; to?: number }
   /** Runemaster's Smelting in a city: 3 weapons or armour pieces into iron ore or a common item. */
   | { type: 'smelt'; into: 'ore' | 'item' }
   | { type: 'spend'; bonus: Partial<Attributes> }

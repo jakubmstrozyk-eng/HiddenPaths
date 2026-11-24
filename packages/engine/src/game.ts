@@ -6,13 +6,14 @@ import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
 import { generateMap, neighbours } from './mapgen';
+import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
 import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
 import {
-  availableServices, buy, buyPrice, canSmelt, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, smelt, useService, usePortal,
+  availableServices, buy, buyPrice, canSmelt, mysticStock, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
 
 export type { Action, GameState, LogEntry, NewPlayer, PlayerState } from './state';
@@ -140,10 +141,14 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     actions.push({ type: 'cook' });
     if (canSeason(state, player)) for (const spice of ATTRIBUTES) actions.push({ type: 'cook', spice });
   }
+  for (const item of readableScrolls(player, state.round, false)) {
+    if (scrollOf(item)!.spell === 'teleport') for (const to of teleportTargets(worldView(state), player.position)) actions.push({ type: 'scroll', item, to });
+    else actions.push({ type: 'scroll', item });
+  }
   if (canSmelt(state, player)) actions.push({ type: 'smelt', into: 'ore' }, { type: 'smelt', into: 'item' });
   for (const service of availableServices(state, player)) actions.push({ type: 'service', service });
   for (const to of portalTargets(state, player)) actions.push({ type: 'portal', to });
-  for (const item of ['food', ...shopStock(state, player)]) {
+  for (const item of ['food', ...shopStock(state, player), ...mysticStock(state, player)]) {
     const price = buyPrice(state, player, item);
     if (price !== null && price <= player.character.gold) actions.push({ type: 'buy', item });
   }
@@ -272,6 +277,9 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     case 'smelt':
       smelt(state, player, rng, action.into);
       break;
+    case 'scroll':
+      readScroll(state, player, rng, action.item, action.to);
+      break;
     case 'service':
       useService(state, player, rng, action.service);
       break;
@@ -376,6 +384,30 @@ function equip(state: GameState, player: PlayerState, id: string) {
     throw new EngineError('item.notGear', 'That cannot be worn.');
   }
   log(state, { type: 'change', player: player.id, change: { what: 'item', item: id, amount: 0 } });
+}
+
+/** Reads a magic scroll on the map: Healing and Renewal on the hero, Teleport up to 2 fragments away. */
+function readScroll(state: GameState, player: PlayerState, rng: Rng, item: string, to?: number) {
+  if (!readableScrolls(player, state.round, false).includes(item)) throw new EngineError('scroll.notNow', 'You cannot read that scroll now.');
+  const spell = scrollOf(item)!.spell;
+  if (spell === 'teleport') {
+    if (to === undefined || !teleportTargets(worldView(state), player.position).includes(to)) throw new EngineError('scroll.target', 'The scroll cannot take you there.');
+    spendScroll(player, state.round, item);
+    log(state, { type: 'scroll', player: player.id, item, to });
+    log(state, { type: 'moved', player: player.id, from: player.position, to, cost: 0, pushed: true });
+    player.cameFrom = null;
+    player.position = to;
+    player.crossedRiver = false;
+    // A new fragment opens as if walked into: XP and maybe an event.
+    const terrain = state.map.cells[to]!.terrain;
+    if (reveal(state, player, to, rng) && drawsEvent(terrain)) {
+      const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
+      if (card !== null) startEvent(state, player, card);
+    }
+    return;
+  }
+  const scroll = spendScroll(player, state.round, item);
+  log(state, { type: 'scroll', player: player.id, item, amount: selfSpell(player, scroll) });
 }
 
 /** Reading a book: one Intelligence test a round; the 3rd good reading teaches its lesson. */

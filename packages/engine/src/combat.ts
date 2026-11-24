@@ -7,6 +7,7 @@ import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
 import { Rng as RngCtor, type Rng } from './rng';
 import { bandage, eatRations, empower, healingHerb, isSpent, useLeaves, usesLeft, trapFoes } from './cards';
+import { BURN_DEATH, readableScrolls, scrollOf, selfSpell, spendScroll } from './scrolls';
 import { effectBonus, heroTest, itemBonus, magicBonus, type ActorState, type Companion, type WorldView } from './terrain';
 
 /** One foe in a fight. */
@@ -27,6 +28,8 @@ export interface Foe {
   disarmed?: boolean;
   /** Druid's Companion: the beast was tamed and left the fight on the hero's side. */
   tamed?: boolean;
+  /** Fire bolt: the foe burns; the number is its failed Strength tests so far. */
+  burning?: number;
 }
 
 export interface CombatState {
@@ -48,6 +51,8 @@ export interface CombatState {
   trap?: boolean;
   /** Guardian's Defensive Stance was taken in this fight (once a fight). */
   stanceUsed?: boolean;
+  /** The game round the fight broke out in (a fight ends the round), for once-a-round limits such as scrolls. */
+  round?: number;
 }
 
 export type CombatMove =
@@ -56,6 +61,8 @@ export type CombatMove =
   | { move: 'focus' }
   | { move: 'flee' }
   | { move: 'potion'; item: string }
+  /** A magic scroll: Fire bolt and Lightning at a foe, Healing and Renewal on the hero. */
+  | { move: 'scroll'; item: string; target?: string }
   /** A skill card played as the hero's move; `target` for the attacking cards. */
   | { move: 'card'; card: string; target?: string };
 
@@ -69,7 +76,13 @@ export type CombatEvent =
     dodge?: TestResult; dodged?: boolean;
     /** Barrier: the foe's Strength roll to break through; `blocked` when it failed. */
     barrier?: TestResult; blocked?: boolean;
+    /** The magic scroll behind the hero's strike. */
+    scroll?: string;
   }
+  /** A scroll read on the hero (Healing, Renewal); `amount` is Vitality healed. */
+  | { type: 'scroll'; item: string; amount: number }
+  /** A burning foe: loses 1 Vitality and tests Strength to put the fire out; the 3rd failure kills it. */
+  | { type: 'burn'; uid: string; result: TestResult; damage: number; out: boolean; dead: boolean }
   | { type: 'trap'; uid: string; result: TestResult; damage: number }
   /** Guardian's Defensive Stance taken for the round. */
   | { type: 'stance' }
@@ -106,7 +119,7 @@ export function startCombat(world: WorldView, enemies: string[], onWin: Outcome[
     const vitality = Math.max(1, Math.round(enemy.vitality * factor));
     return { uid: `${id}-${i + 1}`, enemy: id, vitality, maxVitality: vitality, attacks: 0, stunned: false, poisoned: false, hits: 0 };
   });
-  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin };
+  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin, round: world.round };
 }
 
 export function heroWeapon(actor: ActorState): WeaponItem {
@@ -137,6 +150,12 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   const moves: CombatMove[] = combat.foes.filter((f) => f.vitality > 0).map((f) => ({ move: 'attack', target: f.uid }));
   moves.push({ move: 'parry' }, { move: 'focus' }, { move: 'flee' });
   for (const id of new Set(actor.inventory.items)) if (ITEMS[id]?.kind === 'potion') moves.push({ move: 'potion', item: id });
+  const first = combat.foes.find((f) => f.vitality > 0);
+  for (const id of readableScrolls(actor, combat.round ?? -1, true)) {
+    const attack = scrollOf(id)!.power !== undefined;
+    if (attack && !first) continue;
+    moves.push({ move: 'scroll', item: id, ...(attack ? { target: first!.uid } : {}) });
+  }
   const cards = actor.character.cards ?? [];
   const alive = combat.foes.filter((f) => f.vitality > 0);
   const target = moves.find((m) => m.move === 'attack') as { target: string } | undefined;
@@ -223,11 +242,11 @@ export function combatTurn(
   const cards = actor.character.cards ?? [];
 
   /** One blow of the hero at a foe, with the skill cards that shape it. */
-  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean } = {}): boolean => {
+  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
     const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0);
     const result = heroTest(world, actor, 'com', rng, mod, enemy.kind);
-    const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}) };
+    const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}), ...(opts.scroll ? { scroll: opts.scroll } : {}) };
     if (!result.success) {
       events.push(base);
       return false;
@@ -243,18 +262,24 @@ export function combatTurn(
     const location = hitLocation(rng, result.margin, enemy.armour);
     const armour = enemy.armour[location] ?? 0;
     // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
-    const critical = cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
+    const magic = !!opts.scroll;
+    const critical = !magic && cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
     // Precise Shot: a longbow hit that beat the target by 15 or more deals +2.
     const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
-    let damage = strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
-      + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
-      + critical + precise + (opts.bonus ?? 0) - armour;
-    if (enemy.traits.includes('ethereal') && !rune) damage = Math.floor(damage / 2);
+    // A scroll's magic is not a blade: weapon runes and weapon bonuses do not add to it.
+    let damage = magic
+      ? strengthStep(attrs.str) + (opts.power ?? 0) + damageDie(rng, false) - armour
+      : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
+        + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
+        + critical + precise + (opts.bonus ?? 0) - armour;
+    // Spirits are hurt in full only by magic or runes.
+    if (enemy.traits.includes('ethereal') && !rune && !magic) damage = Math.floor(damage / 2);
     damage = Math.max(0, damage);
     target.vitality -= damage;
     target.hits++;
-    if (rune === 'venom' || opts.poison) target.poisoned = true;
-    if (rune === 'stunning' && target.hits % 3 === 0) target.stunned = true;
+    if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
+    if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
+    if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
     events.push({ ...base, location, damage, ...(dodge ? { dodge } : {}) });
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     return true;
@@ -262,6 +287,9 @@ export function combatTurn(
   const targetOf = (uid?: string) => alive().find((f) => f.uid === uid) ?? alive()[0];
   if (move.move === 'potion' && !actor.inventory.items.includes(move.item)) {
     throw new EngineError('combat.item', 'You do not carry that.');
+  }
+  if (move.move === 'scroll' && !combatMoves(actor, combat).some((m) => m.move === 'scroll' && m.item === move.item)) {
+    throw new EngineError('scroll.notNow', 'You cannot read that scroll now.');
   }
 
   const heroTurn = () => {
@@ -277,6 +305,17 @@ export function combatTurn(
         combat.focus = true;
         events.push({ type: 'focus' });
         break;
+      case 'scroll': {
+        const scroll = spendScroll(actor, combat.round ?? world.round, move.item);
+        if (scroll.power === undefined) {
+          events.push({ type: 'scroll', item: move.item, amount: selfSpell(actor, scroll) });
+          break;
+        }
+        const target = targetOf(move.target);
+        // Strength of the Forest helps the Druid shape the scroll's magic in a forest.
+        if (target) swing(target, { power: scroll.power, scroll: move.item, mod: magicBonus(world, actor) });
+        break;
+      }
       case 'potion': {
         actor.inventory.items.splice(actor.inventory.items.indexOf(move.item), 1);
         drinkPotion(world, actor, move.item);
@@ -533,6 +572,19 @@ export function combatTurn(
   }
   // Fallen companions are gone for good.
   if (actor.companions?.some((p) => p.vitality <= 0)) actor.companions = actor.companions.filter((p) => p.vitality > 0);
+
+  // Fire bolt: a burning foe loses 1 Vitality a round and tests Strength to put the fire out; the 3rd failure kills it.
+  for (const foe of alive()) {
+    if (foe.burning === undefined) continue;
+    const result = test(rng, ENEMIES[foe.enemy]!.str);
+    foe.vitality -= 1;
+    if (result.success) delete foe.burning;
+    else foe.burning++;
+    const dead = foe.burning !== undefined && foe.burning >= BURN_DEATH;
+    if (dead) foe.vitality = 0;
+    events.push({ type: 'burn', uid: foe.uid, result, damage: 1, out: result.success, dead });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
 
   // Venom rune: poisoned foes bleed until they pass a Strength test.
   for (const foe of alive()) {

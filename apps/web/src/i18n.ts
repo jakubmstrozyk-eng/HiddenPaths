@@ -102,6 +102,8 @@ const UI = {
   foeRearm: { pl: 'Odzyskanie broni: test Zręczności', en: 'Getting the weapon back: Dexterity test' },
   heroHoldWeapon: { pl: 'Przytrzymanie broni wroga: test Zręczności', en: 'Keeping the foe unarmed: Dexterity test' },
   companionAttack: { pl: 'Atak towarzysza: test Walki', en: "Companion's attack: Combat test" },
+  testScroll: { pl: 'Zwój: test Walki', en: 'Scroll: Combat test' },
+  foeBurn: { pl: 'Gaszenie ognia: test Siły', en: 'Putting the fire out: Strength test' },
   testRiposte: { pl: 'Odpowiedź: test Walki −10', en: 'Riposte: Combat test −10' },
   cardAtCook: { pl: 'Użyjesz jej, przyrządzając pożywienie (przycisk obok mapy).', en: 'You use it when you prepare food (the button beside the map).' },
   cardInCity: { pl: 'Użyjesz jej w mieście, mając przy sobie 3 sztuki broni lub zbroi.', en: 'You use it in a city while carrying 3 weapons or armour pieces.' },
