@@ -1,3 +1,4 @@
+import { CardArt, castCard } from './CardArt';
 import { useState } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { PROFESSIONS, type ActionCard, type ProfessionId } from '@hp/content';
@@ -44,9 +45,10 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
   inFight?: boolean;
   compact?: boolean;
 }) {
-  const { t } = useT();
+  const { t, tx } = useT();
   const cards = PROFESSIONS[profession].cards.filter((card) => owned.includes(card.id));
   const [open, setOpen] = useState<ActionCard | null>(null);
+
   if (!cards.length) return null;
   const mid = (cards.length - 1) / 2;
   const status = (card: string) => statusOf(card, actor, onPlay ? playable : [], inFight);
@@ -73,7 +75,7 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
               <CardFace card={open} profession={profession} uses={uses(open.id)} large />
               {openStatus === 'play' ? (
                 <div className="card-zoom-actions">
-                  <button className="primary with-icon" onClick={() => { const id = open.id; setOpen(null); onPlay!(id); }}>
+                  <button className="primary with-icon" onClick={() => { const id = open.id; castCard(id, tx(open.name)); setOpen(null); onPlay!(id); }}>
                     <Icon name={open.combat ? 'sword' : 'cards'} />{t('playCard')}
                   </button>
                   <button className="ghost" onClick={() => setOpen(null)}>{t('close')}</button>
@@ -134,7 +136,7 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
         {card.combat && <span className="card-tag">{t('combatCard')}</span>}
         {isPassive(card.id) && <span className="card-tag passive">{t('passiveCard')}</span>}
       </span>
-      <span className="card-art"><Icon name={card.combat ? 'sword' : 'cards'} size={large ? 72 : 26} /></span>
+      <span className="card-art"><CardArt card={card.id} size={large ? 96 : 34} /></span>
       <b className="card-name">{tx(card.name)}</b>
       {uses && <span className="card-uses">{uses}</span>}
       {large && profession && <small className="card-prof">{tx(PROFESSIONS[profession].name)} · {t('level')} {card.level}</small>}
