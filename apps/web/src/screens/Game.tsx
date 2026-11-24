@@ -14,6 +14,7 @@ import { PixelHero } from '../PixelHero';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
 import { BagSheet, HeroSheet, TownSheet } from './Sheets';
+import { SaveDialog } from './Saves';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { SkillHand } from '../SkillCards';
@@ -61,7 +62,7 @@ function actionChance(game: GameState, me: PlayerState, action: TerrainAction): 
   }
 }
 
-export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names = {}, deadline }: {
+export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names = {}, deadline, canSave = false }: {
   game: GameState;
   onChange: (g: GameState) => void;
   onMenu: () => void;
@@ -72,6 +73,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   submit?: (prev: GameState, action: Action) => Promise<void>;
   names?: Record<string, string>;
   deadline?: string | null;
+  /** A game kept on this device shows the floppy button for named saves. */
+  canSave?: boolean;
 }) {
   const T = useT();
   const { t, tx, locale } = T;
@@ -101,7 +104,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [dice, setDice] = useState<DiceRoll[] | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
-  const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | null>(null);
+  const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | null>(null);
   const [storyTitle, setStoryTitle] = useState('');
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
@@ -210,6 +213,11 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     <div className="game">
       <header className="hud">
         <button className="ghost small with-icon" onClick={onMenu}><Icon name="menu" />{t('menu')}</button>
+        {canSave && (
+          <button className="ghost small with-icon" onClick={() => setSheet('save')} title={tx({ pl: 'Zapisz grę', en: 'Save game' })}>
+            <Icon name="save" />{tx({ pl: 'Zapisz grę', en: 'Save game' })}
+          </button>
+        )}
         <div className="who">
           <PixelHero race={c.race} profession={c.profession} look={c.look} size={28} />
           <span>
@@ -381,6 +389,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
+        {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
         {sheet === 'hero' && quiet && <HeroSheet key="hero" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {game.winner && !story && (
           <div className="overlay" key="won">

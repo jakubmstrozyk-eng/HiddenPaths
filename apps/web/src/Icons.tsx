@@ -2,7 +2,7 @@
  * Small pixel icons in the same retro style as the heroes. Each is a 9×9 grid:
  * '.' empty, 'o' outline, 'm' main colour, 'l' light, 'd' dark.
  */
-export type IconName = 'speed' | 'stamina' | 'vitality' | 'food' | 'gold' | 'xp' | 'bag' | 'map' | 'cards' | 'sword' | 'shield' | 'camp' | 'town' | 'menu' | 'hunt' | 'gather' | 'herbalism' | 'mine' | 'swim' | 'meditate';
+export type IconName = 'speed' | 'stamina' | 'vitality' | 'food' | 'gold' | 'xp' | 'bag' | 'map' | 'cards' | 'sword' | 'shield' | 'camp' | 'town' | 'menu' | 'hunt' | 'gather' | 'herbalism' | 'mine' | 'swim' | 'meditate' | 'save';
 
 const ICONS: Record<IconName, { rows: string[]; main: string; light: string; dark: string }> = {
   speed: { main: '#7fd3ff', light: '#d8f3ff', dark: '#2a6f9a', rows: [
@@ -213,6 +213,17 @@ const ICONS: Record<IconName, { rows: string[]; main: string; light: string; dar
     'olmo.olmo',
     'd..odo..d',
     '.........',
+  ] },
+  save: { main: '#5a7ad0', light: '#e8ecf8', dark: '#2a3a7a', rows: [
+    'oooooooo.',
+    'omllllmmo',
+    'omllllmdo',
+    'omllllmdo',
+    'ommmmmmdo',
+    'omoooooo.',
+    'omoddlmo.',
+    'omoddlmo.',
+    'ooooooo..',
   ] },
   meditate: { main: '#c9a7ff', light: '#ffffff', dark: '#6a4aa8', rows: [
     '....o....',
