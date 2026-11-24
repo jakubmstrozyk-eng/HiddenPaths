@@ -208,6 +208,21 @@ describe('heroes', () => {
     }
   });
 
+  it('keeps each game\'s share of the career goals on the hero', async () => {
+    const s = await signIn('career@x.io');
+    const id = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
+    const g = (await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: id, missions: ['hunter', 'scout'] } })).json().id;
+    const state: GameState = (await app.inject({ method: 'GET', url: `/api/games/${g}`, headers: as(s) })).json().state;
+    expect(state.players[0]!.character.heroId).toBe(id);
+    const act = await app.inject({ method: 'POST', url: `/api/games/${g}/actions`, headers: as(s), payload: { version: state.version, action: { type: 'endTurn' } } });
+    expect(act.statusCode).toBe(200);
+    const hero = (await app.inject({ method: 'GET', url: '/api/heroes', headers: as(s) })).json().heroes[0];
+    expect(hero.career[g]).toMatchObject({ cards: 0, level: 1, rune: false });
+    // A hero sent from the client never brings a career of its own.
+    const sneaky = await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: { ...newHero('solo', 'Bo'), career: { x: { cards: 99 } } } } });
+    expect(sneaky.json().hero.career).toBeUndefined();
+  });
+
   it('a single-player hero cannot play multiplayer, and the other way round', async () => {
     const s = await signIn('modes@x.io');
     const soloHero = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;

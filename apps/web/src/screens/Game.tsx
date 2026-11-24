@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { EVENT_BY_ID, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
+import { EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, currentPlayer, entryCell, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  applyAction, currentPlayer, entryCell, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type Side,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
@@ -167,7 +167,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       setLines([]);
     } else if (stillInScene) {
       setLines(acc);
-    } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken')) {
+    } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken' || e.type === 'mission')) {
       // Plain actions only open a card for big moments: death, a new level, the Stone.
       const terrain = cells[nextMe.position]?.terrain ?? 'core';
       setStory({ title: terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name), lines: fresh });
@@ -225,14 +225,16 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           </span>
         </div>
         <div className="stats">
-          <Stat icon="speed" label={t('speed')} value={`${me.speedLeft}/${c.speed}`} />
-          <Stat icon="stamina" label={t('stamina')} value={`${me.staminaLeft}/${c.stamina}`} />
+          <MoveBar icon="speed" label={t('speed')} left={me.speedLeft} max={c.speed} kind="speed" />
+          <MoveBar icon="stamina" label={t('stamina')} left={me.staminaLeft} max={c.stamina} kind="stamina" />
           <Stat icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} />
           <Stat icon="food" label={t('food')} value={c.food} warn={c.food === 0} />
           <Stat icon="gold" label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
           <Stat icon="xp" label={t('xp')} value={Math.floor(c.xp)} />
         </div>
       </header>
+
+      <GoalsPanel game={game} me={me} />
 
       <div className="board-wrap" ref={wrapRef}>
         <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
@@ -256,7 +258,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
                 {seen && <span className="frag-name">{name}</span>}
                 {icons.length > 0 && (
-                  <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={11} />)}</span>
+                  <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={16} />)}</span>
                 )}
                 {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
                 {!seen && (
@@ -418,3 +420,43 @@ function Stat({ icon, label, value, warn }: { icon: IconName; label: string; val
     </span>
   );
 }
+
+/** Speed or Stamina as a row of blocks: lit blocks are what the hero has left this turn. */
+function MoveBar({ icon, label, left, max, kind }: { icon: IconName; label: string; left: number; max: number; kind: 'speed' | 'stamina' }) {
+  const total = Math.max(max, left);
+  return (
+    <span className={`stat movebar ${kind} ${left === 0 ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={left}>
+      <small>{label}</small>
+      <b><Icon name={icon} size={14} /> {left}/{max}</b>
+      <span className="pips" aria-hidden="true">
+        {Array.from({ length: total }, (_, i) => (
+          <motion.i key={i} className={i < left ? 'on' : ''} initial={false} animate={{ scaleY: i < left ? 1 : 0.55, opacity: i < left ? 1 : 0.35 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** This game's goals, always in sight: what to do, how far along, and the XP each pays. */
+function GoalsPanel({ game, me }: { game: GameState; me: PlayerState }) {
+  const { t, tx, locale } = useT();
+  return (
+    <section className="goals" aria-label={locale === 'pl' ? 'Cele gry' : 'Game goals'}>
+      <small className="goals-head">{locale === 'pl' ? 'Cele gry' : 'Game goals'}</small>
+      {me.character.missions.map((id) => {
+        const m = MISSIONS.find((x) => x.id === id);
+        if (!m) return null;
+        const p = missionProgress(game, me, id);
+        return (
+          <div key={id} className={`goal ${p.done ? 'done' : ''}`} title={missionGoal(m, game.config.size, locale)}>
+            <span className="goal-title"><b>{p.done ? '✓ ' : ''}{tx(m.name)}</b> <small>+{m.xp} {t('xp')}</small></span>
+            <small className="goal-text">{missionGoal(m, game.config.size, locale)}</small>
+            <span className="goal-bar"><motion.span initial={false} animate={{ width: `${(p.count / p.target) * 100}%` }} /></span>
+            <small className="goal-count">{p.count}/{p.target}</small>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+

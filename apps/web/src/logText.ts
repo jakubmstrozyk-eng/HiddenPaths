@@ -1,4 +1,4 @@
-import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, PROFESSIONS, type Attribute, type Locale, type Text } from '@hp/content';
+import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, MISSIONS, PROFESSIONS, type Attribute, type Locale, type Text } from '@hp/content';
 import type { LogEntry } from '@hp/engine';
 import type { useT } from './i18n';
 
@@ -96,6 +96,10 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${t('camp')}: +${e.healed} ${t('vitality').toLowerCase()}`;
     case 'levelUp':
       return `${t('level')} ${e.level}!`;
+    case 'mission': {
+      const m = MISSIONS.find((x) => x.id === e.mission);
+      return `${pl ? 'Cel osiągnięty' : 'Goal reached'}: ${m ? m.name[pl ? 'pl' : 'en'] : e.mission} (+${Math.round(e.xp)} ${t('xp')})`;
+    }
     case 'revealed':
       return `+${fmt(e.xp)} ${t('xp')}`;
     case 'moved':

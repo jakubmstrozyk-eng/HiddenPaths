@@ -1,6 +1,7 @@
 import { levelForXp, levelUp } from './character';
 import { DIFFICULTIES, dangerLevel } from './config';
 import { neighbours } from './mapgen';
+import { trackMissions } from './missions';
 import type { Rng } from './rng';
 import type { GameState, LogEntry, PlayerState } from './state';
 import type { WorldView } from './terrain';
@@ -8,6 +9,7 @@ import type { WorldView } from './terrain';
 export function log(state: GameState, entry: LogEntry) {
   state.log.push(entry);
   state.logSeq++;
+  trackMissions(state, entry);
 }
 
 export function worldView(state: GameState): WorldView {

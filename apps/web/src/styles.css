@@ -157,7 +157,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 
 .hero { position: absolute; z-index: 5; display: grid; place-items: center; pointer-events: none; }
 /* A small figurine standing on the lifted fragment, with its shadow on the ground. */
-.figurine { position: relative; width: 46%; translate: 0 -14%; display: grid; place-items: end center; filter: drop-shadow(0 0 5px rgba(255, 240, 200, 0.55)); }
+.figurine { position: relative; width: 34%; translate: 0 -14%; display: grid; place-items: end center; filter: drop-shadow(0 0 5px rgba(255, 240, 200, 0.55)); }
 .figurine::before { content: ''; position: absolute; left: 8%; right: 8%; bottom: -6%; height: 16%; background: rgba(0, 0, 0, 0.55); border-radius: 50%; filter: blur(1px); }
 .figurine svg { position: relative; width: 100%; height: auto; max-width: 44px; }
 .hero.waiting-outside .figurine { translate: 0 0; }
@@ -554,3 +554,58 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .frag-name { display: none; }
   .gate small { display: none; }
 }
+
+/* Speed and Stamina left this turn, as blocks */
+.movebar { min-width: 120px; }
+.movebar .pips { display: flex; gap: 3px; margin-top: 4px; height: 8px; }
+.movebar .pips i { flex: 1; min-width: 6px; background: #3a3450; transform-origin: bottom; }
+.movebar.speed .pips i.on { background: linear-gradient(#bfe9ff, #4ab0f0); box-shadow: 0 0 6px rgba(127, 211, 255, 0.7); }
+.movebar.stamina .pips i.on { background: linear-gradient(#fff1b0, #f0b830); box-shadow: 0 0 6px rgba(255, 211, 77, 0.7); }
+.movebar.warn b { color: #ff9a8a; }
+@media (max-width: 560px) { .movebar { min-width: 0; } }
+
+/* Fight: pace control, the foe striking now, the chosen target, and the blow itself */
+.duel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pace.on { border-color: #ffe066; color: #ffe066; }
+.foe-card { position: relative; }
+.foe-card.attacking {
+  border-color: #ff5a3a; background: rgba(255, 90, 58, 0.14);
+  box-shadow: 0 0 0 2px #ff5a3a, 0 0 28px rgba(255, 90, 58, 0.6);
+  animation: foe-strike 0.9s ease-in-out infinite;
+}
+@keyframes foe-strike { 50% { box-shadow: 0 0 0 2px #ff5a3a, 0 0 40px rgba(255, 90, 58, 0.9); } }
+.foe-card.pickable { animation: pulse 1.6s ease-in-out infinite; border-style: dashed; border-color: rgba(255, 138, 122, 0.7); }
+.foe-flag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; white-space: nowrap; z-index: 2; }
+.foe-flag.attack { background: #ff5a3a; color: #fff; }
+.foe-flag.target { background: #ff8a7a; color: #0a0814; }
+.pick-hint { color: #ff8a7a; }
+.hero-side { position: relative; }
+.hit-fx { position: absolute; left: 50%; top: 42%; width: 96px; height: 96px; transform: translate(-50%, -50%); pointer-events: none; z-index: 3; overflow: visible; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6)); }
+@media (prefers-reduced-motion: reduce) { .foe-card.attacking, .foe-card.pickable { animation: none; } }
+
+/* This game's goals, always in sight */
+.goals { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.goals-head { align-self: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.goal { flex: 1 1 220px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); }
+.goal-title { display: flex; align-items: baseline; gap: 6px; }
+.goal-title small { color: #c9a7ff; font-size: 11px; }
+.goal-text { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.goal-bar { height: 6px; background: #2a2440; align-self: center; }
+.goal-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8f7bff, #c9a7ff); }
+.goal-count { font-variant-numeric: tabular-nums; font-size: 12px; }
+.goal.done { border-color: #6ef0a0; }
+.goal.done .goal-bar span { background: #6ef0a0; }
+.goal.done .goal-title b { color: #6ef0a0; }
+@media (max-width: 560px) { .goals-head { display: none; } .goal { flex-basis: 40%; padding: 5px 8px; } .goal-text { font-size: 11px; } }
+
+/* Career goals on a hero card */
+.career { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.career-badge { font-size: 10px; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); }
+.career-badge.done { border-color: #f0c040; color: #f0c040; background: rgba(240, 192, 64, 0.12); font-weight: 700; }
+.act-risk { font-size: 11px; color: #ffb38a; line-height: 1.25; }
+.choice .act-test, .choice .act-reward, .choice .act-risk { display: block; }
+/* On the light event card the test and reward lines need dark ink */
+.card .choice .act-test { color: #5a5470; }
+.card .choice .act-reward { color: #2f6b2a; }
+.card .choice .act-risk { color: #a8401a; }
+.frag-icons .icon { width: clamp(11px, 2.4vw, 16px); height: auto; }

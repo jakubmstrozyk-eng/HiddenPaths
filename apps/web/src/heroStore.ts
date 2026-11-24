@@ -1,4 +1,4 @@
-import { validateHero, type Hero, type NewHero } from '@hp/engine';
+import { validateHero, withCareer, type GameCareer, type Hero, type NewHero } from '@hp/engine';
 import { api } from './api';
 
 /** Where heroes are kept: on the server for a signed-in player, otherwise on this device. */
@@ -36,6 +36,17 @@ export const deviceHeroes: HeroStore = {
   },
   remove: async (id) => write(read().filter((h) => h.id !== id)),
 };
+
+/** Keeps a device game's latest share of the career goals on its hero (the server does this itself). */
+export function recordDeviceCareer(heroId: string, game: string, share: GameCareer) {
+  const list = read();
+  const hero = list.find((h) => h.id === heroId);
+  if (!hero) return;
+  const before = JSON.stringify(hero.career?.[game] ?? null);
+  if (before === JSON.stringify(share)) return;
+  hero.career = withCareer(hero.career, game, share);
+  write(list);
+}
 
 export const serverHeroes: HeroStore = {
   list: async () => (await api.heroes()).heroes,

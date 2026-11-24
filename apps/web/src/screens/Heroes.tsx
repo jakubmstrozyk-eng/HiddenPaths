@@ -5,7 +5,7 @@ import {
   type Attribute, type DiceLook, type HeroLook, type ProfessionId, type RaceId,
 } from '@hp/content';
 import {
-  BONUS_POINTS, MISSIONS_KEPT, Rng, drawMissionChoices, heroFits, seedFromString, validateHero, type Hero,
+  BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
 } from '@hp/engine';
 import { DieFace, diceStyle } from '../DiceFace';
 import type { HeroStore } from '../heroStore';
@@ -40,9 +40,28 @@ export function HeroCard({ hero, active, onClick, children }: { hero: Hero; acti
         <span className="hero-dice">
           {(['d6', 'd10', 'd100'] as const).map((k) => <DieFace key={k} kind={k} value={k === 'd6' ? 6 : 7} style={diceStyle(hero.dice[k])} size={22} />)}
         </span>
+        <CareerBadges hero={hero} />
       </div>
       {children}
     </div>
+  );
+}
+
+/** Career goals across all the hero's games: a title once reached, otherwise how far along. */
+export function CareerBadges({ hero }: { hero: Hero }) {
+  const { tx, locale } = useT();
+  const progress = careerProgress(Object.values(hero.career ?? {}));
+  return (
+    <span className="career" title={locale === 'pl' ? 'Cele kariery' : 'Career goals'}>
+      {progress.map((p) => {
+        const m = MISSIONS.find((x) => x.id === p.id)!;
+        return (
+          <span key={p.id} className={`career-badge ${p.done ? 'done' : ''}`} title={missionGoal(m, 'short', locale)}>
+            {p.done ? `★ ${tx(m.title ?? m.name)}` : `${tx(m.name)} ${p.count}/${p.target}`}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
@@ -85,15 +104,17 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
 /* Choosing a hero for a new game                                                              */
 /* ------------------------------------------------------------------------------------------ */
 
-export function HeroPickScreen({ store, multiplayer, onBack, onCreate, onStart }: {
+export function HeroPickScreen({ store, multiplayer, size, onBack, onCreate, onStart }: {
   store: HeroStore;
   multiplayer: boolean;
+  /** Game goals ask for more on a bigger map. */
+  size: SizePreset;
   onBack: () => void;
   onCreate: () => void;
   /** Creates the game (locally or on the server). A thrown error is shown under the button. */
   onStart: (hero: Hero, missions: string[], seed: string) => void | Promise<void>;
 }) {
-  const { t, tx } = useT();
+  const { t, tx, locale } = useT();
   const { heroes, error: loadError } = useHeroes(store);
   const fitting = (heroes ?? []).filter((h) => heroFits(h, multiplayer));
   const [picked, setPicked] = useState<string | null>(null);
@@ -145,7 +166,7 @@ export function HeroPickScreen({ store, multiplayer, onBack, onCreate, onStart }
               const m = MISSIONS.find((x) => x.id === id)!;
               return (
                 <Choice key={id} active={missions.includes(id)} onClick={() => toggleMission(id)} title={`${tx(m.name)} · +${m.xp} ${t('xp')}`}>
-                  {tx(m.goal)}
+                  {missionGoal(m, size, locale)}
                 </Choice>
               );
             })}
