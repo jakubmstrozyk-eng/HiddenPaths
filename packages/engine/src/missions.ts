@@ -31,7 +31,11 @@ export function missionProgress(state: GameState, player: PlayerState, id: strin
 function countsOf(state: GameState, entry: LogEntry): Record<string, number> {
   switch (entry.type) {
     case 'combat':
-      return entry.event.type === 'foeDown' ? { warrior: 1 } : {};
+      if (entry.event.type === 'foeDown') return { warrior: 1 };
+      if ((entry.event.type === 'strike' && entry.event.scroll && entry.event.by === 'hero') || entry.event.type === 'scroll') return { magician: 1 };
+      return {};
+    case 'scroll':
+      return { magician: 1 };
     case 'revealed':
       return BUILDINGS.has(state.map.cells[entry.cell]?.terrain ?? '') ? { scout: 1, discoverer: 0 } : { discoverer: 0 };
     case 'test': {

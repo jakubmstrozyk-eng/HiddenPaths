@@ -20,6 +20,7 @@ function byName(name: string): HitKind {
 export function hitKind(by: string, foeEnemy: string | undefined, hero: { weaponId: string; weaponName: string; ranged: boolean }, card?: string): HitKind {
   if (by === 'venom') return 'poison';
   if (by === 'trap') return 'trap';
+  if (by === 'fire' || card?.startsWith('scroll')) return 'magic';
   if (by === 'hero') {
     if (card === 'warrior-heavy-swing') return 'smash';
     if (card === 'cavedelver-whirling-axe') return 'chop';

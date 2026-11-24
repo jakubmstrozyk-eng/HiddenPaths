@@ -4,7 +4,17 @@ import type { CombatEvent, CombatMove, CombatResult, CombatState } from './comba
 import type { GameConfig } from './config';
 import type { TestResult } from './dice';
 import type { GameMap } from './mapgen';
-import type { Condition, Effect, Inventory, TerrainOutcome } from './terrain';
+import type { Companion, Condition, Effect, Inventory, TerrainOutcome } from './terrain';
+
+/**
+ * A portion of food made better before it is eaten: prepared by a Myrmid (+2 to all attributes for a round),
+ * maybe seasoned by a Gourmet (+5 more to one attribute), or a Gourmet's healing stew (+2 Vitality).
+ * Each counts as one of the hero's food portions.
+ */
+export interface Meal {
+  kind: 'prepared' | 'stew';
+  spice?: Attribute;
+}
 
 export interface PlayerState {
   id: string;
@@ -32,6 +42,10 @@ export interface PlayerState {
   combat: CombatState | null;
   /** Carries the Stone of Beginnings back to a city. */
   hasStone: boolean;
+  /** Prepared portions among the food carried (missing in older saves). */
+  meals?: Meal[];
+  /** Tamed beasts following the hero (missing in older saves). */
+  companions?: Companion[];
 }
 
 /** A change to a hero's stats or belongings, for the log and the app's floating numbers. */
@@ -73,6 +87,15 @@ export type LogEntry =
   /** A skill card was used or fired: `ok` says whether it worked, `roll` is its d6 or test roll. */
   | { type: 'card'; player: string; card: string; ok?: boolean; roll?: number; amount?: number }
   | { type: 'turnEnded'; player: string; next: string; round: number }
+  /** A portion was prepared (Myrmid race rule, Seasoning) or made into a stew. */
+  | { type: 'cooked'; player: string; meal: Meal }
+  | { type: 'mealEaten'; player: string; meal: Meal }
+  /** A tamed beast's bond was tested at the start of the turn: it grew, became lasting, or the beast left. */
+  | { type: 'companion'; player: string; uid: string; enemy: string; bond: number; tame: boolean; left: boolean }
+  /** A magic scroll read on the map; `amount` is Vitality healed. */
+  | { type: 'scroll'; player: string; item: string; amount?: number; to?: number }
+  /** Smelting: 3 pieces of gear melted into iron ore or a new common item. */
+  | { type: 'smelted'; player: string; items: string[]; into: string }
   /** A game mission was reached and paid its XP. */
   | { type: 'mission'; player: string; mission: string; xp: number }
   | ({ player: string } & TerrainOutcome);
@@ -127,6 +150,12 @@ export type Action =
   | { type: 'buy'; item: string }
   | { type: 'sell'; item: string }
   | { type: 'portal'; to: number }
+  /** Myrmids prepare a portion of food; a Gourmet may season it with an attribute. */
+  | { type: 'cook'; spice?: Attribute }
+  /** Read a magic scroll on the map: Healing, Renewal, or Teleport to `to`. */
+  | { type: 'scroll'; item: string; to?: number }
+  /** Runemaster's Smelting in a city: 3 weapons or armour pieces into iron ore or a common item. */
+  | { type: 'smelt'; into: 'ore' | 'item' }
   | { type: 'spend'; bonus: Partial<Attributes> }
   | { type: 'endTurn' };
 

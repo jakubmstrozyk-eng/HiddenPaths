@@ -6,8 +6,9 @@ import { DIFFICULTIES } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
 import { Rng as RngCtor, type Rng } from './rng';
-import { eatRations, useLeaves, usesLeft, trapFoes } from './cards';
-import { effectBonus, itemBonus, testModifier, type ActorState, type WorldView } from './terrain';
+import { bandage, eatRations, empower, healingHerb, isSpent, useLeaves, usesLeft, trapFoes } from './cards';
+import { BURN_DEATH, readableScrolls, scrollOf, selfSpell, spendScroll } from './scrolls';
+import { effectBonus, heroTest, itemBonus, magicBonus, type ActorState, type Companion, type WorldView } from './terrain';
 
 /** One foe in a fight. */
 export interface Foe {
@@ -23,6 +24,12 @@ export interface Foe {
   poisoned: boolean;
   /** Hits taken from the hero, for the stunning rune. */
   hits: number;
+  /** Explorer's Disarm: the foe lost its weapon and spends its turns trying to get it back. */
+  disarmed?: boolean;
+  /** Druid's Companion: the beast was tamed and left the fight on the hero's side. */
+  tamed?: boolean;
+  /** Fire bolt: the foe burns; the number is its failed Strength tests so far. */
+  burning?: number;
 }
 
 export interface CombatState {
@@ -42,6 +49,10 @@ export interface CombatState {
   barrier?: boolean;
   /** Set a Trap played in the fight: it springs at the start of the next round. */
   trap?: boolean;
+  /** Guardian's Defensive Stance was taken in this fight (once a fight). */
+  stanceUsed?: boolean;
+  /** The game round the fight broke out in (a fight ends the round), for once-a-round limits such as scrolls. */
+  round?: number;
 }
 
 export type CombatMove =
@@ -50,6 +61,8 @@ export type CombatMove =
   | { move: 'focus' }
   | { move: 'flee' }
   | { move: 'potion'; item: string }
+  /** A magic scroll: Fire bolt and Lightning at a foe, Healing and Renewal on the hero. */
+  | { move: 'scroll'; item: string; target?: string }
   /** A skill card played as the hero's move; `target` for the attacking cards. */
   | { move: 'card'; card: string; target?: string };
 
@@ -63,8 +76,23 @@ export type CombatEvent =
     dodge?: TestResult; dodged?: boolean;
     /** Barrier: the foe's Strength roll to break through; `blocked` when it failed. */
     barrier?: TestResult; blocked?: boolean;
+    /** The magic scroll behind the hero's strike. */
+    scroll?: string;
   }
+  /** A scroll read on the hero (Healing, Renewal); `amount` is Vitality healed. */
+  | { type: 'scroll'; item: string; amount: number }
+  /** A burning foe: loses 1 Vitality and tests Strength to put the fire out; the 3rd failure kills it. */
+  | { type: 'burn'; uid: string; result: TestResult; damage: number; out: boolean; dead: boolean }
   | { type: 'trap'; uid: string; result: TestResult; damage: number }
+  /** Guardian's Defensive Stance taken for the round. */
+  | { type: 'stance' }
+  /** Disarm: the foe's Dexterity roll to keep its weapon; `kept` false means it lost it. */
+  | { type: 'disarm'; uid: string; result: TestResult; kept: boolean }
+  /** A disarmed foe's opposed Dexterity test to pick its weapon up again. */
+  | { type: 'rearm'; uid: string; foe: TestResult; hero: TestResult; success: boolean }
+  /** Companion: the hero's Charisma test to tame a beast (in the fight, or once a round while the bond grows). */
+  | { type: 'tame'; uid: string; result: TestResult }
+  | { type: 'companionDown'; uid: string }
   | { type: 'barrier'; result: TestResult }
   | { type: 'card'; card: string; amount?: number }
   | { type: 'flee'; success: boolean; hero: TestResult; foe: TestResult }
@@ -91,7 +119,7 @@ export function startCombat(world: WorldView, enemies: string[], onWin: Outcome[
     const vitality = Math.max(1, Math.round(enemy.vitality * factor));
     return { uid: `${id}-${i + 1}`, enemy: id, vitality, maxVitality: vitality, attacks: 0, stunned: false, poisoned: false, hits: 0 };
   });
-  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin };
+  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin, round: world.round };
 }
 
 export function heroWeapon(actor: ActorState): WeaponItem {
@@ -107,6 +135,8 @@ export function heroArmour(actor: ActorState): Record<ArmourSlot, number> {
     if (item?.kind !== 'armour') continue;
     for (const slot of item.covers) out[slot] = Math.max(out[slot], item.value);
   }
+  // Hard Hide: the Guardian's own skin counts 1 on every part of the body, on top of armour.
+  if ((actor.character.cards ?? []).includes('guardian-hide')) for (const slot of Object.keys(out) as ArmourSlot[]) out[slot] += 1;
   return out;
 }
 
@@ -120,20 +150,48 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   const moves: CombatMove[] = combat.foes.filter((f) => f.vitality > 0).map((f) => ({ move: 'attack', target: f.uid }));
   moves.push({ move: 'parry' }, { move: 'focus' }, { move: 'flee' });
   for (const id of new Set(actor.inventory.items)) if (ITEMS[id]?.kind === 'potion') moves.push({ move: 'potion', item: id });
+  const first = combat.foes.find((f) => f.vitality > 0);
+  for (const id of readableScrolls(actor, combat.round ?? -1, true)) {
+    const attack = scrollOf(id)!.power !== undefined;
+    if (attack && !first) continue;
+    moves.push({ move: 'scroll', item: id, ...(attack ? { target: first!.uid } : {}) });
+  }
   const cards = actor.character.cards ?? [];
+  const alive = combat.foes.filter((f) => f.vitality > 0);
   const target = moves.find((m) => m.move === 'attack') as { target: string } | undefined;
   if (target) {
     for (const card of ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe']) {
       if (cards.includes(card)) moves.push({ move: 'card', card, target: target.target });
     }
   }
+  const armed = alive.find(canDisarm);
+  if (cards.includes('explorer-disarm') && armed) moves.push({ move: 'card', card: 'explorer-disarm', target: armed.uid });
+  const beast = alive.find((f) => canTame(actor, f));
+  if (cards.includes('druid-companion') && beast) moves.push({ move: 'card', card: 'druid-companion', target: beast.uid });
   if (cards.includes('trapper-trap') && !combat.trap) moves.push({ move: 'card', card: 'trapper-trap' });
   if (cards.includes('mystic-barrier') && !combat.barrier) moves.push({ move: 'card', card: 'mystic-barrier' });
+  if (cards.includes('guardian-stance') && !combat.stanceUsed) moves.push({ move: 'card', card: 'guardian-stance' });
   for (const card of ['warrior-rations', 'wraith-leaves']) {
     if (cards.includes(card) && (usesLeft(actor, card) ?? 0) > 0) moves.push({ move: 'card', card });
   }
+  for (const card of ['elder-herb', 'runemaster-empower']) {
+    if (cards.includes(card) && !isSpent(actor, card)) moves.push({ move: 'card', card });
+  }
+  if (cards.includes('explorer-bandages')) moves.push({ move: 'card', card: 'explorer-bandages' });
   return moves;
 }
+
+/** Disarm only works on foes that fight with a weapon in hand, not on beasts or spirits. */
+export const canDisarm = (foe: Foe) => !foe.disarmed && ['human', 'thug', 'demon'].includes(ENEMIES[foe.enemy]!.kind);
+
+/** Most beasts that follow a Druid at once (Companion). */
+export const MAX_COMPANIONS = 2;
+/** Companion: a beast under 10 Vitality can be tamed. */
+export const TAME_BELOW = 10;
+export const canTame = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
+  ENEMIES[foe.enemy]!.kind === 'beast' && foe.vitality < TAME_BELOW && (actor.companions ?? []).length < MAX_COMPANIONS;
+/** Charisma tests passed that make a tamed beast stay for good. */
+export const BOND_NEEDED = 3;
 
 /** Where a hit lands: a strike that passed by more than 20 picks the least armoured spot, otherwise a d6 decides. */
 function hitLocation(rng: Rng, margin: number, armour: Partial<Record<ArmourSlot, number>>): ArmourSlot {
@@ -167,6 +225,8 @@ export function combatTurn(
   // A parry or a flight is declared for the whole round, so it also covers foes that strike before the hero.
   const parrying = move.move === 'parry' && !combat.heroStunned;
   const fleeing = move.move === 'flee' && !combat.heroStunned;
+  // Defensive Stance, like a parry, is taken for the whole round.
+  const stance = move.move === 'card' && move.card === 'guardian-stance' && !combat.heroStunned;
   let fled = false;
   let enthralled = false;
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
@@ -182,44 +242,54 @@ export function combatTurn(
   const cards = actor.character.cards ?? [];
 
   /** One blow of the hero at a foe, with the skill cards that shape it. */
-  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean } = {}) => {
+  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
     const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0);
-    const result = test(rng, attrs.com, testModifier(world, actor, 'com', mod, enemy.kind));
-    const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}) };
+    const result = heroTest(world, actor, 'com', rng, mod, enemy.kind);
+    const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}), ...(opts.scroll ? { scroll: opts.scroll } : {}) };
     if (!result.success) {
       events.push(base);
-      return;
+      return false;
     }
     let dodge: TestResult | undefined;
     if (opts.dodge) {
       dodge = test(rng, enemy.dex);
       if (dodge.success) {
         events.push({ ...base, dodge, dodged: true });
-        return;
+        return false;
       }
     }
     const location = hitLocation(rng, result.margin, enemy.armour);
     const armour = enemy.armour[location] ?? 0;
     // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
-    const critical = cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
+    const magic = !!opts.scroll;
+    const critical = !magic && cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
     // Precise Shot: a longbow hit that beat the target by 15 or more deals +2.
     const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
-    let damage = strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
-      + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
-      + critical + precise + (opts.bonus ?? 0) - armour;
-    if (enemy.traits.includes('ethereal') && !rune) damage = Math.floor(damage / 2);
+    // A scroll's magic is not a blade: weapon runes and weapon bonuses do not add to it.
+    let damage = magic
+      ? strengthStep(attrs.str) + (opts.power ?? 0) + damageDie(rng, false) - armour
+      : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
+        + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
+        + critical + precise + (opts.bonus ?? 0) - armour;
+    // Spirits are hurt in full only by magic or runes.
+    if (enemy.traits.includes('ethereal') && !rune && !magic) damage = Math.floor(damage / 2);
     damage = Math.max(0, damage);
     target.vitality -= damage;
     target.hits++;
-    if (rune === 'venom' || opts.poison) target.poisoned = true;
-    if (rune === 'stunning' && target.hits % 3 === 0) target.stunned = true;
+    if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
+    if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
+    if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
     events.push({ ...base, location, damage, ...(dodge ? { dodge } : {}) });
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+    return true;
   };
   const targetOf = (uid?: string) => alive().find((f) => f.uid === uid) ?? alive()[0];
   if (move.move === 'potion' && !actor.inventory.items.includes(move.item)) {
     throw new EngineError('combat.item', 'You do not carry that.');
+  }
+  if (move.move === 'scroll' && !combatMoves(actor, combat).some((m) => m.move === 'scroll' && m.item === move.item)) {
+    throw new EngineError('scroll.notNow', 'You cannot read that scroll now.');
   }
 
   const heroTurn = () => {
@@ -235,6 +305,17 @@ export function combatTurn(
         combat.focus = true;
         events.push({ type: 'focus' });
         break;
+      case 'scroll': {
+        const scroll = spendScroll(actor, combat.round ?? world.round, move.item);
+        if (scroll.power === undefined) {
+          events.push({ type: 'scroll', item: move.item, amount: selfSpell(actor, scroll) });
+          break;
+        }
+        const target = targetOf(move.target);
+        // Strength of the Forest helps the Druid shape the scroll's magic in a forest.
+        if (target) swing(target, { power: scroll.power, scroll: move.item, mod: magicBonus(world, actor) });
+        break;
+      }
       case 'potion': {
         actor.inventory.items.splice(actor.inventory.items.indexOf(move.item), 1);
         drinkPotion(world, actor, move.item);
@@ -244,7 +325,7 @@ export function combatTurn(
       case 'flee': {
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
-        const hero = test(rng, attrs.dex, testModifier(world, actor, 'dex', focus + harried));
+        const hero = heroTest(world, actor, 'dex', rng, focus + harried);
         const foe = test(rng, ENEMIES[fastest.enemy]!.dex);
         fled = hero.success && (!foe.success || hero.roll <= foe.roll);
         events.push({ type: 'flee', success: fled, hero, foe });
@@ -287,8 +368,51 @@ export function combatTurn(
             // Whirling Axe: a separate Combat test against each foe, up to 3; each may dodge with Dexterity.
             for (const target of alive().slice(0, 3)) swing(target, { dodge: true, card: move.card });
             break;
+          case 'explorer-disarm': {
+            // Disarm: a plain blow; a foe it hits tests Dexterity or loses its weapon.
+            const target = targetOf(move.target);
+            if (!target || !canDisarm(target)) throw new EngineError('combat.target', 'That foe cannot be disarmed.');
+            if (swing(target, { card: move.card }) && target.vitality > 0) {
+              const result = test(rng, ENEMIES[target.enemy]!.dex);
+              if (!result.success) target.disarmed = true;
+              events.push({ type: 'disarm', uid: target.uid, result, kept: result.success });
+            }
+            break;
+          }
+          case 'druid-companion': {
+            // Companion: a Charisma test tames a weak beast; it leaves the fight and follows the Druid.
+            const target = targetOf(move.target);
+            if (!target || !canTame(actor, target)) throw new EngineError('combat.target', 'That beast cannot be tamed.');
+            const result = heroTest(world, actor, 'cha', rng, focus);
+            events.push({ type: 'tame', uid: target.uid, result });
+            if (result.success) {
+              const n = (actor.counters.tamed ?? 0) + 1;
+              actor.counters.tamed = n;
+              (actor.companions ??= []).push({
+                uid: `pet-${target.enemy}-${n}`,
+                enemy: target.enemy, vitality: target.vitality, maxVitality: target.maxVitality, bond: 1, tame: false,
+              });
+              target.tamed = true;
+              target.vitality = 0;
+            }
+            break;
+          }
+          case 'guardian-stance':
+            combat.stanceUsed = true;
+            events.push({ type: 'stance' });
+            break;
+          case 'elder-herb':
+            events.push({ type: 'card', card: move.card, amount: healingHerb(actor) });
+            break;
+          case 'explorer-bandages':
+            events.push({ type: 'card', card: move.card, amount: bandage(actor) });
+            break;
+          case 'runemaster-empower':
+            empower(world.round, actor);
+            events.push({ type: 'card', card: move.card, amount: 2 });
+            break;
           case 'mystic-barrier': {
-            const result = test(rng, attrs.int, testModifier(world, actor, 'int', focus));
+            const result = heroTest(world, actor, 'int', rng, focus + magicBonus(world, actor));
             if (result.success) combat.barrier = true;
             events.push({ type: 'barrier', result });
             break;
@@ -310,6 +434,8 @@ export function combatTurn(
     }
   };
 
+  const pets = () => (actor.companions ?? []).filter((p) => p.vitality > 0);
+
   const foeTurn = (foe: Foe) => {
     if (foe.vitality <= 0 || actor.character.vitality <= 0 || enthralled) return;
     if (foe.stunned) {
@@ -318,16 +444,42 @@ export function combatTurn(
       return;
     }
     const enemy: Enemy = ENEMIES[foe.enemy]!;
+    if (foe.disarmed) {
+      // Disarm: the foe spends its turn on an opposed Dexterity test to get its weapon back. Both must pass;
+      // then the lower roll wins, and a tie goes to the Explorer.
+      const own = test(rng, enemy.dex);
+      const hero = heroTest(world, actor, 'dex', rng, focus);
+      const success = own.success && (!hero.success || own.roll < hero.roll);
+      if (success) foe.disarmed = false;
+      events.push({ type: 'rearm', uid: foe.uid, foe: own, hero, success });
+      return;
+    }
+    // With companions in the fight, each foe picks whom to strike: the hero or one of the beasts.
+    const beside = pets();
+    if (beside.length) {
+      const pick = rng.int(beside.length + 1);
+      if (pick > 0) return strikePet(foe, enemy, beside[pick - 1]!);
+    }
     foe.attacks++;
     const sting = enemy.traits.includes('stinger') && foe.attacks % 3 === 0;
     const result = test(rng, enemy.com, fleeing ? 10 : 0);
+    // Riposte: in the defensive stance the Guardian answers every attack with the spear.
+    const riposte = () => {
+      if (stance && cards.includes('guardian-riposte') && foe.vitality > 0) swing(foe, { mod: -10, power: 1, card: 'guardian-riposte' });
+    };
     if (!result.success) {
       events.push({ type: 'strike', by: foe.uid, target: HERO, result });
+      riposte();
+      return;
+    }
+    if (stance) {
+      events.push({ type: 'strike', by: foe.uid, target: HERO, result, blocked: true, card: 'guardian-stance' });
+      riposte();
       return;
     }
     if (parrying) {
       const shield = actor.character.equipment.shield ? 15 : 0;
-      const parry = test(rng, attrs.com, testModifier(world, actor, 'com', focus + shield, enemy.kind));
+      const parry = heroTest(world, actor, 'com', rng, focus + shield, enemy.kind);
       if (parry.success && parry.roll <= result.roll) {
         events.push({ type: 'strike', by: foe.uid, target: HERO, result, parry, parried: true });
         return;
@@ -359,12 +511,46 @@ export function combatTurn(
       addCondition(actor, 'rot', { pl: 'Zgnilizna', en: 'Rot' }, 'dex', 2);
       events.push({ type: 'poisoned', who: HERO, condition: 'rot' });
     }
-    if (enemy.traits.includes('stun') && !test(rng, attrs.wil, testModifier(world, actor, 'wil', focus)).success) {
+    if (enemy.traits.includes('stun') && !heroTest(world, actor, 'wil', rng, focus).success) {
       combat.heroStunned = true;
     }
     if (enemy.traits.includes('drain')) {
       actor.staminaLeft = Math.max(0, actor.staminaLeft - 1);
       if (actor.staminaLeft === 0) enthralled = true;
+    }
+  };
+
+  /** A foe's blow at one of the hero's beasts: no armour, no parry. */
+  const strikePet = (foe: Foe, enemy: Enemy, pet: Companion) => {
+    foe.attacks++;
+    const result = test(rng, enemy.com);
+    if (!result.success) {
+      events.push({ type: 'strike', by: foe.uid, target: pet.uid, result });
+      return;
+    }
+    const damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + damageDie(rng, enemy.traits.includes('penetrating')));
+    pet.vitality -= damage;
+    events.push({ type: 'strike', by: foe.uid, target: pet.uid, result, damage });
+    if (pet.vitality <= 0) events.push({ type: 'companionDown', uid: pet.uid });
+  };
+
+  /** Each companion bites the hero's target, or the first foe standing, with its own stats. */
+  const petsTurn = () => {
+    for (const pet of pets()) {
+      const target = targetOf(move.move === 'attack' || move.move === 'card' ? move.target : undefined);
+      if (!target) return;
+      const beast = ENEMIES[pet.enemy]!;
+      const foe = ENEMIES[target.enemy]!;
+      const result = test(rng, beast.com);
+      if (!result.success) {
+        events.push({ type: 'strike', by: pet.uid, target: target.uid, result });
+        continue;
+      }
+      const location = hitLocation(rng, result.margin, foe.armour);
+      const damage = Math.max(0, strengthStep(beast.str) + beast.weapon.power + damageDie(rng, false) - (foe.armour[location] ?? 0));
+      target.vitality -= damage;
+      events.push({ type: 'strike', by: pet.uid, target: target.uid, result, location, damage });
+      if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     }
   };
 
@@ -379,8 +565,25 @@ export function combatTurn(
     ...alive().map((f) => ({ id: f.uid, dex: ENEMIES[f.enemy]!.dex })),
   ].sort((a, b) => b.dex - a.dex);
   for (const slot of order) {
-    if (slot.id === HERO) heroTurn();
-    else foeTurn(combat.foes.find((f) => f.uid === slot.id)!);
+    if (slot.id === HERO) {
+      heroTurn();
+      petsTurn();
+    } else foeTurn(combat.foes.find((f) => f.uid === slot.id)!);
+  }
+  // Fallen companions are gone for good.
+  if (actor.companions?.some((p) => p.vitality <= 0)) actor.companions = actor.companions.filter((p) => p.vitality > 0);
+
+  // Fire bolt: a burning foe loses 1 Vitality a round and tests Strength to put the fire out; the 3rd failure kills it.
+  for (const foe of alive()) {
+    if (foe.burning === undefined) continue;
+    const result = test(rng, ENEMIES[foe.enemy]!.str);
+    foe.vitality -= 1;
+    if (result.success) delete foe.burning;
+    else foe.burning++;
+    const dead = foe.burning !== undefined && foe.burning >= BURN_DEATH;
+    if (dead) foe.vitality = 0;
+    events.push({ type: 'burn', uid: foe.uid, result, damage: 1, out: result.success, dead });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
   }
 
   // Venom rune: poisoned foes bleed until they pass a Strength test.

@@ -4,14 +4,13 @@ import {
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
-import { test } from './dice';
 import { EngineError } from './errors';
 import { combatXp, startCombat } from './combat';
 import { neighbours } from './mapgen';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
-import { FOREVER, testModifier, type Rune } from './terrain';
+import { FOREVER, heroTest, type Rune } from './terrain';
 
 /** The whole deck in card order, shuffled into `state.eventDeck` at the start and whenever it runs out. */
 export const ALL_EVENT_IDS = EVENTS.map((e) => e.id);
@@ -230,7 +229,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       }
       case 'test': {
         const bonus = o.raceBonus && o.raceBonus.race === c.race ? o.raceBonus.amount : 0;
-        const result = test(rng, c.attributes[o.attribute], testModifier(world, player, o.attribute, (o.modifier ?? 0) + bonus));
+        const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus);
         log(state, { type: 'check', player: player.id, attribute: o.attribute, result });
         runOutcomes(state, player, rng, (result.success ? o.pass : o.fail) ?? [], card);
         break;
@@ -292,7 +291,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
 export function tickConditions(state: GameState, player: PlayerState, rng: Rng) {
   const world = worldView(state);
   for (const cond of [...player.conditions]) {
-    const result = test(rng, player.character.attributes[cond.test], testModifier(world, player, cond.test, cond.modifier));
+    const result = heroTest(world, player, cond.test, rng, cond.modifier);
     log(state, { type: 'check', player: player.id, attribute: cond.test, result });
     if (result.success) {
       player.conditions = player.conditions.filter((x) => x !== cond);

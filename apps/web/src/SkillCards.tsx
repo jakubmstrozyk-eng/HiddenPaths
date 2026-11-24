@@ -7,16 +7,22 @@ import { useT, type UiKey } from './i18n';
 import { Icon } from './Icons';
 
 /** Cards the player plays on the map and in a fight. Every other card works on its own. */
-const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap'];
-const FIGHT_PLAY = ['trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves'];
+const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew'];
+const FIGHT_PLAY = [
+  'trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves',
+  'explorer-disarm', 'guardian-stance', 'druid-companion', 'elder-herb', 'explorer-bandages', 'runemaster-empower',
+];
+/** Cards used through another button: at camp, when preparing food, in a city, or not yet in the game. */
+const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city'> = {
+  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'elder-nature': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city',
+};
 
 /** A card that is never played: it works by itself whenever its moment comes. */
-export const isPassive = (card: string) =>
-  !MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card) && card !== 'cavedelver-craftsman' && card !== 'mystic-researcher';
+export const isPassive = (card: string) => !MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card) && !ELSEWHERE[card];
 
-type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'map' | 'fight' | 'notNow' | 'passive';
+type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'cook' | 'city' | 'map' | 'fight' | 'notNow' | 'passive';
 const NOTE: Record<Exclude<Status, 'play'>, UiKey> = {
-  usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp',
+  usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp', cook: 'cardAtCook', city: 'cardInCity',
   map: 'cardOnMap', fight: 'cardInFight', notNow: 'cardNotNow', passive: 'cardPassive',
 };
 
@@ -24,8 +30,7 @@ function statusOf(card: string, actor: Pick<ActorState, 'counters'>, playable: s
   if (playable.includes(card)) return 'play';
   if (usesLeft(actor, card) === 0) return 'usedUp';
   if (isSpent(actor, card)) return 'spent';
-  if (card === 'cavedelver-craftsman') return 'later';
-  if (card === 'mystic-researcher') return 'camp';
+  if (ELSEWHERE[card]) return ELSEWHERE[card];
   if (inFight && MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card)) return 'map';
   if (!inFight && FIGHT_PLAY.includes(card) && !MAP_PLAY.includes(card)) return 'fight';
   if (MAP_PLAY.includes(card) || FIGHT_PLAY.includes(card)) return 'notNow';

@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
 /** The places in a settlement a hero can walk into. */
-export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal';
+export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal' | 'mystic';
 
 export const SPOTS: Record<'inn' | 'village' | 'city', Spot[]> = {
   inn: ['bar', 'table', 'rooms'],
   village: ['tavern', 'smith', 'yard', 'market', 'shop'],
-  city: ['tavern', 'smith', 'yard', 'market', 'shop', 'portal'],
+  city: ['tavern', 'smith', 'yard', 'market', 'shop', 'mystic', 'portal'],
 };
 
 export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
@@ -19,6 +19,7 @@ export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
   market: { pl: 'Targ', en: 'Market' },
   shop: { pl: 'Kupiec i zielarz', en: 'Merchant and herbalist' },
   portal: { pl: 'Portal', en: 'Portal' },
+  mystic: { pl: 'Wieża Mistyka', en: "The Mystic's tower" },
 };
 
 /** A clickable building or corner of the picture, lit when hovered or chosen. */
@@ -124,6 +125,15 @@ function TownStreet({ chosen, onPick, name, city }: { chosen: Spot | null; onPic
         <House x={665} y={180} w={110} h={80} wall="#b8c0a0" roof="#3a6a3a" />
         <rect x={680} y={160} width={24} height={14} fill="#c8a0e0" stroke="#1a120c" />
       </Hot>
+      {city && (
+        <Hot spot="mystic" chosen={chosen} onPick={onPick} label={name('mystic')} x={600} y={22}>
+          <rect x={580} y={58} width={40} height={92} fill="#3a2a5a" stroke="#1a120c" strokeWidth={2} />
+          <polygon points="572,58 600,12 628,58" fill="#5a3a8a" stroke="#1a120c" strokeWidth={2} />
+          <rect x={592} y={78} width={16} height={20} fill="#c9b8ff" stroke="#1a120c" />
+          <circle cx={600} cy={10} r={4} fill="#ffe08a" />
+          <rect x={593} y={112} width={14} height={22} fill="#8f7bff" opacity={0.6} />
+        </Hot>
+      )}
       {city && (
         <Hot spot="portal" chosen={chosen} onPick={onPick} label={name('portal')} x={400} y={40}>
           <ellipse cx={400} cy={88} rx={26} ry={34} fill="#120c22" stroke="#8f7bff" strokeWidth={5} />

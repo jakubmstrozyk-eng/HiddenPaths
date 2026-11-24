@@ -21,6 +21,6 @@ export const MISSIONS: Mission[] = [
   { id: 'hero', scope: 'career', targets: 5, xp: 50, name: { pl: 'Bohater', en: 'Hero' }, goal: { pl: 'Osiągnij {n} poziom.', en: 'Reach level {n}.' }, title: { pl: 'Bohater', en: 'Hero' } },
 ];
 
-/** Goals drawn at the start of a game. Magician waits until magic scrolls are in the game. */
-export const GAME_MISSIONS = MISSIONS.filter((m) => m.scope === 'game' && m.id !== 'magician');
+/** Goals drawn at the start of a game. */
+export const GAME_MISSIONS = MISSIONS.filter((m) => m.scope === 'game');
 export const CAREER_MISSIONS = MISSIONS.filter((m) => m.scope === 'career');

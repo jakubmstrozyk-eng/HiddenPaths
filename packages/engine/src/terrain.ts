@@ -51,6 +51,17 @@ export interface Equipment {
 /** Weapon runes from the runic smith's d10 table. */
 export type Rune = 'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing';
 
+/** A tamed beast fighting beside the hero (Druid's Companion). Until `tame`, it can still break free. */
+export interface Companion {
+  uid: string;
+  enemy: string;
+  vitality: number;
+  maxVitality: number;
+  /** Charisma tests passed so far; at 3 the beast stays for good. */
+  bond: number;
+  tame: boolean;
+}
+
 /** The parts of a player's state that terrain actions read and change. */
 export interface ActorState {
   id: string;
@@ -65,6 +76,8 @@ export interface ActorState {
   /** Set by a successful swim; lets the hero leave a river fragment onwards. */
   crossedRiver: boolean;
   conditions: Condition[];
+  /** Tamed beasts that follow the hero (missing in games saved before companions existed). */
+  companions?: Companion[];
   character: {
     race: RaceId;
     attributes: Record<Attribute, number>;
@@ -128,7 +141,34 @@ export function testModifier(world: WorldView, actor: ActorState, attribute: Att
   const settings = DIFFICULTIES[world.difficulty];
   const danger = dangerLevel(world.ringAt(actor.position), world.maxRing, settings);
   return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp)
-    + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + cardBonus(world, actor, attribute) + extra;
+    + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + cardBonus(world, actor, attribute)
+    + (actor.counters.nature ? NATURE_BONUS : 0) + extra;
+}
+
+/** Close to Nature: the Elder's meditation at camp gives +10 to the next attribute test. */
+export const NATURE_BONUS = 10;
+
+/**
+ * A test of one of the hero's base attributes, with every modifier and the cards that act on any test:
+ * Close to Nature's +10 is used up by it, and Wisdom of Ages gives a failed Intelligence test a second throw
+ * once until the next camp.
+ */
+export function heroTest(world: WorldView, actor: ActorState, attribute: Attribute, rng: Rng, extra = 0, vs?: string): TestResult {
+  const modifier = testModifier(world, actor, attribute, extra, vs);
+  const value = actor.character.attributes[attribute];
+  let result = test(rng, value, modifier);
+  if (actor.counters.nature) delete actor.counters.nature;
+  const cards = actor.character.cards ?? [];
+  if (!result.success && attribute === 'int' && cards.includes('elder-wisdom') && !actor.counters['used:elder-wisdom']) {
+    actor.counters['used:elder-wisdom'] = 1;
+    result = { ...test(rng, value, modifier), rerolled: 'elder-wisdom', first: result.roll };
+  }
+  return result;
+}
+
+/** Strength of the Forest: +20 to the Druid's tests of shaping magic on a forest fragment. */
+export function magicBonus(world: WorldView, actor: Pick<ActorState, 'position' | 'character'>): number {
+  return (actor.character.cards ?? []).includes('druid-forest') && world.terrainAt(actor.position) === 'forest' ? 20 : 0;
 }
 
 const WATER = new Set(['river', 'lake']);
@@ -153,6 +193,9 @@ export function rerollCard(actor: ActorState, action: TerrainAction, terrain: st
   const cards = actor.character.cards ?? [];
   // Fish: a failed hunt on a water fragment (river or lake) is rolled again once (Jacob, 2026-11-24).
   if (action === 'hunt' && WATER.has(terrain) && cards.includes('diver-fish')) return 'diver-fish';
+  if (action === 'hunt' && WATER.has(terrain) && cards.includes('gourmet-fish')) return 'gourmet-fish';
+  // Vise: every failed test for gathering materials is rolled again once.
+  if (action === 'mine' && cards.includes('runemaster-vise')) return 'runemaster-vise';
   // Hunter: every failed hunt may be rolled again, once (Jacob, 2026-11-24).
   if (action === 'hunt' && cards.includes('trapper-hunter')) return 'trapper-hunter';
   return null;
@@ -190,8 +233,9 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
   const skill: Partial<Record<TerrainAction, number>> = {
     hunt: skills.hunt ?? 0, gather: skills.gather ?? 0, herbalism: skills.herbalism ?? 0, mine: skills.mine ?? 0,
   };
-  const roll = (attribute: Attribute, extra = 0) =>
-    test(rng, attrs[attribute], testModifier(world, actor, attribute, extra + (skill[action] ?? 0)));
+  // Herbalist: +20 to the Intelligence test when gathering herbs or fruit.
+  const herbalist = (action === 'gather' || action === 'herbalism') && (actor.character.cards ?? []).includes('druid-herbalist') ? 20 : 0;
+  const roll = (attribute: Attribute, extra = 0) => heroTest(world, actor, attribute, rng, extra + herbalist + (skill[action] ?? 0));
 
   switch (action) {
     case 'hunt': {
@@ -226,17 +270,28 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
       return { type: 'test', action, attribute: 'int', result, gained };
     }
     case 'mine': {
+      const vise = rerollCard(actor, 'mine', terrain);
       if (terrain === 'forest') {
-        const result = roll('dex');
+        let result = roll('dex');
+        const again = !result.success && vise;
+        if (again) result = roll('dex');
         if (result.success) {
           add(actor.inventory.materials, 'wood');
           gained.push('material:wood');
         }
-        return { type: 'test', action, attribute: 'dex', result, gained };
+        return { type: 'test', action, attribute: 'dex', result, gained, ...(again ? { rerolled: vise } : {}) };
       }
       // Mountains and caves: common ores on a Dexterity test, plus one rare find on a harder Intelligence test.
       const common = terrain === 'cave' ? 1 : 2;
-      const result = roll('dex');
+      let result = roll('dex');
+      let again = !result.success && !!vise;
+      if (again) result = roll('dex');
+      const rareFind = (): boolean => {
+        if (heroTest(world, actor, 'int', rng, -10 + (skill.mine ?? 0)).success) return true;
+        if (!vise) return false;
+        again = true;
+        return heroTest(world, actor, 'int', rng, -10 + (skill.mine ?? 0)).success;
+      };
       if (result.success) {
         for (let i = 0; i < common; i++) {
           const ore = COMMON_ORES[rng.int(COMMON_ORES.length)]!;
@@ -246,17 +301,19 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
         if (terrain === 'cave') {
           actor.character.food += 1; // a mushroom
           gained.push('food:1');
-        } else if (test(rng, attrs.int, testModifier(world, actor, 'int', -10 + (skill.mine ?? 0))).success) {
+        } else if (rareFind()) {
           const rare = RARE_ORES[rng.int(RARE_ORES.length)]!;
           add(actor.inventory.materials, rare);
           gained.push(`material:${rare}`);
         }
         add(actor.counters, 'gathered');
       }
-      return { type: 'test', action, attribute: 'dex', result, gained };
+      return { type: 'test', action, attribute: 'dex', result, gained, ...(again ? { rerolled: vise! } : {}) };
     }
     case 'swim': {
-      const fish = (actor.character.cards ?? []).includes('diver-fish');
+      const cards = actor.character.cards ?? [];
+      const fishCard = cards.includes('diver-fish') ? 'diver-fish' : cards.includes('gourmet-fish') ? 'gourmet-fish' : null;
+      const fish = !!fishCard;
       // Fish: each failed swim test is rolled again once.
       let dex = roll('dex');
       const dexAgain = !dex.success && fish;
@@ -264,7 +321,7 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
       let str = roll('str');
       const strAgain = !str.success && fish;
       if (strAgain) str = roll('str');
-      const again = dexAgain || strAgain ? { rerolled: 'diver-fish' } : {};
+      const again = dexAgain || strAgain ? { rerolled: fishCard! } : {};
       const result = dex.success && str.success ? dex : dex.success ? str : dex;
       if (dex.success && str.success) {
         actor.crossedRiver = true;

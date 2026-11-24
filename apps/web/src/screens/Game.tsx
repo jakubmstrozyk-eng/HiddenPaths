@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
+import { ATTRIBUTES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
   applyAction, currentPlayer, entryCell, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type Side,
@@ -9,7 +9,7 @@ import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
-import { attrShort, combatLine, describe, diceOf, type DiceRoll } from '../logText';
+import { attrShort, cardName, combatLine, describe, diceOf, foeName, itemName, type DiceRoll } from '../logText';
 import { PixelHero } from '../PixelHero';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
@@ -85,7 +85,11 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const c = me.character;
   const { width, height, cells } = game.map;
   const actions = useMemo(() => legalActions(game, me.id), [game, me.id]);
-  const moves = new Map(actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
+  // A Teleport scroll being aimed: its targets take the place of ordinary moves on the board.
+  const [aim, setAim] = useState<string | null>(null);
+  const moves = new Map<number, Action>(aim
+    ? actions.flatMap((a) => (a.type === 'scroll' && a.item === aim && a.to !== undefined ? [[a.to, a] as const] : []))
+    : actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
   const outside = isOutside(me);
   // The board leaves a margin of about one fragment on each side for the starting places outside the map.
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -137,6 +141,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     if (a.type === 'service') return t(a.service);
     if (a.type === 'camp') return a.research ? t('campResearch') : t('camp');
     if (a.type === 'read') return t('read');
+    if (a.type === 'scroll') return itemName(a.item, locale);
+    if (a.type === 'cook') return tx({ pl: 'Przyrządzanie pożywienia · Zręczność', en: 'Preparing food · Dexterity' });
+    if (a.type === 'card') return `${cardName(a.card, locale)}${a.card === 'gourmet-stew' ? ` · ${tx({ pl: 'Inteligencja', en: 'Intelligence' })}` : ''}`;
     // At the start of a turn each lasting condition (plague, nightmare...) is tested again: a pass ends it.
     if (a.type === 'endTurn' && who.conditions.length) {
       return `${who.conditions.map((cd) => tx(cd.name)).join(', ')} · ${tx({ pl: 'próba pozbycia się stanu', en: 'trying to shake it off' })}`;
@@ -269,9 +276,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               return (
                 <button
                   key={cell.index}
-                  className={`frag ${move ? 'reachable' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
+                  className={`frag ${move ? 'reachable' : ''} ${move && aim ? 'aim' : ''} ${isHere ? 'here-tile' : ''} ${seen ? 'seen' : ''}`}
                   disabled={!move}
-                  onClick={() => move && act(move)}
+                  onClick={() => { if (!move) return; setAim(null); act(move); }}
                   aria-label={seen ? name : move ? `${t('tapToMove')}` : undefined}
                 >
                   {seen && <TerrainArt terrain={cell.terrain} seed={cell.index} />}
@@ -362,6 +369,22 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               ))}
             </p>
           )}
+          {aim && (
+            <p className="conditions-note aim-note">
+              {tx({ pl: 'Teleportacja: wybierz fragment do 2 pól stąd.', en: 'Teleport: pick a fragment up to 2 steps away.' })}{' '}
+              <button className="ghost small" onClick={() => setAim(null)}>{t('back')}</button>
+            </p>
+          )}
+          {(me.companions?.length ?? 0) > 0 && (
+            <p className="companions-note">
+              🐾 {me.companions!.map((pet) => `${foeName(pet.uid, locale)} ${pet.vitality}/${pet.maxVitality}${pet.tame ? '' : ` · ${tx({ pl: 'więź', en: 'bond' })} ${pet.bond}/3`}`).join(' · ')}
+            </p>
+          )}
+          {(me.meals?.length ?? 0) > 0 && (
+            <p className="companions-note">
+              {tx({ pl: 'Przyrządzone porcje', en: 'Prepared portions' })}: {me.meals!.map((m) => (m.kind === 'stew' ? tx({ pl: 'potrawka (+2 Żyw.)', en: 'stew (+2 Vit)' }) : m.spice ? `${tx({ pl: 'przyprawiona', en: 'seasoned' })} ${attrShort(m.spice, locale)}` : tx({ pl: 'przyrządzona', en: 'prepared' }))).join(', ')}
+            </p>
+          )}
           <small className="frag-panel-head">{tx({ pl: 'Co możesz tu zrobić', en: 'What you can do here' })}</small>
           <div className="frag-actions">
             {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
@@ -381,7 +404,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             {inTown && quiet && (
               <button className="ghost act-btn town-btn" onClick={() => setSheet('town')}>
                 <span className="act-title"><Icon name="town" size={14} />{tx({ pl: 'Wejdź', en: 'Go in' })}: {hereTerrain ? tx(hereTerrain.name) : t('town')}</span>
-                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
+                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : here?.terrain === 'city' ? tx({ pl: 'karczma, kuźnia, plac, targ, kupiec, wieża mistyka', en: 'tavern, smithy, yard, market, merchant, mystic' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
               </button>
             )}
             {myTurn && actions.some((a) => a.type === 'camp') && (
@@ -389,6 +412,35 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             )}
             {myTurn && actions.some((a) => a.type === 'camp' && a.research) && (
               <button className="ghost with-icon" onClick={() => act({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
+            )}
+            {myTurn && quiet && actions.some((a) => a.type === 'cook') && (
+              <div className="cook-box">
+                <button className="ghost act-btn" onClick={() => act({ type: 'cook' })}>
+                  <span className="act-title"><Icon name="food" size={14} />{tx({ pl: 'Przyrządź pożywienie', en: 'Prepare food' })}</span>
+                  <small className="act-test">{tx({ pl: 'Test', en: 'Test' })}: {tx({ pl: 'Zręczność', en: 'Dexterity' })} · {Math.round(successChance(c.attributes.dex, testModifier(worldView(game), me, 'dex')) * 100)}%</small>
+                  <small className="act-reward">{tx({ pl: 'zjedzona porcja: +2 do cech na rundę', en: 'the portion eaten: +2 to attributes for a round' })} · −1 {t('staminaShort')}</small>
+                </button>
+                {actions.some((a) => a.type === 'cook' && a.spice) && (
+                  <span className="cook-spices">
+                    <small>{cardName('gourmet-seasoning', locale)} (+5):</small>
+                    {ATTRIBUTES.map((attr) => (
+                      <button key={attr} className="ghost small" onClick={() => act({ type: 'cook', spice: attr })}>{attrShort(attr, locale)}</button>
+                    ))}
+                  </span>
+                )}
+              </div>
+            )}
+            {myTurn && quiet && actions.some((a) => a.type === 'smelt') && (
+              <button className="ghost act-btn" onClick={() => act({ type: 'smelt', into: 'ore' })}>
+                <span className="act-title"><Icon name="mine" size={14} />{cardName('runemaster-smelt', locale)}</span>
+                <small className="act-reward">{tx({ pl: '3 sztuki broni lub zbroi → 1 żelazo', en: '3 weapons or armour pieces → 1 iron' })}</small>
+              </button>
+            )}
+            {myTurn && quiet && actions.some((a) => a.type === 'smelt') && (
+              <button className="ghost act-btn" onClick={() => act({ type: 'smelt', into: 'item' })}>
+                <span className="act-title"><Icon name="mine" size={14} />{cardName('runemaster-smelt', locale)}</span>
+                <small className="act-reward">{tx({ pl: '3 sztuki broni lub zbroi → nowy zwykły przedmiot', en: '3 weapons or armour pieces → a new common item' })}</small>
+              </button>
             )}
             <button className="primary end-turn" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>
               {t('endTurn')}
@@ -432,7 +484,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         )}
         {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
-        {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
+        {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
         {sheet === 'hero' && quiet && <HeroSheet key="hero" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {game.winner && !story && (

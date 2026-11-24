@@ -67,7 +67,20 @@ export interface BookItem extends BaseItem {
   teaches: { target: Attribute | 'mine'; amount: number }[];
 }
 
-export type Item = WeaponItem | ArmourItem | ShieldItem | PotionItem | TrinketItem | BookItem;
+/** Spells on the Mystic's scrolls, from the "Mistyk" table. */
+export type Spell = 'fire' | 'teleport' | 'heal' | 'renewal' | 'lightning';
+
+/** A magic scroll from a city's Mystic: read once, then gone. One scroll a round. */
+export interface ScrollItem extends BaseItem {
+  kind: 'scroll';
+  spell: Spell;
+  /** Attack scrolls: power on top of the reader's Strength step S. */
+  power?: number;
+  /** What the scroll does, for its button. */
+  effect: Text;
+}
+
+export type Item = WeaponItem | ArmourItem | ShieldItem | PotionItem | TrinketItem | BookItem | ScrollItem;
 
 /** Good readings needed to learn a book. */
 export const BOOK_READINGS = 3;
@@ -126,13 +139,37 @@ const list: Item[] = [
   { id: 'bookJuggler', kind: 'book', name: t('Księga Magii Kuglarskiej', "Book of Juggler's Magic"), sell: 10, buy: 5, rare: true, teaches: [{ target: 'wil', amount: 5 }, { target: 'cha', amount: 5 }] },
   { id: 'bookStonemason', kind: 'book', name: t('Księga Kamieniarza', "Stonemason's Book"), sell: 10, buy: 5, rare: true, teaches: [{ target: 'mine', amount: 10 }] },
   { id: 'beastFur', kind: 'trinket', name: t('Futro bestii', 'Beast fur'), sell: 6, buy: 3, rare: false },
+  // The Mystic's scrolls, sold only in a city.
+  {
+    id: 'scrollFire', kind: 'scroll', spell: 'fire', power: 1, name: t('Zwój: Ognisty pocisk', 'Scroll: Fire bolt'), sell: 6, buy: 3, rare: false, cityOnly: true,
+    effect: t('W walce: test Walki, siła S+1, trafiony płonie (−1 Żyw. co rundę, 3 nieudane testy Siły = śmierć)', 'In a fight: Combat test, power S+1; the foe hit burns (−1 Vit a round, 3 failed Strength tests = death)'),
+  },
+  {
+    id: 'scrollTeleport', kind: 'scroll', spell: 'teleport', name: t('Zwój: Teleportacja', 'Scroll: Teleport'), sell: 7, buy: 3.5, rare: false, cityOnly: true,
+    effect: t('Przenosisz się na wybrany fragment do 2 pól stąd', 'You move to a fragment of your choice up to 2 steps away'),
+  },
+  {
+    id: 'scrollHeal', kind: 'scroll', spell: 'heal', name: t('Zwój: Uzdrowienie', 'Scroll: Healing'), sell: 8, buy: 4, rare: false, cityOnly: true,
+    effect: t('W pełni leczy Żywotność', 'Heals Vitality in full'),
+  },
+  {
+    id: 'scrollRenewal', kind: 'scroll', spell: 'renewal', name: t('Zwój: Odnowa', 'Scroll: Renewal'), sell: 7, buy: 3.5, rare: false, cityOnly: true,
+    effect: t('Usuwa wszystkie negatywne efekty', 'Removes every negative effect'),
+  },
+  {
+    id: 'scrollLightning', kind: 'scroll', spell: 'lightning', power: 3, name: t('Zwój: Błyskawica', 'Scroll: Lightning'), sell: 10, buy: 5, rare: false, cityOnly: true,
+    effect: t('W walce: test Walki, siła S+3', 'In a fight: Combat test, power S+3'),
+  },
 ];
+
+/** Scrolls the Mystic sells in a city. */
+export const SCROLLS = list.filter((i): i is ScrollItem => i.kind === 'scroll').map((i) => i.id);
 
 export const ITEMS: Record<string, Item> = Object.fromEntries(list.map((i) => [i.id, i]));
 
 /** What "a random item" from an event can be. */
 export const LOOT_COMMON = ['lifePotion', 'dagger', 'shortSword', 'leather-head', 'leather-arms', 'powerPotion', 'ring', 'bow'];
-export const LOOT_RARE = ['bigLifePotion', 'staminaPotion', 'speedPotion', 'necklace', 'longBow', 'iron-head', 'shield', 'twoHanded'];
+export const LOOT_RARE = ['bigLifePotion', 'staminaPotion', 'speedPotion', 'necklace', 'longBow', 'iron-head', 'shield', 'twoHanded', 'scrollFire'];
 
 /** What every hero starts with: a sword, a leather jerkin and greaves. */
 export const STARTING_KIT = { weapon: 'oneHanded', armour: ['leather-torso', 'leather-legs'] };

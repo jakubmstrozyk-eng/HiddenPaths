@@ -9,6 +9,7 @@ export * from './terrain';
 export * from './combat';
 export * from './cards';
 export * from './towns';
+export * from './scrolls';
 export { eventOptions, drawEvent, ALL_EVENT_IDS } from './events';
 export type { Change, Service, Side } from './state';
 export { OUTSIDE, SIDES } from './state';
