@@ -4,29 +4,66 @@ import { useT } from './i18n';
 import type { DiceLook } from '@hp/content';
 import type { DiceRoll } from './logText';
 import { diceVars } from './DiceFace';
+import { buzz, clack, ShakeToThrow, Verdict } from './Throw';
 
 const ROLL_MS = 900;
 
 /**
- * The dice tray: every die thrown by an action tumbles in from the side, bounces,
- * flickers through faces and lands on the engine's result. Tap anywhere to skip.
+ * The dice tray. A test waits in the player's hand: hold, shake and let go (or just click) to throw.
+ * Every die then tumbles, flickers through faces and lands on the engine's result, with Success! or Failure under it.
  */
 export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: () => void; dice?: DiceLook }) {
-  const { t } = useT();
-  const [landed, setLanded] = useState(false);
+  const { t, tx } = useT();
   const shown = rolls.slice(0, 6);
+  const [thrown, setThrown] = useState(() => !shown.some((r) => r.kind === 'd100'));
+  const [landed, setLanded] = useState(false);
   const total = ROLL_MS + shown.length * 120;
   const done = useRef(onDone);
   done.current = onDone;
 
   useEffect(() => {
-    const land = setTimeout(() => setLanded(true), total);
-    const finish = setTimeout(() => done.current(), total + 1100);
+    if (!thrown) return;
+    const land = setTimeout(() => {
+      setLanded(true);
+      clack(0.35, 60);
+      const tests = shown.filter((r) => r.kind === 'd100');
+      if (tests.length) buzz(tests.every((r) => r.success) ? [30, 40, 30] : 60);
+    }, total);
+    const finish = setTimeout(() => done.current(), total + 1600);
     return () => {
       clearTimeout(land);
       clearTimeout(finish);
     };
-  }, [total]);
+  }, [total, thrown]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!thrown) {
+    return (
+      <motion.div className="dice-tray ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <ShakeToThrow onThrow={() => setThrown(true)} hint={tx({ pl: 'Przytrzymaj kości, potrząśnij i puść', en: 'Hold the dice, shake and let go' })}>
+          {(shaking) => (
+            <span className="dice-row">
+              {shown.map((r, i) => (
+                <span className="dice-group" key={i}>
+                  <span className="dice-pair">
+                    {r.kind === 'd100' ? (
+                      <>
+                        <HeldDie sides={10} tens shaking={shaking} style={diceVars(dice, 'd100')} />
+                        <HeldDie sides={10} shaking={shaking} style={diceVars(dice, 'd10')} />
+                      </>
+                    ) : (
+                      <HeldDie sides={r.sides} shaking={shaking} style={r.sides === 10 ? diceVars(dice, 'd10') : r.sides <= 6 ? diceVars(dice, 'd6') : undefined} />
+                    )}
+                  </span>
+                  <small className="dice-label">{r.label}</small>
+                </span>
+              ))}
+            </span>
+          )}
+        </ShakeToThrow>
+        <button className="ghost small dice-skip-btn" onClick={onDone}>{t('tapToSkip')}</button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -54,14 +91,7 @@ export function DiceTray({ rolls, onDone, dice }: { rolls: DiceRoll[]; onDone: (
             <small className="dice-label">{r.label}</small>
             <AnimatePresence>
               {landed && r.kind === 'd100' && (
-                <motion.b
-                  className={`dice-verdict ${r.success ? 'ok' : 'bad'}`}
-                  initial={{ scale: 1.8, opacity: 0, rotate: -8 }}
-                  animate={{ scale: 1, opacity: 1, rotate: -4 }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 14 }}
-                >
-                  {r.value} / {r.target} · {r.success ? t('success') : t('failure')}
-                </motion.b>
+                <Verdict success={r.success} />
               )}
               {landed && r.kind === 'plain' && (
                 <motion.b className="dice-verdict" initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
@@ -109,7 +139,7 @@ function Die({ face, sides, tens, delay, style }: { face: string; sides: number;
     <motion.span
       className={`die d${sides} ${tens ? 'tens' : ''}`}
       style={style}
-      initial={{ x: '-70vw', y: -60, rotate: spin, scale: 0.7 }}
+      initial={{ x: (Math.random() - 0.5) * 80, y: -140, rotate: spin, scale: 1.2 }}
       animate={{ x: 0, y: [-60, 0, -26, 0, -8, 0], rotate: 0, scale: 1 }}
       transition={{
         delay,
@@ -122,4 +152,18 @@ function Die({ face, sides, tens, delay, style }: { face: string; sides: number;
       {shown}
     </motion.span>
   );
+}
+
+/** A die still in the hand: it shows "?" and spins with a flicker of faces while shaken. */
+function HeldDie({ sides, tens, shaking, style }: { sides: number; tens?: boolean; shaking: boolean; style?: React.CSSProperties }) {
+  const [face, setFace] = useState('?');
+  useEffect(() => {
+    if (!shaking) return setFace('?');
+    const timer = setInterval(() => {
+      const n = Math.floor(Math.random() * sides);
+      setFace(tens ? String(n * 10).padStart(2, '0') : String(sides === 10 ? n : n + 1));
+    }, 90);
+    return () => clearInterval(timer);
+  }, [shaking, sides, tens]);
+  return <span className={`die d${sides} ${tens ? 'tens' : ''} ${shaking ? 'shaking' : ''}`} style={style}>{face}</span>;
 }
