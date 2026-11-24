@@ -4,12 +4,13 @@ import {
   applyAction, createGame, currentPlayer, legalActions, neighbours, startCombat, strengthStep, worldView, Rng,
   type Action, type CharacterInput, type GameConfig, type GameState,
 } from '../src';
+import { onMap } from './helpers';
 
 const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter', 'scout'] };
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
 
 function game(seed = 'm2', config: GameConfig = solo): GameState {
-  return createGame(seed, config, [{ id: 'p1', character: hero }]);
+  return onMap(createGame(seed, config, [{ id: 'p1', character: hero }]));
 }
 
 /** Makes every test pass (98 is under every roll but 99 and 100). */

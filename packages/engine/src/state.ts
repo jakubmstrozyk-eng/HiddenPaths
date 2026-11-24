@@ -100,8 +100,16 @@ export interface GameState {
 /** Town services that cost gold or Stamina. */
 export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen';
 
+/** A side of the map, where a hero stands before stepping onto it. */
+export type Side = 'N' | 'E' | 'S' | 'W';
+export const SIDES: Side[] = ['N', 'E', 'S', 'W'];
+/** The position of a hero who has not stepped onto the map yet. */
+export const OUTSIDE = -1;
+
 export type Action =
   | { type: 'move'; to: number }
+  /** The first step: from the starting place outside the map onto the middle fragment of a side. */
+  | { type: 'enter'; side: Side }
   /** `research`: the Mystic's Researcher card, 1 more Stamina for a permanent +1 Intelligence. */
   | { type: 'camp'; research?: boolean }
   /** Play a skill card outside a fight. */

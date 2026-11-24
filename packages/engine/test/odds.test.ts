@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, fightOdds, foeDamage, startCombat, worldView } from '../src/index';
+import { onMap } from './helpers';
 
 describe('fight odds', () => {
-  const game = createGame('odds', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]);
+  const game = onMap(createGame('odds', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
+    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
   const me = game.players[0]!;
 
   it('gives the same estimate for the same fight and leaves the state alone', () => {
@@ -37,8 +38,8 @@ describe('random foes by level', () => {
 
 describe("Jacob's movement and fight rules", async () => {
   const { applyAction, legalActions, createGame: make, startCombat: begin, worldView: view, currentPlayer } = await import('../src/index');
-  const fresh = () => make('rules', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]);
+  const fresh = () => onMap(make('rules', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
+    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
 
   it('a step costs 1 Stamina as well as Speed, and needs it', () => {
     const g = fresh();
