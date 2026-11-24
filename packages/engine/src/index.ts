@@ -4,6 +4,7 @@ export * from './config';
 export * from './errors';
 export * from './mapgen';
 export * from './character';
+export * from './heroes';
 export * from './terrain';
 export * from './combat';
 export * from './cards';

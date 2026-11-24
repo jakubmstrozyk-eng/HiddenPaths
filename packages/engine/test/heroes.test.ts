@@ -1,0 +1,33 @@
+import { describe, expect, it } from 'vitest';
+import { createGame, heroCharacter, heroFits, validateHero, type NewHero } from '../src/index';
+
+const hero: NewHero = {
+  mode: 'solo', name: ' Ara ', race: 'keepers', profession: 'wraith', bonus: { dex: 10 },
+  look: { head: 2, torso: 1, legs: 0 }, dice: { d6: 'ruby', d10: 'gold', d100: 'void' },
+};
+
+describe('heroes', () => {
+  it('a hero is checked like a character and trimmed', () => {
+    expect(validateHero(hero).name).toBe('Ara');
+    expect(() => validateHero({ ...hero, profession: 'warrior' })).toThrow();
+    expect(() => validateHero({ ...hero, look: { head: 3, torso: 0, legs: 0 } })).toThrow();
+    expect(() => validateHero({ ...hero, dice: { d6: 'plaid', d10: 'gold', d100: 'void' } })).toThrow();
+    expect(() => validateHero({ ...hero, mode: 'both' as never })).toThrow();
+  });
+
+  it('single-player heroes play solo games only, multiplayer heroes multiplayer only', () => {
+    expect(heroFits({ mode: 'solo' }, false)).toBe(true);
+    expect(heroFits({ mode: 'solo' }, true)).toBe(false);
+    expect(heroFits({ mode: 'multi' }, true)).toBe(true);
+    expect(heroFits({ mode: 'multi' }, false)).toBe(false);
+  });
+
+  it('brings its look and dice into a game, with the missions chosen for that game', () => {
+    const g = createGame('h', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
+      [{ id: 'p', character: heroCharacter(validateHero(hero), ['hunter', 'scout']) }]);
+    const c = g.players[0]!.character;
+    expect(c.look).toEqual({ head: 2, torso: 1, legs: 0 });
+    expect(c.dice?.d100).toBe('void');
+    expect(c.missions).toEqual(['hunter', 'scout']);
+  });
+});

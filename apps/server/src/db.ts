@@ -100,6 +100,12 @@ create table if not exists invites (
   game_id uuid not null references games(id) on delete cascade,
   expires_at timestamptz not null
 );
+create table if not exists heroes (
+  id uuid primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);
 create table if not exists rewards (
   game_id uuid not null references games(id) on delete cascade,
   user_id uuid not null references users(id),

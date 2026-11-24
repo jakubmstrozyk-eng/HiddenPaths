@@ -1,6 +1,6 @@
 import {
-  ATTRIBUTES, MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
-  type Attributes, type ProfessionId, type RaceId, type SkillId,
+  ATTRIBUTES, DICE_STYLE_IDS, LOOK_OPTIONS, MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
 import type { Rng } from './rng';
@@ -18,6 +18,9 @@ export interface CharacterInput {
   bonus: Partial<Attributes>;
   /** The 2 missions kept out of the 4 drawn. */
   missions: string[];
+  /** How the hero looks and the dice they roll; only for show. */
+  look?: HeroLook;
+  dice?: DiceLook;
 }
 
 export interface Character {
@@ -39,6 +42,8 @@ export interface Character {
   skills: Partial<Record<SkillId, number>>;
   /** Attribute points from levelling up, not spent yet. */
   unspentPoints: number;
+  look?: HeroLook;
+  dice?: DiceLook;
 }
 
 /** Draws the 4 mission cards a new character chooses from. */
@@ -59,6 +64,17 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
     if (!(ATTRIBUTES as readonly string[]).includes(key)) throw new EngineError('character.bonus', `Unknown attribute ${key}.`);
     if (!Number.isInteger(value) || value! < 0) throw new EngineError('character.bonus', 'Bonus points must be whole and not negative.');
     spent += value!;
+  }
+  if (input.look) {
+    for (const part of ['head', 'torso', 'legs'] as const) {
+      const v = input.look[part];
+      if (!Number.isInteger(v) || v < 0 || v >= LOOK_OPTIONS) throw new EngineError('character.look', 'Unknown look.');
+    }
+  }
+  if (input.dice) {
+    for (const die of ['d6', 'd10', 'd100'] as const) {
+      if (!DICE_STYLE_IDS.includes(input.dice[die])) throw new EngineError('character.dice', 'Unknown dice style.');
+    }
   }
   if (spent > BONUS_POINTS) throw new EngineError('character.bonus', `Only ${BONUS_POINTS} bonus points can be spent.`);
   if (new Set(input.missions).size !== MISSIONS_KEPT) throw new EngineError('character.missions', `Keep exactly ${MISSIONS_KEPT} missions.`);
@@ -92,6 +108,8 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     equipment: { weapon: STARTING_KIT.weapon, armour: [...STARTING_KIT.armour], shield: false, rune: null },
     skills: {},
     unspentPoints: 0,
+    ...(input.look ? { look: { head: input.look.head, torso: input.look.torso, legs: input.look.legs } } : {}),
+    ...(input.dice ? { dice: { d6: input.dice.d6, d10: input.dice.d10, d100: input.dice.d100 } } : {}),
   };
 }
 

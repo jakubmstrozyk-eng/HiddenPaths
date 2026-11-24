@@ -8,3 +8,4 @@ export * from './equipment';
 export * from './enemies';
 export * from './eventTypes';
 export * from './events';
+export * from './looks';

@@ -164,7 +164,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
         <div className="duel-field">
           <div className={`side hero-side ${active === HERO ? 'active' : ''}`}>
             <motion.div className="avatar" animate={step?.kind === 'hit' && step.target === HERO ? { x: [0, -10, 8, -4, 0] } : { x: 0 }}>
-              <PixelHero race={c.race} size={72} />
+              <PixelHero race={c.race} profession={c.profession} look={c.look} size={72} />
             </motion.div>
             <b>{c.name}</b>
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>

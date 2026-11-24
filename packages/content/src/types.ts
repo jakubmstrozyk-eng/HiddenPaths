@@ -16,6 +16,8 @@ export interface Race {
   id: RaceId;
   name: Text;
   homeland: Region;
+  /** A few lines on the race and its land, from the "Rasy" chapter. */
+  blurb: Text;
   attributes: Attributes;
   speed: number;
   stamina: number;

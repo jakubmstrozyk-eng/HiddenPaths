@@ -184,3 +184,50 @@ describe('multiplayer', () => {
     expect((await app.inject({ method: 'POST', url: `/api/invites/${lobby.code}/join`, headers: as(g2), payload: { character: hero('G2') } })).statusCode).toBe(409);
   });
 });
+
+describe('heroes', () => {
+  const newHero = (mode: 'solo' | 'multi', name = 'Ara') => ({
+    mode, name, race: 'sunborn', profession: 'mystic', bonus: { int: 10 },
+    look: { head: 1, torso: 2, legs: 0 }, dice: { d6: 'ruby', d10: 'gold', d100: 'void' },
+  });
+
+  it('keeps heroes apart from games, and a hero plays several games at once', async () => {
+    const s = await signIn('heroes@x.io');
+    const made = await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } });
+    expect(made.statusCode).toBe(201);
+    const id = made.json().hero.id;
+    const list = (await app.inject({ method: 'GET', url: '/api/heroes', headers: as(s) })).json().heroes;
+    expect(list).toHaveLength(1);
+    expect(list[0].look).toEqual({ head: 1, torso: 2, legs: 0 });
+    for (const missions of [['hunter', 'scout'], ['hunter', 'scout']]) {
+      const g = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: id, missions } });
+      expect(g.statusCode).toBe(201);
+      const state: GameState = (await app.inject({ method: 'GET', url: `/api/games/${g.json().id}`, headers: as(s) })).json().state;
+      expect(state.players[0]!.character.name).toBe('Ara');
+      expect(state.players[0]!.character.dice?.d6).toBe('ruby');
+    }
+  });
+
+  it('a single-player hero cannot play multiplayer, and the other way round', async () => {
+    const s = await signIn('modes@x.io');
+    const soloHero = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
+    const multiHero = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('multi', 'Bo') } })).json().hero.id;
+    const a = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: soloHero, missions: ['hunter', 'scout'] } });
+    expect(a.statusCode).toBe(422);
+    expect(a.json().error).toBe('hero.mode');
+    const b = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: multiHero, missions: ['hunter', 'scout'] } });
+    expect(b.statusCode).toBe(422);
+    const c = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: multiHero, missions: ['hunter', 'scout'] } });
+    expect(c.statusCode).toBe(201);
+  });
+
+  it('refuses a broken hero and hides heroes from other players', async () => {
+    const s = await signIn('broken@x.io');
+    const bad = await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: { ...newHero('solo'), profession: 'warrior' } } });
+    expect(bad.statusCode).toBe(422);
+    const id = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
+    const other = await signIn('other@x.io');
+    const g = await app.inject({ method: 'POST', url: '/api/games', headers: as(other), payload: { config: solo, heroId: id, missions: ['hunter', 'scout'] } });
+    expect(g.statusCode).toBe(404);
+  });
+});
