@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ENEMIES, ITEMS, type DiceLook } from '@hp/content';
 import {
-  attacksPerTurn, combatMoves, fightOdds, foeDamage, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  attacksPerTurn, combatMoves, fightOdds, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
@@ -168,6 +168,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const potions = [...new Set(me.inventory.items.filter((i) => ITEMS[i]?.kind === 'potion'))];
   const busy = !!entries;
   const active = step?.who;
+  const strike = weaponStrike(weapon.id, locale);
+  // The hero's own blow: a lunge with a blade or axe, an arrow or bolt flying across with a bow.
+  const heroBlow = step?.kind === 'hit' && step.who === HERO && !step.card?.startsWith('trapper-trap') ? (weapon.ranged ? 'ranged' : 'melee') : null;
   const hitFx = step?.kind === 'hit'
     ? hitKind(step.who, combat.foes.find((f) => f.uid === step.who)?.enemy, { weaponId: weapon.id, weaponName: weapon.name.en, ranged: !!weapon.ranged }, step.card)
     : null;
@@ -193,9 +196,23 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
         </header>
 
         <div className="duel-field">
+          <AnimatePresence>
+            {heroBlow === 'ranged' && (
+              <motion.span key={`shot-${at}`} className="projectile" initial={{ left: '18%', opacity: 1 }} animate={{ left: '74%', opacity: [1, 1, 0] }} transition={{ duration: 0.35, ease: 'easeIn' }}>
+                <svg viewBox="0 0 60 12" width={60} height={12}><path d="M2 6 L48 6" stroke="#e8d0a0" strokeWidth={3} /><path d="M46 1 L58 6 L46 11 Z" fill="#dfe6f0" /><path d="M2 1 L8 6 L2 11" stroke="#ff8a7a" strokeWidth={2} fill="none" /></svg>
+              </motion.span>
+            )}
+          </AnimatePresence>
           <div className={`side hero-side ${active === HERO ? 'active' : ''}`}>
-            <motion.div className="avatar" animate={step?.kind === 'hit' && step.target === HERO ? { x: [0, -10, 8, -4, 0] } : { x: 0 }}>
-              <PixelHero race={c.race} profession={c.profession} look={c.look} size={72} />
+            <motion.div
+              className="avatar"
+              animate={step?.kind === 'hit' && step.target === HERO ? { x: [0, -10, 8, -4, 0] }
+                : heroBlow === 'melee' ? { x: [0, 70, 0], rotate: [0, 8, 0] }
+                : heroBlow === 'ranged' ? { x: [0, -8, 0] }
+                : { x: 0 }}
+              transition={{ duration: heroBlow ? 0.45 : 0.4 }}
+            >
+              <PixelHero race={c.race} profession={c.profession} look={c.look} size={72} gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }} />
             </motion.div>
             <b>{c.name}</b>
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
@@ -218,7 +235,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               )}
               {!busy && prompt && (
                 <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                  <TestTitle test={promptTest} target={promptTarget} who={`${c.name}${promptCard ? ` · ${cardName(promptCard, locale)}` : ''}`} />
+                  <TestTitle test={promptTest} target={promptTarget} who={`${c.name} · ${promptCard ? cardName(promptCard, locale) : prompt === 'attack' ? strike : t('flee')}`} />
                   <BigDie dice={c.dice} onTap={throwDie} />
                   <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
                 </motion.div>
@@ -260,7 +277,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               {t('winOdds')} ~{oddsPct}%{oddsPct < 50 ? ` · ${t('fleeHint')}` : ''} · {attacksPerTurn(me)} {t('attacksPerTurn')}
             </p>
             <div className="combat-moves">
-              <button className="primary with-icon" disabled={!chosen} onClick={() => setPrompt('attack')}><Icon name="sword" />{t('attack')}</button>
+              <button className="primary with-icon" disabled={!chosen} onClick={() => setPrompt('attack')}><Icon name={weapon.ranged ? 'hunt' : 'sword'} />{strike}</button>
               <button className="ghost with-icon" onClick={() => act({ type: 'combat', move: { move: 'parry' } })}><Icon name="shield" />{t('parry')}</button>
               <button className="ghost" onClick={() => act({ type: 'combat', move: { move: 'focus' } })}>{t('focus')}</button>
               <button className="ghost" onClick={() => setPrompt('flee')}>{t('flee')}</button>
@@ -275,6 +292,16 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
       </motion.section>
     </div>
   );
+}
+
+/** The attack button named for the weapon in hand. */
+function weaponStrike(id: string, locale: string): string {
+  const pl = locale === 'pl';
+  if (id === 'dagger') return pl ? 'Pchnięcie sztyletem' : 'Dagger thrust';
+  if (id === 'twoHanded' || id === 'minotaurAxe') return pl ? 'Cios toporem' : 'Axe blow';
+  if (id === 'bow' || id === 'longBow') return pl ? 'Strzał z łuku' : 'Bow shot';
+  if (id === 'crossbow') return pl ? 'Strzał z kuszy' : 'Crossbow shot';
+  return pl ? 'Atak mieczem' : 'Sword strike';
 }
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));

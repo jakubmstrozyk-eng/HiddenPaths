@@ -18,6 +18,7 @@ import { SaveDialog } from './Saves';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { SkillHand } from '../SkillCards';
+import { CardCastHost } from '../CardArt';
 
 /** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
 const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W', flintborn: 'N', nomads: 'N', myrmids: 'E' };
@@ -449,6 +450,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
       {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
+      <CardCastHost />
     </div>
   );
 }

@@ -443,7 +443,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .duel-centre.empty { min-height: 0; }
 @media (max-width: 600px) { .duel-centre.empty { display: none; } }
 .hand { margin-top: 10px; }
-.card-name { font-size: 10px; overflow-wrap: anywhere; hyphens: auto; max-width: 100%; }
+.card-name { font-size: 10px; overflow-wrap: normal; word-break: normal; hyphens: manual; max-width: 100%; letter-spacing: -0.01em; }
+.hand.compact .card-face:not(.large) .card-name { font-size: 9px; }
 .card-face:not(.large) .card-art { max-height: 46px; }
 
 /* Heroes */
@@ -710,3 +711,19 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .target-shield.big span { font-size: 28px; }
 .conditions-note { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .condition-tag { font-size: 12px; padding: 3px 8px; background: rgba(255, 106, 90, 0.15); border: 1px solid #ff8a7a; color: #ffd0c8; }
+
+/* The hero's arrow or bolt crossing the field. */
+.duel-field { position: relative; }
+.projectile { position: absolute; top: 34%; z-index: 4; pointer-events: none; filter: drop-shadow(0 0 6px #ffe066); }
+
+/* Skill card pictures and the show when a card is played. */
+.card-art { display: grid; place-items: center; }
+.card-art-svg { display: block; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)); }
+.card-cast { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle, rgba(0, 0, 0, 0.45), transparent 60%); }
+.card-cast-card {
+  position: relative; display: grid; justify-items: center; gap: 10px; padding: 22px 26px 18px; min-width: 190px;
+  background: linear-gradient(160deg, #2a2050, #120c22); border: 2px solid var(--glow); box-shadow: 0 0 40px var(--glow);
+}
+.card-cast-card b { font: 700 18px var(--display); color: var(--ink); text-align: center; }
+.card-cast-ring { position: absolute; left: 50%; top: 42%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 4px solid var(--glow); }
+@media (prefers-reduced-motion: reduce) { .card-cast-ring { display: none; } }
