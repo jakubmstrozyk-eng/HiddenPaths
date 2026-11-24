@@ -522,3 +522,35 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .swatch:hover { transform: scale(1.12); }
 .swatch.active { box-shadow: 0 0 0 2px var(--tile), 0 0 12px rgba(255, 255, 255, 0.5); }
 .die-face { display: block; }
+
+/* Saves */
+.save-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.save-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); text-align: left; }
+.save-row.pickable { cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+.save-row.pickable:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.4); }
+.save-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.save-body b { display: flex; align-items: center; gap: 8px; }
+.save-body small { color: var(--muted); font-size: 12px; }
+.mode-badge.auto { background: #4a4a6a; color: #fff; }
+.save-done { color: #6ef0a0; margin: 8px 0 0; }
+.save-error { color: #ff8a7a; margin: 8px 0 0; }
+
+/* New game: map sizes drawn to scale, difficulty by colour */
+.size-preview { display: grid; gap: 2px; margin: 4px 0 6px; }
+.size-preview i { aspect-ratio: 1; background: rgba(143, 123, 255, 0.35); }
+.choice.active .size-preview i { background: #2a2050; }
+.choice.diff { border-left: 6px solid var(--diff); }
+.choice.diff.active { background: var(--diff); border-color: var(--diff); color: #0a0814; }
+.choice.diff strong { color: var(--diff); }
+.choice.diff.active strong { color: #0a0814; }
+
+/* Phones: a bigger board, a smaller hand of cards, and tiles told apart by their pictures */
+@media (max-width: 560px) {
+  .board-wrap { min-height: min(96vw, 58vh); }
+  .hand { min-height: 90px; }
+  .hand .card-face:not(.large) { width: 58px; height: 82px; padding: 6px 4px 5px; }
+  .hand .card-face:not(.large) .card-art { max-height: 30px; }
+  .hand .card-face:not(.large) .card-name { font-size: 8px; }
+  .frag-name { display: none; }
+  .gate small { display: none; }
+}

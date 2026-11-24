@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SIZE_PRESETS, type Difficulty, type GameConfig, type SizePreset, type WinMode } from '@hp/engine';
+import { DIFFICULTIES, SIZE_PRESETS, type Difficulty, type GameConfig, type SizePreset, type WinMode } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
 
 export function SetupScreen({ onBack, onNext, multiplayer = false }: {
@@ -7,7 +7,7 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
   onNext: (c: GameConfig, maxPlayers: number) => void;
   multiplayer?: boolean;
 }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const [players, setPlayers] = useState(2);
   const [size, setSize] = useState<SizePreset>('short');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -34,6 +34,9 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
           const { width, height } = SIZE_PRESETS[s];
           return (
             <Choice key={s} active={size === s} onClick={() => setSize(s)} title={t(s)}>
+              <span className="size-preview" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, width: 14 * width }} aria-hidden="true">
+                {Array.from({ length: width * height }, (_, i) => <i key={i} />)}
+              </span>
               {width * height} {t('fragments')} · {width}×{height}
             </Choice>
           );
@@ -43,7 +46,9 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
       <h3>{t('difficulty')}</h3>
       <div className="choices">
         {(['easy', 'normal', 'hard', 'nightmare'] as Difficulty[]).map((d) => (
-          <Choice key={d} active={difficulty === d} onClick={() => setDifficulty(d)} title={t(d)} />
+          <Choice key={d} active={difficulty === d} onClick={() => setDifficulty(d)} title={t(d)} className="diff" style={{ ['--diff' as string]: DIFF_COLOUR[d] }}>
+            {diffNote(d, locale)}
+          </Choice>
         ))}
       </div>
 
@@ -66,9 +71,24 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
   );
 }
 
-export function Choice(props: { active: boolean; onClick: () => void; title: string; children?: React.ReactNode }) {
+const DIFF_COLOUR: Record<Difficulty, string> = { easy: '#6ed08a', normal: '#7fb8ff', hard: '#ffb347', nightmare: '#ff5a5a' };
+
+/** What each difficulty changes, read from the engine's own settings. */
+function diffNote(d: Difficulty, locale: string) {
+  const s = DIFFICULTIES[d];
+  const pl = locale === 'pl';
+  const parts = [
+    s.testModifier ? `${pl ? 'testy' : 'tests'} ${s.testModifier > 0 ? '+' : ''}${s.testModifier}` : null,
+    `${pl ? 'wrogowie' : 'foes'} ${Math.round(s.enemyVitality * 100)}% ${pl ? 'Żyw' : 'Vit'}`,
+    `${pl ? 'start' : 'start'}: ${s.startFood} ${pl ? 'jedz.' : 'food'}`,
+    `PD ×${s.xp}`,
+  ];
+  return parts.filter(Boolean).join(' · ');
+}
+
+export function Choice(props: { active: boolean; onClick: () => void; title: string; children?: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <button className={`choice ${props.active ? 'active' : ''}`} aria-pressed={props.active} onClick={props.onClick}>
+    <button className={`choice ${props.className ?? ''} ${props.active ? 'active' : ''}`} style={props.style} aria-pressed={props.active} onClick={props.onClick}>
       <strong>{props.title}</strong>
       {props.children && <small>{props.children}</small>}
     </button>

@@ -9,6 +9,8 @@ import { SetupScreen } from './screens/Setup';
 import { CreateHeroScreen, HeroPickScreen, HeroesScreen } from './screens/Heroes';
 import { deviceHeroes, serverHeroes } from './heroStore';
 import { GameScreen } from './screens/Game';
+import { SavesScreen } from './screens/Saves';
+import { autosave, listSaves } from './saves';
 import { AccountScreen, GamesScreen, MultiplayerScreen, OnlineGame, SignInScreen } from './screens/Online';
 
 type Screen =
@@ -18,34 +20,15 @@ type Screen =
   | { name: 'heroes' }
   | { name: 'createHero'; mode?: 'solo' | 'multi'; then?: Screen }
   | { name: 'game'; game: GameState }
+  | { name: 'saves' }
   | { name: 'signin'; then: Screen }
   | { name: 'games' }
   | { name: 'multi'; code?: string }
   | { name: 'online'; id: string }
   | { name: 'account' };
 
-const SAVE_KEY = 'hidden-paths.save';
 /** Where to go after the emailed sign-in link brings the player back. */
 const AFTER_KEY = 'hidden-paths.after';
-
-function loadSave(): GameState | null {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    const game = raw ? (JSON.parse(raw) as GameState) : null;
-    // Saves from before event cards and combat lack the newer fields; start fresh.
-    return game && Array.isArray(game.eventDeck) && typeof game.logSeq === 'number' ? game : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSave(game: GameState) {
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(game));
-  } catch {
-    /* storage can be unavailable; the game still runs */
-  }
-}
 
 function remember(key: string, value: string | null) {
   try {
@@ -95,7 +78,7 @@ function takeParams() {
 export function App() {
   const [locale, setLocale] = useState<Locale>(() => (navigator.language.startsWith('pl') ? 'pl' : 'en'));
   const [screen, setScreen] = useState<Screen>({ name: 'menu' });
-  const [save, setSave] = useState<GameState | null>(loadSave);
+  const [hasSave, setHasSave] = useState(() => listSaves().length > 0);
   /** null while checking; false in a copy without a server, which plays solo games on this device. */
   const [online, setOnline] = useState<boolean | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -155,8 +138,8 @@ export function App() {
   };
 
   const play = (game: GameState) => {
-    writeSave(game);
-    setSave(game);
+    autosave(game);
+    setHasSave(true);
     setScreen({ name: 'game', game });
   };
 
@@ -199,9 +182,9 @@ export function App() {
                 key="menu"
                 online={online}
                 me={me}
-                hasSave={!!save}
+                hasSave={hasSave}
                 onNew={() => go({ name: 'setup', multi: false })}
-                onContinue={() => (online ? go({ name: 'games' }) : save && setScreen({ name: 'game', game: save }))}
+                onContinue={() => (online ? go({ name: 'games' }) : setScreen({ name: 'saves' }))}
                 onMulti={() => go({ name: 'multi' })}
                 onAccount={() => go({ name: 'account' })}
                 onHeroes={() => go({ name: 'heroes' })}
@@ -254,11 +237,20 @@ export function App() {
                 <GameScreen
                   game={screen.game}
                   onChange={(g) => {
-                    writeSave(g);
-                    setSave(g);
+                    autosave(g);
                     setScreen({ name: 'game', game: g });
                   }}
-                  onMenu={() => setScreen({ name: 'menu' })}
+                  canSave
+                  onMenu={() => { setHasSave(listSaves().length > 0); setScreen({ name: 'menu' }); }}
+                  onNew={() => setScreen({ name: 'setup', multi: false })}
+                />
+              </Opened>
+            )}
+            {screen.name === 'saves' && (
+              <Opened key="saves" tile="continue">
+                <SavesScreen
+                  onBack={() => { setHasSave(listSaves().length > 0); setScreen({ name: 'menu' }); }}
+                  onOpen={(game) => setScreen({ name: 'game', game })}
                   onNew={() => setScreen({ name: 'setup', multi: false })}
                 />
               </Opened>

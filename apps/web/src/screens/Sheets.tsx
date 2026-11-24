@@ -9,7 +9,7 @@ import { useT } from '../i18n';
 import { attrShort, itemName } from '../logText';
 import { Icon } from '../Icons';
 
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { t } = useT();
   return (
     <div className="overlay sheet-overlay" onClick={onClose}>
