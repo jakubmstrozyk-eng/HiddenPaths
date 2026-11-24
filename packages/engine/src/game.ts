@@ -1,5 +1,6 @@
 import { BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
 import { createCharacter, spendPoints } from './character';
+import { playCard, playableCards, refreshCards } from './cards';
 import { combatMoves, combatTurn, drinkPotion, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { test } from './dice';
@@ -92,6 +93,12 @@ function canCamp(state: GameState, player: PlayerState): { ok: boolean; cost: nu
   return { ok: player.staminaLeft >= cost, cost };
 }
 
+/** Researcher: the Mystic may spend 1 more Stamina at camp to study, for a permanent +1 Intelligence. */
+function canResearch(state: GameState, player: PlayerState): boolean {
+  const { ok, cost } = canCamp(state, player);
+  return ok && player.character.cards.includes('mystic-researcher') && player.staminaLeft >= cost + 1;
+}
+
 const readKey = (state: GameState, item: string) => `read:${item}@${state.round}`;
 
 /** Everything the player may do right now. The app builds its buttons from this list. */
@@ -108,7 +115,11 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     if (moveCost(state, n) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
   for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
-  if (canCamp(state, player).ok) actions.push({ type: 'camp' });
+  if (canCamp(state, player).ok) {
+    actions.push({ type: 'camp' });
+    if (canResearch(state, player)) actions.push({ type: 'camp', research: true });
+  }
+  for (const card of playableCards(state, player)) actions.push({ type: 'card', card });
   for (const service of availableServices(state, player)) actions.push({ type: 'service', service });
   for (const to of portalTargets(state, player)) actions.push({ type: 'portal', to });
   for (const item of ['food', ...shopStock(state, player)]) {
@@ -161,7 +172,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       player.cameFrom = player.position;
       player.position = action.to;
       const terrain = state.map.cells[action.to]!.terrain;
-      if (reveal(state, player, action.to) && drawsEvent(terrain)) {
+      if (reveal(state, player, action.to, rng) && drawsEvent(terrain)) {
         const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
         if (card !== null) startEvent(state, player, card);
       }
@@ -170,7 +181,14 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     case 'camp': {
       const { ok, cost } = canCamp(state, player);
       if (!ok) throw new EngineError('camp.notHere', 'You cannot camp here.');
+      if (action.research && !canResearch(state, player)) throw new EngineError('card.notNow', 'You cannot study here.');
       player.staminaLeft -= cost;
+      if (action.research) {
+        player.staminaLeft -= 1;
+        player.character.attributes.int += 1;
+        log(state, { type: 'card', player: player.id, card: 'mystic-researcher', ok: true, amount: 1 });
+      }
+      refreshCards(player);
       const healed = Math.min(2, player.character.maxVitality - player.character.vitality);
       player.character.vitality += healed;
       player.actionsSinceCamp = 0;
@@ -188,6 +206,9 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       break;
     case 'combat':
       fight(state, player, rng, action.move);
+      break;
+    case 'card':
+      playCard(state, player, action.card);
       break;
     case 'service':
       useService(state, player, rng, action.service);

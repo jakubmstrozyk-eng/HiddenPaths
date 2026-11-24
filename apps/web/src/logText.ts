@@ -1,4 +1,4 @@
-import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, type Attribute, type Locale, type Text } from '@hp/content';
+import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, PROFESSIONS, type Attribute, type Locale, type Text } from '@hp/content';
 import type { LogEntry } from '@hp/engine';
 import type { useT } from './i18n';
 
@@ -20,6 +20,14 @@ export function itemName(id: string, locale: Locale): string {
   if (id === 'food') return locale === 'pl' ? 'Pożywienie' : 'Food';
   const t = ITEMS[id]?.name ?? MATERIALS[id as keyof typeof MATERIALS]?.name ?? HERBS[id as keyof typeof HERBS]?.name;
   return t ? t[locale] : id;
+}
+
+export function cardName(id: string, locale: Locale): string {
+  for (const prof of Object.values(PROFESSIONS)) {
+    const card = prof.cards.find((c) => c.id === id);
+    if (card) return card.name[locale];
+  }
+  return id;
 }
 
 export function foeName(uid: string, locale: Locale): string {
@@ -99,7 +107,9 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
     case 'traded':
       return `${e.bought ? '−' : '+'}${fmt(e.gold)} ${t('gold').toLowerCase()} · ${itemName(e.item, locale)}`;
     case 'test':
-      return `${tx({ pl: 'Test', en: 'Test' })} ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}${e.gained.length ? ` · ${e.gained.map((g) => g.split(':').slice(-1)[0]).join(', ')}` : ''}`;
+      return `${e.rerolled ? `${cardName(e.rerolled, locale)} ↻ · ` : ''}${tx({ pl: 'Test', en: 'Test' })} ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}${e.gained.length ? ` · ${e.gained.map((g) => g.split(':').slice(-1)[0]).join(', ')}` : ''}`;
+    case 'card':
+      return cardLine(e.card, e, locale);
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:
@@ -110,13 +120,19 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
 export function combatLine(e: LogEntry, T: T): string | null {
   if (e.type !== 'combat') return describe(e, T);
   const { t, locale } = T;
+  const pl = locale === 'pl';
   const ev = e.event;
   switch (ev.type) {
     case 'strike': {
       const by = ev.by === 'hero' ? t('you') : foeName(ev.by, locale);
       const on = ev.target === 'hero' ? t('you').toLowerCase() : foeName(ev.target, locale);
-      if (!ev.result.success) return `${by} → ${on}: ${t('miss')} (${ev.result.roll}/${ev.result.target})`;
+      const tag = ev.card ? `${cardName(ev.card, locale)} · ` : '';
+      if (ev.dodged) return `${tag}${on}: ${pl ? 'unik' : 'dodged'} (${ev.dodge!.roll}/${ev.dodge!.target})`;
+      if (!ev.result.success) return `${tag}${by} → ${on}: ${t('miss')} (${ev.result.roll}/${ev.result.target})`;
       if (ev.parried) return `${by} → ${on}: ${t('parried')}`;
+      if (ev.blocked) return `${by} → ${on}: ${pl ? 'bariera zatrzymuje cios' : 'the barrier stops the blow'}`;
+      if (ev.barrier) return `${by} → ${on}: ${pl ? 'przebija barierę' : 'breaks the barrier'}, −${ev.damage ?? 0}`;
+      if (ev.card) return `${tag}${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
       return `${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
     }
     case 'flee': return ev.success ? t('fled') : `${t('flee')}: ${t('failure')}`;
@@ -127,5 +143,23 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'foeDown': return `${foeName(ev.uid, locale)} ✕`;
     case 'poisoned': return locale === 'pl' ? 'Trucizna!' : 'Poisoned!';
     case 'bleed': return `${foeName(ev.uid, locale)} −${ev.damage}`;
+    case 'trap': return `${cardName('trapper-trap', locale)}: ${foeName(ev.uid, locale)} ${ev.damage ? `−${ev.damage}` : pl ? 'unika' : 'dodges'}`;
+    case 'barrier': return `${cardName('mystic-barrier', locale)}: ${ev.result.success ? (pl ? 'stoi' : 'raised') : t('failure')}`;
+    case 'card': return cardLine(ev.card, ev, locale);
+  }
+}
+
+function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: number }, locale: Locale): string {
+  const pl = locale === 'pl';
+  const name = cardName(card, locale);
+  switch (card) {
+    case 'mystic-seer': return e.ok ? `${name}: ${pl ? 'wizja! +10 do cech w tej rundzie' : 'a vision! +10 to all attributes this round'}` : `${name}: k6 = ${e.roll}`;
+    case 'wraith-haste': return `${name}: +1 ${pl ? 'Szybkości' : 'Speed'}`;
+    case 'wraith-leaves': return `${name}: +${e.amount ?? 0} ${pl ? 'Żyw.' : 'Vit'}`;
+    case 'warrior-rations': return `${name}: +5 ${pl ? 'Walki i Siły' : 'Combat and Strength'}`;
+    case 'warrior-veteran': return `${name}: +1 ${pl ? 'PD' : 'XP'}`;
+    case 'mystic-researcher': return `${name}: +1 Int`;
+    case 'trapper-trap': return `${name}: ${pl ? 'pułapka zastawiona' : 'trap set'}`;
+    default: return name;
   }
 }

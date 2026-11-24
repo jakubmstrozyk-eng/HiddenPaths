@@ -6,6 +6,7 @@ import { DIFFICULTIES } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
 import { Rng as RngCtor, type Rng } from './rng';
+import { eatRations, useLeaves, usesLeft } from './cards';
 import { effectBonus, itemBonus, testModifier, type ActorState, type WorldView } from './terrain';
 
 /** One foe in a fight. */
@@ -37,6 +38,8 @@ export interface CombatState {
   onWin: Outcome[];
   /** The event card the fight came from, so its script can continue after a win. */
   card?: number;
+  /** Mystic's Barrier: up until a foe's blow lands on it. */
+  barrier?: boolean;
 }
 
 export type CombatMove =
@@ -44,10 +47,24 @@ export type CombatMove =
   | { move: 'parry' }
   | { move: 'focus' }
   | { move: 'flee' }
-  | { move: 'potion'; item: string };
+  | { move: 'potion'; item: string }
+  /** A skill card played as the hero's move; `target` for the attacking cards. */
+  | { move: 'card'; card: string; target?: string };
 
 export type CombatEvent =
-  | { type: 'strike'; by: string; target: string; result: TestResult; location?: ArmourSlot; damage?: number; parry?: TestResult; parried?: boolean }
+  | {
+    type: 'strike'; by: string; target: string; result: TestResult; location?: ArmourSlot; damage?: number;
+    parry?: TestResult; parried?: boolean;
+    /** The skill card behind the hero's strike. */
+    card?: string;
+    /** Whirling Axe: the foe's Dexterity roll to get out of the way. */
+    dodge?: TestResult; dodged?: boolean;
+    /** Barrier: the foe's Strength roll to break through; `blocked` when it failed. */
+    barrier?: TestResult; blocked?: boolean;
+  }
+  | { type: 'trap'; uid: string; result: TestResult; damage: number }
+  | { type: 'barrier'; result: TestResult }
+  | { type: 'card'; card: string; amount?: number }
   | { type: 'flee'; success: boolean; hero: TestResult; foe: TestResult }
   | { type: 'focus' }
   | { type: 'stunned'; who: string }
@@ -101,6 +118,17 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   const moves: CombatMove[] = combat.foes.filter((f) => f.vitality > 0).map((f) => ({ move: 'attack', target: f.uid }));
   moves.push({ move: 'parry' }, { move: 'focus' }, { move: 'flee' });
   for (const id of new Set(actor.inventory.items)) if (ITEMS[id]?.kind === 'potion') moves.push({ move: 'potion', item: id });
+  const cards = actor.character.cards ?? [];
+  const target = moves.find((m) => m.move === 'attack') as { target: string } | undefined;
+  if (target) {
+    for (const card of ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe']) {
+      if (cards.includes(card)) moves.push({ move: 'card', card, target: target.target });
+    }
+  }
+  if (cards.includes('mystic-barrier') && !combat.barrier) moves.push({ move: 'card', card: 'mystic-barrier' });
+  for (const card of ['warrior-rations', 'wraith-leaves']) {
+    if (cards.includes(card) && (usesLeft(actor, card) ?? 0) > 0) moves.push({ move: 'card', card });
+  }
   return moves;
 }
 
@@ -145,6 +173,48 @@ export function combatTurn(
   if (move.move === 'attack' && !alive().some((f) => f.uid === move.target)) {
     throw new EngineError('combat.target', 'That foe is not in the fight.');
   }
+  if (move.move === 'card' && !combatMoves(actor, combat).some((m) => m.move === 'card' && m.card === move.card)) {
+    throw new EngineError('card.notNow', 'You cannot play that card now.');
+  }
+  const cards = actor.character.cards ?? [];
+
+  /** One blow of the hero at a foe, with the skill cards that shape it. */
+  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean } = {}) => {
+    const enemy = ENEMIES[target.enemy]!;
+    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0);
+    const result = test(rng, attrs.com, testModifier(world, actor, 'com', mod, enemy.kind));
+    const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}) };
+    if (!result.success) {
+      events.push(base);
+      return;
+    }
+    let dodge: TestResult | undefined;
+    if (opts.dodge) {
+      dodge = test(rng, enemy.dex);
+      if (dodge.success) {
+        events.push({ ...base, dodge, dodged: true });
+        return;
+      }
+    }
+    const location = hitLocation(rng, result.margin, enemy.armour);
+    const armour = enemy.armour[location] ?? 0;
+    // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
+    const critical = cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
+    // Precise Shot: a longbow hit that beat the target by 15 or more deals +2.
+    const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
+    let damage = strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
+      + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
+      + critical + precise + (opts.bonus ?? 0) - armour;
+    if (enemy.traits.includes('ethereal') && !rune) damage = Math.floor(damage / 2);
+    damage = Math.max(0, damage);
+    target.vitality -= damage;
+    target.hits++;
+    if (rune === 'venom' || opts.poison) target.poisoned = true;
+    if (rune === 'stunning' && target.hits % 3 === 0) target.stunned = true;
+    events.push({ ...base, location, damage, ...(dodge ? { dodge } : {}) });
+    if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+  };
+  const targetOf = (uid?: string) => alive().find((f) => f.uid === uid) ?? alive()[0];
   if (move.move === 'potion' && !actor.inventory.items.includes(move.item)) {
     throw new EngineError('combat.item', 'You do not carry that.');
   }
@@ -185,31 +255,50 @@ export function combatTurn(
         }
         const swings = attacksPerTurn(actor);
         for (let i = 0; i < swings; i++) {
-          const target = alive().find((f) => f.uid === move.target) ?? alive()[0];
+          const target = targetOf(move.target);
           if (!target) break;
-          const enemy = ENEMIES[target.enemy]!;
-          const mod = focus + (rune === 'precise' ? 5 : 0);
-          const result = test(rng, attrs.com, testModifier(world, actor, 'com', mod, enemy.kind));
-          if (!result.success) {
-            events.push({ type: 'strike', by: HERO, target: target.uid, result });
-            continue;
-          }
-          const location = hitLocation(rng, result.margin, enemy.armour);
-          const armour = enemy.armour[location] ?? 0;
-          let damage = strengthStep(attrs.str) + weapon.power + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
-            + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0) - armour;
-          if (enemy.traits.includes('ethereal') && !rune) damage = Math.floor(damage / 2);
-          damage = Math.max(0, damage);
-          target.vitality -= damage;
-          target.hits++;
-          if (rune === 'venom') target.poisoned = true;
-          if (rune === 'stunning' && target.hits % 3 === 0) target.stunned = true;
-          events.push({ type: 'strike', by: HERO, target: target.uid, result, location, damage });
-          if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+          swing(target);
         }
         if (weapon.reload) combat.reloading = true;
         break;
       }
+      case 'card':
+        switch (move.card) {
+          case 'warrior-heavy-swing': {
+            // Heavy Swing: Combat -10, damage +4, on every blow of the move.
+            const swings = attacksPerTurn(actor);
+            for (let i = 0; i < swings; i++) {
+              const target = targetOf(move.target);
+              if (!target) break;
+              swing(target, { mod: -10, bonus: 4, card: move.card });
+            }
+            break;
+          }
+          case 'diver-blowpipe': {
+            // Blowpipe: one poisoned dart (S-2); a hit poisons the foe.
+            const target = targetOf(move.target);
+            if (target) swing(target, { power: -2, poison: true, card: move.card });
+            break;
+          }
+          case 'cavedelver-whirling-axe':
+            // Whirling Axe: a separate Combat test against each foe, up to 3; each may dodge with Dexterity.
+            for (const target of alive().slice(0, 3)) swing(target, { dodge: true, card: move.card });
+            break;
+          case 'mystic-barrier': {
+            const result = test(rng, attrs.int, testModifier(world, actor, 'int', focus));
+            if (result.success) combat.barrier = true;
+            events.push({ type: 'barrier', result });
+            break;
+          }
+          case 'warrior-rations':
+            eatRations(world.round, actor);
+            events.push({ type: 'card', card: move.card });
+            break;
+          case 'wraith-leaves':
+            events.push({ type: 'card', card: move.card, amount: useLeaves(actor) });
+            break;
+        }
+        break;
     }
   };
 
@@ -239,10 +328,21 @@ export function combatTurn(
     }
     const armour = heroArmour(actor);
     const location = hitLocation(rng, result.margin, armour);
-    const damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0)
+    let damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0)
       + damageDie(rng, enemy.traits.includes('penetrating')) - armour[location]);
+    // Barrier: the blow must break through on a Strength test, and then deals half; either way the barrier is gone.
+    let barrier: TestResult | undefined;
+    if (combat.barrier) {
+      combat.barrier = false;
+      barrier = test(rng, enemy.str);
+      if (!barrier.success) {
+        events.push({ type: 'strike', by: foe.uid, target: HERO, result, barrier, blocked: true });
+        return;
+      }
+      damage = Math.floor(damage / 2);
+    }
     actor.character.vitality -= damage;
-    events.push({ type: 'strike', by: foe.uid, target: HERO, result, location, damage });
+    events.push({ type: 'strike', by: foe.uid, target: HERO, result, location, damage, ...(barrier ? { barrier } : {}) });
     if (enemy.traits.includes('poison') || sting) {
       addCondition(actor, 'poison', { pl: 'Zatrucie', en: 'Poisoned' }, 'str', 1);
       events.push({ type: 'poisoned', who: HERO, condition: 'poison' });
