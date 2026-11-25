@@ -56,19 +56,26 @@ export interface CombatState {
 }
 
 export type CombatMove =
-  | { move: 'attack'; target: string }
+  /** `aim`: the spot the hero goes for; it is hit when the Combat test passes by more than 20. */
+  | { move: 'attack'; target: string; aim?: ArmourSlot }
   | { move: 'parry' }
   | { move: 'focus' }
   | { move: 'flee' }
   | { move: 'potion'; item: string }
   /** A magic scroll: Fire bolt and Lightning at a foe, Healing and Renewal on the hero. */
-  | { move: 'scroll'; item: string; target?: string }
+  | { move: 'scroll'; item: string; target?: string; aim?: ArmourSlot }
   /** A skill card played as the hero's move; `target` for the attacking cards. */
-  | { move: 'card'; card: string; target?: string };
+  | { move: 'card'; card: string; target?: string; aim?: ArmourSlot };
 
 export type CombatEvent =
   | {
     type: 'strike'; by: string; target: string; result: TestResult; location?: ArmourSlot; damage?: number;
+    /** The k6 for the hit location (1 head, 2 left arm, 3 right arm, 4 torso, 5 left leg, 6 right leg); absent when the striker chose the spot. */
+    locationRoll?: number;
+    /** The striker chose where to hit: the test passed by more than 20. */
+    aimed?: boolean;
+    /** The k6 added to the weapon's strength, and the armour on the spot hit that took it off. */
+    damageRoll?: number; armour?: number;
     parry?: TestResult; parried?: boolean;
     /** The skill card behind the hero's strike. */
     card?: string;
@@ -193,12 +200,21 @@ export const canTame = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
 /** Charisma tests passed that make a tamed beast stay for good. */
 export const BOND_NEEDED = 3;
 
-/** Where a hit lands: a strike that passed by more than 20 picks the least armoured spot, otherwise a d6 decides. */
-function hitLocation(rng: Rng, margin: number, armour: Partial<Record<ArmourSlot, number>>): ArmourSlot {
-  if (margin > 20) {
-    return (['torso', 'head', 'arms', 'legs'] as ArmourSlot[]).reduce((best, s) => ((armour[s] ?? 0) < (armour[best] ?? 0) ? s : best), 'torso');
-  }
-  return HIT_LOCATIONS[rng.die(6) - 1]!;
+/** Margin over the Combat target past which the striker picks where the blow lands ("Walka!", d. Atak). */
+export const AIM_MARGIN = 20;
+
+/** The spot with the least armour, torso first on a tie. */
+export const weakestSpot = (armour: Partial<Record<ArmourSlot, number>>): ArmourSlot =>
+  (['torso', 'head', 'arms', 'legs'] as ArmourSlot[]).reduce((best, s) => ((armour[s] ?? 0) < (armour[best] ?? 0) ? s : best), 'torso');
+
+/**
+ * Where a hit lands: a strike that passed by more than 20 goes where the striker aims
+ * (the weakest spot when nothing was chosen), otherwise a k6 decides.
+ */
+function hitLocation(rng: Rng, margin: number, armour: Partial<Record<ArmourSlot, number>>, aim?: ArmourSlot): { location: ArmourSlot; locationRoll?: number; aimed?: boolean } {
+  if (margin > AIM_MARGIN) return { location: aim ?? weakestSpot(armour), aimed: true };
+  const locationRoll = rng.die(6);
+  return { location: HIT_LOCATIONS[locationRoll - 1]!, locationRoll };
 }
 
 function damageDie(rng: Rng, penetrating: boolean): number {
@@ -242,6 +258,8 @@ export function combatTurn(
   const cards = actor.character.cards ?? [];
 
   /** One blow of the hero at a foe, with the skill cards that shape it. */
+  const aim = 'aim' in move ? move.aim : undefined;
+  if (aim !== undefined && !(['head', 'arms', 'torso', 'legs'] as const).includes(aim)) throw new EngineError('combat.aim', 'Aim at the head, arms, torso or legs.');
   const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
     const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0);
@@ -259,7 +277,8 @@ export function combatTurn(
         return false;
       }
     }
-    const location = hitLocation(rng, result.margin, enemy.armour);
+    const spot = hitLocation(rng, result.margin, enemy.armour, aim);
+    const { location } = spot;
     const armour = enemy.armour[location] ?? 0;
     // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
     const magic = !!opts.scroll;
@@ -267,9 +286,10 @@ export function combatTurn(
     // Precise Shot: a longbow hit that beat the target by 15 or more deals +2.
     const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
     // A scroll's magic is not a blade: weapon runes and weapon bonuses do not add to it.
+    const damageRoll = damageDie(rng, !magic && (!!weapon.penetrating || rune === 'piercing'));
     let damage = magic
-      ? strengthStep(attrs.str) + (opts.power ?? 0) + damageDie(rng, false) - armour
-      : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageDie(rng, !!weapon.penetrating || rune === 'piercing')
+      ? strengthStep(attrs.str) + (opts.power ?? 0) + damageRoll - armour
+      : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageRoll
         + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
         + critical + precise + (opts.bonus ?? 0) - armour;
     // Spirits are hurt in full only by magic or runes.
@@ -280,7 +300,7 @@ export function combatTurn(
     if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
     if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
     if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
-    events.push({ ...base, location, damage, ...(dodge ? { dodge } : {}) });
+    events.push({ ...base, ...spot, damage, damageRoll, armour, ...(dodge ? { dodge } : {}) });
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     return true;
   };
@@ -487,9 +507,10 @@ export function combatTurn(
       events.push({ type: 'strike', by: foe.uid, target: HERO, result, parry, parried: false });
     }
     const armour = heroArmour(actor);
-    const location = hitLocation(rng, result.margin, armour);
-    let damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0)
-      + damageDie(rng, enemy.traits.includes('penetrating')) - armour[location]);
+    const spot = hitLocation(rng, result.margin, armour);
+    const { location } = spot;
+    const damageRoll = damageDie(rng, enemy.traits.includes('penetrating'));
+    let damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0) + damageRoll - armour[location]);
     // Barrier: the blow must break through on a Strength test, and then deals half; either way the barrier is gone.
     let barrier: TestResult | undefined;
     if (combat.barrier) {
@@ -502,7 +523,7 @@ export function combatTurn(
       damage = Math.floor(damage / 2);
     }
     actor.character.vitality -= damage;
-    events.push({ type: 'strike', by: foe.uid, target: HERO, result, location, damage, ...(barrier ? { barrier } : {}) });
+    events.push({ type: 'strike', by: foe.uid, target: HERO, result, ...spot, damage, damageRoll, armour: armour[location], ...(barrier ? { barrier } : {}) });
     if (enemy.traits.includes('poison') || sting) {
       addCondition(actor, 'poison', { pl: 'Zatrucie', en: 'Poisoned' }, 'str', 1);
       events.push({ type: 'poisoned', who: HERO, condition: 'poison' });
@@ -546,10 +567,12 @@ export function combatTurn(
         events.push({ type: 'strike', by: pet.uid, target: target.uid, result });
         continue;
       }
-      const location = hitLocation(rng, result.margin, foe.armour);
-      const damage = Math.max(0, strengthStep(beast.str) + beast.weapon.power + damageDie(rng, false) - (foe.armour[location] ?? 0));
+      const spot = hitLocation(rng, result.margin, foe.armour);
+      const damageRoll = damageDie(rng, false);
+      const armour = foe.armour[spot.location] ?? 0;
+      const damage = Math.max(0, strengthStep(beast.str) + beast.weapon.power + damageRoll - armour);
       target.vitality -= damage;
-      events.push({ type: 'strike', by: pet.uid, target: target.uid, result, location, damage });
+      events.push({ type: 'strike', by: pet.uid, target: target.uid, result, ...spot, damage, damageRoll, armour });
       if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     }
   };

@@ -76,6 +76,10 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
       {error && <p className="error">{error}</p>}
       {heroes && !heroes.length && <p>{t('noHeroes')}</p>}
       <div className="hero-list">
+        <button className="hero-card hero-new" onClick={onCreate}>
+          <span aria-hidden="true">+</span>
+          <b>{t('createNewHero')}</b>
+        </button>
         {heroes?.map((h) => (
           <HeroCard key={h.id} hero={h}>
             <button
@@ -94,7 +98,6 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
       </div>
       <div className="actions">
         <button className="ghost" onClick={onBack}>{t('back')}</button>
-        <button className="primary" onClick={onCreate}>{t('createHero')}</button>
       </div>
     </div>
   );
