@@ -1,7 +1,7 @@
 import { ATTRIBUTES, BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
-import { createCharacter, spendPoints } from './character';
-import { bondCompanions, canCook, canSeason, cook, eatMeal, playCard, playableCards, refreshCards, trimMeals } from './cards';
-import { combatMoves, combatTurn, drinkPotion, type CombatMove } from './combat';
+import { createCharacter, keepCards, spendPoints } from './character';
+import { bondCompanions, canCook, canSeason, cook, eatMeal, levitating, playCard, playableCards, refreshCards, trimMeals } from './cards';
+import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
@@ -13,7 +13,7 @@ import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type Playe
 import type { GameMap } from './mapgen';
 import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
 import {
-  availableServices, buy, buyPrice, canSmelt, mysticStock, isSettlement, placeOf, portalTargets, sell, sellPrice, shopStock, smelt, useService, usePortal,
+  availableServices, buy, buyPrice, canSmelt, mysticStock, isSettlement, placeOf, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
 
 export type { Action, GameState, LogEntry, NewPlayer, PlayerState } from './state';
@@ -73,7 +73,7 @@ export function currentPlayer(state: GameState): PlayerState {
 
 /** A river blocks onward travel until the hero swims across; going back the way they came is always allowed. */
 function blockedByRiver(state: GameState, player: PlayerState, to: number): boolean {
-  if (state.map.cells[player.position]!.terrain !== 'river' || player.crossedRiver) return false;
+  if (state.map.cells[player.position]!.terrain !== 'river' || player.crossedRiver || levitating(state, player)) return false;
   if (to === player.cameFrom || player.cameFrom === null) return false;
   return state.map.cells[to]!.terrain !== 'river';
 }
@@ -91,9 +91,12 @@ export function entryCell(map: Pick<GameMap, 'width' | 'height'>, side: Side): n
 
 export const isOutside = (player: Pick<PlayerState, 'position'>) => player.position === OUTSIDE;
 
-function moveCost(state: GameState, to: number): number {
+/** Speed to step onto a fragment: 2 on hard terrain, except for the Explorer (Sense of Direction) or a levitating Mystic. */
+function moveCost(state: GameState, to: number, player?: PlayerState): number {
   const terrain = state.map.cells[to]!.terrain;
-  return terrain === 'core' ? 2 : TERRAINS[terrain].hard ? 2 : 1;
+  if (terrain === 'core') return 2;
+  const light = !!player && (player.character.cards.includes('explorer-direction') || levitating(state, player));
+  return TERRAINS[terrain].hard && !light ? 2 : 1;
 }
 
 function canCamp(state: GameState, player: PlayerState): { ok: boolean; cost: number } {
@@ -117,19 +120,22 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   const player = currentPlayer(state);
   if (player.id !== playerId) return [];
   if (player.combat) return combatMoves(player, player.combat).map((move) => ({ type: 'combat', move }));
+  if (player.pendingEvent && player.character.newCards?.length) {
+    return [...eventOptions(state, player).filter((o) => o.affordable).map((o): Action => ({ type: 'event', option: o.index })), { type: 'keepCards', cards: [] }];
+  }
   if (player.pendingEvent) {
     return eventOptions(state, player).filter((o) => o.affordable).map((o) => ({ type: 'event', option: o.index }));
   }
   const actions: Action[] = [];
   if (isOutside(player)) {
     for (const side of SIDES) {
-      if (moveCost(state, entryCell(state.map, side)) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA) actions.push({ type: 'enter', side });
+      if (moveCost(state, entryCell(state.map, side), player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA) actions.push({ type: 'enter', side });
     }
     actions.push({ type: 'endTurn' });
     return actions;
   }
   for (const n of neighbours(state.map, player.position)) {
-    if (moveCost(state, n) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
+    if (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
   for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
   if (canCamp(state, player).ok) {
@@ -160,14 +166,16 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     if (kind === 'weapon' || kind === 'armour' || (kind === 'shield' && !player.character.equipment.shield)) actions.push({ type: 'equip', item: id });
     if (kind === 'book' && !player.counters[readKey(state, id)]) actions.push({ type: 'read', item: id });
   }
+  for (const slot of reinforceSlots(state, player, heroArmour(player))) actions.push({ type: 'reinforce', slot });
   if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
+  if (player.character.newCards?.length) actions.push({ type: 'keepCards', cards: [] });
   actions.push({ type: 'endTurn' });
   return actions;
 }
 
 /** One step onto a fragment: costs Speed and Stamina, reveals it and may draw an event. */
 function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
-  const cost = moveCost(state, to);
+  const cost = moveCost(state, to, player);
   if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
   if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
   player.crossedRiver = false;
@@ -208,8 +216,9 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   const rng = new Rng(state.rng);
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
-  if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'spend') busy(player);
-  if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'spend') {
+  const anytime = action.type === 'spend' || action.type === 'keepCards';
+  if (action.type !== 'combat' && action.type !== 'event' && !anytime) busy(player);
+  if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && !anytime) {
     throw new EngineError('enter.first', 'Step onto the map first.');
   }
 
@@ -264,7 +273,19 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       fight(state, player, rng, action.move);
       break;
     case 'card':
-      playCard(state, player, action.card, rng);
+      playCard(state, player, action.card, rng, action.target);
+      break;
+    case 'keepCards': {
+      if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
+      const before = [...player.character.cards, ...(player.character.newCards ?? [])];
+      keepCards(player.character, action.cards);
+      log(state, { type: 'cardsKept', player: player.id, cards: action.cards, dropped: before.filter((c) => !action.cards.includes(c)) });
+      break;
+    }
+    case 'reinforce':
+      reinforce(state, player, action.slot, heroArmour(player));
+      // Reinforcing takes the rest of the round.
+      endTurn(state, player, rng);
       break;
     case 'cook':
       cook(state, player, rng, action.spice);
@@ -330,6 +351,11 @@ function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove
   switch (result) {
     case 'won':
       winCombat(state, player, rng);
+      break;
+    case 'hidden':
+      // Camouflage: the Diver slips away unseen and stays where they are.
+      log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
+      player.combat = null;
       break;
     case 'fled':
     case 'enthralled':

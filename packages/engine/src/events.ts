@@ -5,7 +5,7 @@ import {
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
 import { EngineError } from './errors';
-import { combatXp, startCombat } from './combat';
+import { combatXp, startCombat, VIGILANCE } from './combat';
 import { neighbours } from './mapgen';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
@@ -84,6 +84,14 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
     log(state, { type: 'card', player: player.id, card: 'warrior-veteran', ok: true, amount: 1 });
   }
   if (player.inventory.items.includes('luckyCoin')) change(state, player, 'gold', 1);
+  // Scalp: each kind of foe beaten gives the Guardian +1 Combat against it for good.
+  if (player.character.cards.includes('guardian-scalp')) {
+    for (const enemy of new Set(combat.foes.filter((f) => !f.tamed).map((f) => f.enemy))) {
+      if (player.counters[`scalp:${enemy}`]) continue;
+      player.counters[`scalp:${enemy}`] = 1;
+      log(state, { type: 'card', player: player.id, card: 'guardian-scalp', ok: true, amount: 1 });
+    }
+  }
   runOutcomes(state, player, rng, combat.onWin, combat.card);
   if (combat.card !== undefined && !player.pendingEvent && !player.combat) log(state, { type: 'eventEnded', player: player.id, card: combat.card });
 }
@@ -229,7 +237,9 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       }
       case 'test': {
         const bonus = o.raceBonus && o.raceBonus.race === c.race ? o.raceBonus.amount : 0;
-        const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus);
+        // Vigilance: +10 to the Guardian's Dexterity tests in the sudden moments events bring.
+        const vigilance = o.attribute === 'dex' && c.cards.includes('guardian-vigilance') ? VIGILANCE : 0;
+        const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus + vigilance);
         log(state, { type: 'check', player: player.id, attribute: o.attribute, result });
         runOutcomes(state, player, rng, (result.success ? o.pass : o.fail) ?? [], card);
         break;

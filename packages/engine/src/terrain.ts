@@ -49,7 +49,7 @@ export interface Equipment {
 }
 
 /** Weapon runes from the runic smith's d10 table. */
-export type Rune = 'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing';
+export type Rune = 'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing' | 'safety';
 
 /** A tamed beast fighting beside the hero (Druid's Companion). Until `tame`, it can still break free. */
 export interface Companion {
@@ -60,6 +60,8 @@ export interface Companion {
   /** Charisma tests passed so far; at 3 the beast stays for good. */
   bond: number;
   tame: boolean;
+  /** Teacher: added to the beast's attributes. */
+  bonus?: number;
 }
 
 /** The parts of a player's state that terrain actions read and change. */
@@ -103,7 +105,7 @@ export interface WorldView {
 }
 
 export type TerrainOutcome =
-  | { type: 'test'; action: TerrainAction; attribute: Attribute; result: TestResult; gained: string[]; lost?: string[]; rerolled?: string };
+  | { type: 'test'; action: TerrainAction; attribute: Attribute; result: TestResult; gained: string[]; lost?: string[]; rerolled?: string; card?: string };
 
 /** Stamina cost of each terrain action that the engine runs in the MVP. */
 export const ACTION_COST: Partial<Record<TerrainAction, number>> = {
@@ -173,7 +175,7 @@ export function magicBonus(world: WorldView, actor: Pick<ActorState, 'position' 
 
 const WATER = new Set(['river', 'lake']);
 
-/** Always-on skill cards: Strongman (+10 to Strength tests) and Water-born (+10 to all next to water). */
+/** Always-on skill cards: Strongman (+10 to Strength tests), Water-born (+10 to all next to water) and Caver. */
 export function cardBonus(world: WorldView, actor: Pick<ActorState, 'position' | 'character'>, attribute: Attribute): number {
   const cards = actor.character.cards ?? [];
   let bonus = 0;
@@ -182,6 +184,8 @@ export function cardBonus(world: WorldView, actor: Pick<ActorState, 'position' |
     const wet = (cell: number) => WATER.has(world.terrainAt(cell));
     if (wet(actor.position) || world.near(actor.position).some(wet)) bonus += 10;
   }
+  // Caver: +10 to every attribute in the mountains and in caves.
+  if (cards.includes('cavedelver-caver') && ['mountains', 'cave'].includes(world.terrainAt(actor.position))) bonus += 10;
   return bonus;
 }
 
@@ -239,16 +243,29 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
 
   switch (action) {
     case 'hunt': {
-      let result = roll('dex');
-      const rerolled = result.success ? null : rerollCard(actor, 'hunt', terrain);
-      if (rerolled) result = roll('dex');
-      if (result.success) {
-        const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
-        actor.character.food += food;
-        gained.push(`food:${food}`);
-        add(actor.counters, 'hunts');
+      const once = () => {
+        let result = roll('dex');
+        const rerolled = result.success ? null : rerollCard(actor, 'hunt', terrain);
+        if (rerolled) result = roll('dex');
+        if (result.success) {
+          const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
+          actor.character.food += food;
+          gained.push(`food:${food}`);
+          add(actor.counters, 'hunts');
+          // Tannery: each animal caught leaves a hide the Trapper can work.
+          if ((actor.character.cards ?? []).includes('trapper-tannery')) add(actor.counters, 'hides');
+        }
+        return { result, rerolled };
+      };
+      let { result, rerolled } = once();
+      // Fisher: on a lake or river the Gourmet hunts twice in one go.
+      const fisher = WATER.has(terrain) && (actor.character.cards ?? []).includes('gourmet-fisher');
+      if (fisher) {
+        const second = once();
+        if (second.result.success && !result.success) result = second.result;
+        rerolled ??= second.rerolled;
       }
-      return { type: 'test', action, attribute: 'dex', result, gained, ...(rerolled ? { rerolled } : {}) };
+      return { type: 'test', action, attribute: 'dex', result, gained, ...(rerolled ? { rerolled } : {}), ...(fisher ? { card: 'gourmet-fisher' } : {}) };
     }
     case 'gather': {
       const result = roll('int', 10);
