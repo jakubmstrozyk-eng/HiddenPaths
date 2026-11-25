@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ENEMIES, ITEMS, type DiceLook } from '@hp/content';
+import { ENEMIES, ITEMS, type ArmourSlot, type DiceLook } from '@hp/content';
 import {
   attacksPerTurn, canDisarm, canMaster, canTame, combatMoves, MASTER_STEPS, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
 import { Icon } from '../Icons';
-import { diceVars } from '../DiceFace';
+import { diceStyle, diceVars, DieFace } from '../DiceFace';
+import { ArmourBody, spotName } from '../ArmourBody';
 import { buzz, clack, ShakeToThrow, Verdict } from '../Throw';
 import { HitFx, hitKind } from '../HitFx';
 import { PixelFoe, PixelHero } from '../PixelHero';
@@ -23,7 +24,9 @@ import { SkillHand } from '../SkillCards';
 
 type Step =
   | { kind: 'roll'; who: string; test: UiKey; result: TestResult; vs?: string; card?: string }
-  | { kind: 'hit'; who: string; target: string; damage: number; location?: string; card?: string }
+  | { kind: 'hit'; who: string; target: string; damage: number; location?: ArmourSlot; roll?: number; damageRoll?: number; armour?: number; card?: string }
+  /** Where a blow lands: the k6 for the spot, or the striker's own pick after a hit by more than 20. */
+  | { kind: 'spot'; who: string; target: string; slot: ArmourSlot; roll?: number; margin: number }
   | { kind: 'note'; who: string; text: string };
 
 const HERO = 'hero';
@@ -62,7 +65,10 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         else if (ev.dodged) out.push({ kind: 'note', who: ev.target, text: pl ? 'Unik!' : 'Dodged!' });
         else if (ev.blocked && ev.card === 'guardian-stance') out.push({ kind: 'note', who: HERO, text: pl ? 'Tarcza blokuje cios!' : 'The shield blocks the blow!' });
         else if (ev.blocked) out.push({ kind: 'note', who: HERO, text: pl ? 'Bariera zatrzymuje cios!' : 'The barrier stops the blow!' });
-        else if (ev.result.success && ev.damage !== undefined) out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, card: ev.card ?? ev.scroll });
+        else if (ev.result.success && ev.damage !== undefined) {
+          if (ev.location) out.push({ kind: 'spot', who: ev.by, target: ev.target, slot: ev.location, roll: ev.locationRoll, margin: ev.result.margin });
+          out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, roll: ev.locationRoll, damageRoll: ev.damageRoll, armour: ev.armour, card: ev.card ?? ev.scroll });
+        }
         break;
       }
       case 'flee':
@@ -167,6 +173,8 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const world = worldView(game);
   const alive = combat.foes.filter((f) => f.vitality > 0);
   const [target, setTarget] = useState<string | null>(null);
+  /** The spot the hero goes for; it counts when the Combat test passes by more than 20. Null: the weakest spot. */
+  const [aim, setAim] = useState<ArmourSlot | null>(null);
   // With several foes the player picks whom to strike; a lone foe is the target by itself.
   const chosen = alive.find((f) => f.uid === target) ?? (alive.length === 1 ? alive[0] : undefined);
   const [pace, setPace] = useState(readPace);
@@ -203,7 +211,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     }
     // The foes' moves play slowly enough to follow; the player can speed them up.
     const foeStep = !!step && step.who !== HERO;
-    const base = step?.kind === 'roll' ? ROLL_MS + (foeStep ? FOE_PAUSE_MS : PAUSE_MS) : step?.kind === 'hit' ? (foeStep ? 1500 : 1100) : (foeStep ? 1300 : 900);
+    const base = step?.kind === 'roll' ? ROLL_MS + (foeStep ? FOE_PAUSE_MS : PAUSE_MS) : step?.kind === 'hit' ? (foeStep ? 1500 : 1300) : step?.kind === 'spot' ? (foeStep ? 1400 : 1200) : (foeStep ? 1300 : 900);
     const wait = pace === 'fast' ? Math.round(base * 0.45) : base;
     const next = setTimeout(() => { setAt((i) => i + 1); setRolled(false); }, wait);
     return () => clearTimeout(next);
@@ -270,13 +278,21 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     ? hitKind('pet', pets.find((p) => p.uid === step.who)?.enemy, { weaponId: weapon.id, weaponName: weapon.name.en, ranged: !!weapon.ranged })
     : null;
 
+  const aimed = aim ? { aim } : {};
   const throwDie = () => {
-    if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid } });
+    if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid, ...aimed } });
     if (prompt === 'flee') act({ type: 'combat', move: { move: 'flee' } });
-    if (promptCard) act({ type: 'combat', move: { move: 'card', card: promptCard, ...(cardFoe ? { target: cardFoe.uid } : {}) } });
-    if (promptScroll) act({ type: 'combat', move: { move: 'scroll', item: promptScroll, target: (chosen ?? alive[0])!.uid } });
+    if (promptCard) act({ type: 'combat', move: { move: 'card', card: promptCard, ...(cardFoe ? { target: cardFoe.uid } : {}), ...(AIMED_CARDS.includes(promptCard) ? aimed : {}) } });
+    if (promptScroll) act({ type: 'combat', move: { move: 'scroll', item: promptScroll, target: (chosen ?? alive[0])!.uid, ...aimed } });
     setPrompt(null);
   };
+  // The foe the throw waiting in the prompt goes at, for the aim picker.
+  const aimFoe = prompt === 'attack' ? chosen : promptScroll ? (chosen ?? alive[0]) : promptCard && AIMED_CARDS.includes(promptCard) ? cardFoe : undefined;
+  const aimArmour = aimFoe ? ENEMIES[aimFoe.enemy]!.armour : {};
+  /** The spot hit at this point of the playback, for the body maps. */
+  const spotHit = (who: string) => (step && (step.kind === 'spot' || step.kind === 'hit') && step.target === who && (step.kind === 'spot' ? step.slot : step.location)
+    ? { slot: (step.kind === 'spot' ? step.slot : step.location)!, roll: step.roll }
+    : null);
 
   return (
     <div className="overlay combat">
@@ -311,11 +327,12 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
               <PixelHero race={c.race} profession={c.profession} look={c.look} size={72} gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }} />
             </motion.div>
             <b>{c.name}</b>
+            <span className="duel-body"><ArmourBody armour={heroArmour(me)} size={combat.foes.length > 1 ? 70 : 90} hit={spotHit(HERO)} title={locale === 'pl' ? 'Twój pancerz' : 'Your armour'} /></span>
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
             <small><Icon name="vitality" size={12} /> {heroVit}/{c.maxVitality}</small>
             <small><Icon name="sword" size={12} /> {itemName(weapon.id, locale)} S{signed(strengthStep(c.attributes.str) + weapon.power)}+k6</small>
             {hitFx && step?.kind === 'hit' && step.target === HERO && <HitFx key={`fx-${at}`} kind={hitFx} />}
-            <AnimatePresence>{step?.kind === 'hit' && step.target === HERO && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
+            <AnimatePresence>{step?.kind === 'hit' && step.target === HERO && <DamagePop key={at} step={step} />}</AnimatePresence>
             {pets.length > 0 && (
               <div className="pets">
                 {pets.map((pet) => {
@@ -331,7 +348,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                       <span className="bar hero-bar"><motion.span animate={{ width: `${(vit / pet.maxVitality) * 100}%` }} /></span>
                       <small>{vit}/{pet.maxVitality}{pet.tame ? '' : ` · ${locale === 'pl' ? 'więź' : 'bond'} ${pet.bond}/3`}</small>
                       {hitFx && step?.kind === 'hit' && step.target === pet.uid && <HitFx key={`pfx-${at}`} kind={hitFx} />}
-                      <AnimatePresence>{step?.kind === 'hit' && step.target === pet.uid && <DamagePop key={`p${at}`} damage={step.damage} location={step.location} />}</AnimatePresence>
+                      <AnimatePresence>{step?.kind === 'hit' && step.target === pet.uid && <DamagePop key={`p${at}`} step={step} />}</AnimatePresence>
                     </motion.div>
                   );
                 })}
@@ -347,6 +364,18 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                   <BigDie dice={c.dice} result={step.result} rolling={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} />
                 </motion.div>
               )}
+              {step?.kind === 'spot' && (
+                <motion.div key={`spot-${at}`} className="spot-step" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                  <small>{step.who === HERO ? c.name : foeName(step.who, locale)} · {locale === 'pl' ? 'miejsce trafienia' : 'hit location'}</small>
+                  {step.roll !== undefined
+                    ? <motion.span initial={{ rotate: -200, y: -20 }} animate={{ rotate: 0, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}><DieFace kind="d6" value={step.roll} style={diceStyle(c.dice?.d6)} size={46} /></motion.span>
+                    : <span className="big-aim" aria-hidden="true">◎</span>}
+                  <span className="spot-line">{step.roll !== undefined ? `k6 = ${step.roll}: ` : ''}{spotName(step.slot, step.roll, locale)}</span>
+                  <small>{step.roll !== undefined
+                    ? (locale === 'pl' ? `trafienie o ${step.margin} (do 20): miejsce losuje k6` : `hit by ${step.margin} (20 or less): a k6 picks the spot`)
+                    : (locale === 'pl' ? `trafienie o ${step.margin} (ponad 20): ${step.who === HERO ? 'wybierasz miejsce' : 'wybiera słabe miejsce'}` : `hit by ${step.margin} (over 20): ${step.who === HERO ? 'you pick the spot' : 'it picks a weak spot'}`)}</small>
+                </motion.div>
+              )}
               {step?.kind === 'note' && (
                 <motion.p key={`note-${at}`} className="duel-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>{step.text}</motion.p>
               )}
@@ -354,6 +383,15 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                   <TestTitle test={promptTest} target={promptTarget} who={`${c.name} · ${promptCard ? cardName(promptCard, locale) : promptScroll ? itemName(promptScroll, locale) : prompt === 'attack' ? strike : t('flee')}`} />
                   <BigDie dice={c.dice} onTap={throwDie} />
+                  {aimFoe && (
+                    <div className="aim-pick">
+                      <b>{locale === 'pl' ? 'Celujesz w' : 'Aiming at'}: {aim ? spotName(aim, undefined, locale) : (locale === 'pl' ? 'najsłabsze miejsce' : 'the weakest spot')}</b>
+                      <ArmourBody armour={aimArmour} size={124} aim={aim} onPick={(s) => setAim(aim === s ? null : s)} showRolls title={foeName(aimFoe.uid, locale)} />
+                      <small>{locale === 'pl'
+                        ? 'Dotknij miejsca. Liczy się, gdy trafisz o ponad 20; inaczej miejsce wylosuje k6. Obrażenia: siła broni + k6 − pancerz.'
+                        : 'Tap a spot. It counts when you hit by more than 20; otherwise a k6 picks it. Damage: weapon strength + k6 − armour.'}</small>
+                    </div>
+                  )}
                   <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
                 </motion.div>
               )}
@@ -375,7 +413,10 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 >
                   {active === f.uid && !down && <span className="foe-flag attack">{locale === 'pl' ? 'Atakuje!' : 'Attacking!'}</span>}
                   {chosen?.uid === f.uid && !down && active !== f.uid && alive.length > 1 && <span className="foe-flag target">◎ {locale === 'pl' ? 'Twój cel' : 'Your target'}</span>}
-                  <PixelFoe kind={enemy.kind} size={combat.foes.length > 1 ? 48 : 72} />
+                  <span className="duel-body">
+                    <PixelFoe kind={enemy.kind} size={combat.foes.length > 1 ? 48 : 72} />
+                    <ArmourBody armour={enemy.armour} size={combat.foes.length > 1 ? 66 : 90} hit={spotHit(f.uid)} aim={chosen?.uid === f.uid && !busy ? aim : null} />
+                  </span>
                   <b>{foeName(f.uid, locale)}</b>
                   <span className="bar"><motion.span animate={{ width: `${(vit / f.maxVitality) * 100}%` }} /></span>
                   <small><Icon name="vitality" size={12} /> {vit}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
@@ -392,7 +433,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                       {(f.blindUntil ?? 0) >= combat.turn && <i className="state blind">{locale === 'pl' ? 'Oślepiony' : 'Blinded'}</i>}
                     </span>
                   )}
-                  <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
+                  <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} step={step} />}</AnimatePresence>
                 </motion.button>
               );
             })}
@@ -442,6 +483,9 @@ function weaponStrike(id: string, locale: string): string {
   if (id === 'crossbow') return pl ? 'Strzał z kuszy' : 'Crossbow shot';
   return pl ? 'Atak mieczem' : 'Sword strike';
 }
+
+/** Cards whose blow can be aimed like a plain attack. */
+const AIMED_CARDS = ['warrior-heavy-swing', 'diver-blowpipe', 'explorer-disarm'];
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 
@@ -546,11 +590,15 @@ function DicePair({ face, spin, shaking, dice }: { face: number | null; spin: bo
   );
 }
 
-function DamagePop({ damage, location }: { damage: number; location?: string }) {
-  const { t } = useT();
+function DamagePop({ step }: { step: Extract<Step, { kind: 'hit' }> }) {
+  const { locale } = useT();
+  const pl = locale === 'pl';
   return (
     <motion.span className="damage-pop" initial={{ y: 0, opacity: 0, scale: 0.6 }} animate={{ y: -34, opacity: 1, scale: 1.2 }} exit={{ opacity: 0, y: -50 }} transition={{ duration: 0.45 }}>
-      −{damage}{location ? <small> {t(location as UiKey)}</small> : null}
+      <span>−{step.damage}{step.location ? <small> {spotName(step.location, step.roll, locale)}</small> : null}</span>
+      {step.damageRoll !== undefined && (
+        <small className="damage-sum">k6 {step.damageRoll}{step.armour ? ` · ${pl ? 'pancerz' : 'armour'} −${step.armour}` : ''}</small>
+      )}
     </motion.span>
   );
 }

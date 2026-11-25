@@ -28,6 +28,28 @@ describe('missions', () => {
     expect(p.character.xp).toBe(xp + 60);
   });
 
+  it('counts food and herbs found on event cards for the Gatherer, and hunted food too', () => {
+    const g = game(['gatherer', 'hunter']);
+    const p = g.players[0]!;
+    log(g, { type: 'change', player: 'p', change: { what: 'food', amount: 2 } });
+    log(g, { type: 'change', player: 'p', change: { what: 'herbs', amount: 1 } });
+    log(g, { type: 'change', player: 'p', change: { what: 'food', amount: -3 } });
+    p.counters.hunts = 1;
+    log(g, { type: 'test', player: 'p', action: 'hunt', attribute: 'dex', result: { roll: 10, target: 40, success: true, margin: 30 }, gained: ['food:2'] });
+    expect(missionProgress(g, p, 'gatherer').count).toBe(5);
+    expect(missionProgress(g, p, 'hunter').count).toBe(1);
+  });
+
+  it('counts only items gained for the Collector, not potions drunk or gear put on', () => {
+    const g = game(['collector', 'hunter']);
+    const p = g.players[0]!;
+    log(g, { type: 'change', player: 'p', change: { what: 'item', item: 'healingPotion', amount: -1 } });
+    log(g, { type: 'change', player: 'p', change: { what: 'item', item: 'dagger', amount: 0 } });
+    expect(missionProgress(g, p, 'collector').count).toBe(0);
+    log(g, { type: 'change', player: 'p', change: { what: 'item', item: 'dagger', amount: 1 } });
+    expect(missionProgress(g, p, 'collector').count).toBe(1);
+  });
+
   it('adds up career goals across games', () => {
     const one = careerOf(game().players[0]!);
     const done = careerProgress([{ ...one, cards: 12 }, { ...one, cards: 9, level: 5 }]);

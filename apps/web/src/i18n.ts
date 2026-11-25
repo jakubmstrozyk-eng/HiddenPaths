@@ -9,6 +9,7 @@ const UI = {
   settings: { pl: 'Ustawienia', en: 'Settings' },
   heroes: { pl: 'Bohaterowie', en: 'Heroes' },
   createHero: { pl: 'Stwórz bohatera', en: 'Create a hero' },
+  createNewHero: { pl: 'Stwórz nowego bohatera', en: 'Create a new hero' },
   noHeroes: { pl: 'Nie masz jeszcze bohatera.', en: 'You have no hero yet.' },
   heroSolo: { pl: 'Jeden gracz', en: 'Single player' },
   heroMulti: { pl: 'Wielu graczy', en: 'Multiplayer' },
