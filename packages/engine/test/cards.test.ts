@@ -134,7 +134,12 @@ describe('skill cards (level 1)', () => {
     for (let seed = 1; seed < 60; seed++) {
       p.staminaLeft = 3;
       const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(seed));
-      if (out.type === 'test' && out.rerolled === 'trapper-hunter') rerolls++;
+      if (out.type === 'test' && out.rerolled === 'trapper-hunter') {
+        rerolls++;
+        // The result keeps the failed first throw, so the player sees both.
+        expect(out.result.rerolled).toBe('trapper-hunter');
+        expect(out.result.first).toBeGreaterThan(out.result.target);
+      }
     }
     expect(rerolls).toBeGreaterThan(1);
   });

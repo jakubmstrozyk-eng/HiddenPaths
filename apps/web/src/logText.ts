@@ -6,7 +6,7 @@ type T = ReturnType<typeof useT>;
 
 /** One die thrown on screen. A d100 test shows as two d10s (tens and units). */
 export type DiceRoll =
-  | { kind: 'd100'; value: number; target: number; success: boolean; label: string; attr?: Attribute }
+  | { kind: 'd100'; value: number; target: number; success: boolean; label: string; attr?: Attribute; /** The skill card that gave this second throw. */ reroll?: string; /** The failed throw before a skill card's second one. */ first?: boolean }
   | { kind: 'plain'; sides: number; value: number; label: string };
 
 const ATTR: Record<Attribute, Text> = {
@@ -46,8 +46,15 @@ export function foeName(uid: string, locale: Locale): string {
 export function diceOf(entries: LogEntry[], { locale }: T): DiceRoll[] {
   const out: DiceRoll[] = [];
   for (const e of entries) {
-    if (e.type === 'check') out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale), attr: e.attribute });
-    if (e.type === 'test' && e.result.roll > 0) out.push({ kind: 'd100', value: e.result.roll, target: e.result.target, success: e.result.success, label: attrShort(e.attribute, locale), attr: e.attribute });
+    if (e.type === 'check' || (e.type === 'test' && e.result.roll > 0)) {
+      const r = e.result;
+      const label = attrShort(e.attribute, locale);
+      // A skill card's second throw: show the failed one first, then the new throw under the card's name.
+      if (r.rerolled && r.first !== undefined) {
+        out.push({ kind: 'd100', value: r.first, target: r.target, success: false, label, attr: e.attribute, first: true });
+        out.push({ kind: 'd100', value: r.roll, target: r.target, success: r.success, label: `↻ ${cardName(r.rerolled, locale)}`, attr: e.attribute, reroll: cardName(r.rerolled, locale) });
+      } else out.push({ kind: 'd100', value: r.roll, target: r.target, success: r.success, label, attr: e.attribute });
+    }
     if (e.type === 'roll') out.push({ kind: 'plain', sides: e.die, value: e.value, label: `k${e.die}` });
     if (e.type === 'combat' && e.event.type === 'strike') {
       const by = e.event.by === 'hero' ? (locale === 'pl' ? 'Ty' : 'You') : foeName(e.event.by, locale);
@@ -140,6 +147,8 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${itemName(e.item, locale)}${e.amount ? `: +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
     case 'smelted':
       return `${pl ? 'Przetopione' : 'Smelted'}: ${e.items.map((i) => itemName(i, locale)).join(', ')} → ${itemName(e.into, locale)}`;
+    case 'ate':
+      return pl ? `Posiłek zjedzony · zostało ${e.foodLeft} jedzenia` : `Meal eaten · ${e.foodLeft} food left`;
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:

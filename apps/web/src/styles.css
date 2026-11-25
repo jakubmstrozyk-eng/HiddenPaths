@@ -712,6 +712,8 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 /* Crisp numbers everywhere dice and shields show them. */
 .die, .target-shield span, .damage-pop, .card-cost, .card-uses { font-variant-numeric: tabular-nums; }
 .tray-head { background: rgba(11, 9, 22, 0.88); border: 1px solid var(--line); padding: 12px 22px; min-width: 220px; }
+.tray-head .tray-reroll { font: 700 13px var(--num); color: #9fe8b0; background: #1d3a26cc; border: 1px solid #9fe8b066; border-radius: 999px; padding: 3px 10px; }
+.dice-group.first-throw { opacity: 0.55; filter: grayscale(0.6); }
 .tray-head .tray-heading { font: 700 14px var(--display); color: #ffe066; letter-spacing: 0.06em; text-transform: uppercase; }
 .tray-head > b { font-size: 22px; }
 .target-shield.big { width: 70px; height: 80px; }
@@ -866,3 +868,99 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .map-sample { position: static; max-width: 260px; margin: 0 auto; order: -1; }
   .tiles-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Event cards: drawn from the deck, turned face up, with the choices set apart below the story */
+.ev-overlay { --evw: min(calc(100vw - 32px), 460px); perspective: 1400px; overflow: hidden; }
+.ev-deck {
+  position: absolute; left: 50%; top: 50%; width: var(--evw); height: calc(var(--evw) * 1.38);
+  margin-left: calc(var(--evw) / -2); margin-top: calc(var(--evw) * -0.69); pointer-events: none;
+}
+.ev-back { display: block; position: absolute; inset: 0; box-shadow: 0 0 0 3px #0b0b10, 0 0 0 5px #e0b25c, 0 18px 40px rgba(0, 0, 0, 0.6); }
+.ev-back svg { width: 100%; height: 100%; display: block; }
+.ev-flight { position: relative; width: var(--evw); transform-style: preserve-3d; }
+.ev-back-face { transform: rotateY(180deg); backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.ev-card {
+  --edge: #e0b25c; --edge-glow: rgba(224, 178, 92, 0.45);
+  position: relative; display: flex; flex-direction: column; gap: 10px;
+  max-height: calc(100dvh - 40px); overflow: auto; overscroll-behavior: contain;
+  padding: 16px 16px 16px; color: var(--ink); backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: linear-gradient(165deg, #2a1d48 0%, #150f26 55%, #22173c 100%);
+  border: 2px solid var(--edge);
+  box-shadow: 0 0 0 3px #0b0b10, 0 0 0 5px var(--edge), 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 50px var(--edge-glow);
+}
+.ev-card::before { content: ''; position: absolute; inset: 6px; border: 1px dashed rgba(224, 178, 92, 0.25); pointer-events: none; }
+.ev-card.hostile { --edge: #ff8a4a; --edge-glow: rgba(255, 80, 60, 0.45); background: linear-gradient(165deg, #3c1620 0%, #1a0c14 55%, #2e121a 100%); }
+.ev-number {
+  position: absolute; top: 10px; left: 10px; z-index: 2; min-width: 34px; height: 34px; padding: 0 6px; display: grid; place-items: center;
+  background: var(--edge); color: #0b0b10; font: 800 16px var(--num); box-shadow: 0 0 0 2px #0b0b10;
+}
+.ev-tag {
+  position: absolute; top: 10px; right: 10px; z-index: 2; background: #6b4fd8; color: #fff; padding: 4px 9px;
+  font: 700 11px var(--num); letter-spacing: 0.12em; text-transform: uppercase; box-shadow: 0 0 0 2px #0b0b10;
+}
+.ev-card.hostile .ev-tag { background: #ff5a3a; }
+.ev-art { position: relative; height: 120px; flex: none; overflow: hidden; border: 1px solid rgba(224, 178, 92, 0.4); }
+.ev-art .terrain-art { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.ev-art-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(10, 6, 20, 0.75)), radial-gradient(circle at 50% 40%, transparent 40%, rgba(0, 0, 0, 0.5)); }
+.ev-head { text-align: center; margin-top: -34px; position: relative; z-index: 1; }
+.ev-head h2 { font: 700 26px/1.15 var(--display); margin: 0; color: #fff3d6; text-shadow: 0 2px 0 #0b0b10, 0 0 18px rgba(224, 178, 92, 0.5); }
+.ev-head small { display: block; margin-top: 4px; color: var(--edge); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+.ev-text { margin: 0; font: italic 16px/1.55 Georgia, 'Times New Roman', serif; color: #ece6ff; text-align: center; padding: 0 4px; }
+.ev-lines { list-style: none; margin: 0; padding: 8px 12px; display: grid; gap: 3px; font-size: 13px; background: rgba(0, 0, 0, 0.3); border-left: 3px solid var(--edge); }
+.ev-lines li::before { content: '› '; opacity: 0.5; }
+.ev-rule { display: flex; align-items: center; gap: 10px; color: var(--edge); font: 700 11px var(--num); letter-spacing: 0.2em; text-transform: uppercase; }
+.ev-rule::before, .ev-rule::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--edge), transparent); }
+.ev-options { display: grid; gap: 8px; }
+.ev-choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06); color: var(--ink); border: 2px solid rgba(224, 178, 92, 0.55);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.ev-choice:hover:not(:disabled), .ev-choice:focus-visible { background: #fff3d6; color: #15101f; border-color: #fff3d6; transform: translateY(-2px); }
+.ev-choice:disabled { opacity: 0.4; }
+.ev-choice-label { font-weight: 700; font-size: 15px; }
+.ev-chip { font: 700 12px var(--num); padding: 2px 8px; border: 1px solid currentColor; }
+.ev-chip b { font-weight: 800; }
+.ev-chip.good { color: #7ee2a0; } .ev-chip.even { color: #ffd166; } .ev-chip.bad { color: #ff7a7a; } .ev-chip.free { color: #b9b2d8; }
+.ev-choice:hover:not(:disabled) .ev-chip.good { color: #17703a; } .ev-choice:hover:not(:disabled) .ev-chip.even { color: #8a5a00; }
+.ev-choice:hover:not(:disabled) .ev-chip.bad { color: #b0202a; } .ev-choice:hover:not(:disabled) .ev-chip.free { color: #4b4466; }
+.ev-out { font-size: 12px; line-height: 1.35; }
+.ev-out.pass { color: #9be8b4; } .ev-out.fail { color: #ff9a8a; } .ev-out.cost { color: #ffd98a; }
+.ev-choice:hover:not(:disabled) .ev-out.pass { color: #1d6b38; } .ev-choice:hover:not(:disabled) .ev-out.fail { color: #a3261f; } .ev-choice:hover:not(:disabled) .ev-out.cost { color: #7a5200; }
+
+/* Losing Vitality: a red flash from the edges, a crack, the loss rising, and the screen shaking */
+.hurt-layer { position: fixed; inset: 0; z-index: 90; pointer-events: none; display: grid; place-items: center; }
+.hurt-vignette { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(255, 0, 30, 0) 35%, rgba(220, 0, 30, 0.55) 75%, rgba(140, 0, 20, 0.9) 100%); }
+.hurt-crack { position: absolute; width: min(70vw, 420px); height: min(70vw, 420px); }
+.hurt-amount { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-shadow: 0 3px 0 #0b0b10, 0 0 24px rgba(255, 40, 60, 0.9); }
+.hurt-amount b { display: inline-flex; align-items: center; gap: 8px; font: 800 64px var(--num); color: #ff4d5e; }
+.hurt-amount small { font: 700 16px var(--display); color: #fff; letter-spacing: 0.08em; text-transform: uppercase; }
+.game.shaking { animation: hurt-shake 0.45s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes hurt-shake {
+  10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-7px, 3px); } 40%, 60% { transform: translate(7px, -3px); }
+}
+.stat.hit { animation: stat-hit 0.9s ease-out; }
+@keyframes stat-hit { 0%, 30% { background: rgba(255, 40, 60, 0.75); transform: scale(1.12); } 100% { background: transparent; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .game.shaking, .stat.hit { animation: none; } }
+
+/* Eating: the bread in the bar is a button; it glows until this round's meal is eaten */
+.eat-btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 2px solid #ffc36b; background: rgba(255, 195, 107, 0.14); color: #ffe2b0; font: 700 12px var(--num); }
+.eat-btn:hover { background: #ffc36b; color: #15101f; }
+.eat-btn.due { animation: eat-due 1.4s ease-in-out infinite; }
+.eat-btn.urgent { border-color: #ff6b6b; background: rgba(255, 80, 80, 0.2); animation-duration: 0.7s; }
+@keyframes eat-due { 50% { box-shadow: 0 0 0 3px rgba(255, 195, 107, 0.35), 0 0 18px rgba(255, 195, 107, 0.8); transform: scale(1.06); } }
+.eat-done { display: inline-flex; align-items: center; gap: 4px; color: #9be8b4; font-size: 11px; }
+.eat-hungry { color: #ff9a8a; font-size: 11px; }
+.food-stat { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.meal-card { text-align: center; }
+.meal-card .meal-bread { display: grid; place-items: center; margin: 4px auto 8px; }
+.meal-card .card-options { margin-top: 12px; }
+.meal-card .eat-big { padding: 12px; background: #ffc36b; color: #15101f; border: 2px solid #15101f; width: 100%; font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .eat-btn.due { animation: none; } }
+.duel-hurt { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+.ev-story { width: min(100%, 460px); }
+.ev-story .ev-head { margin-top: 0; }
+.ev-story .ev-head small { margin: 0 0 4px; }
+.ev-continue { padding: 12px; background: #fff3d6; color: #15101f; border: 2px solid var(--edge); font-weight: 800; }
+.ev-continue:hover { background: var(--edge); }

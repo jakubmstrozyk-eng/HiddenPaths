@@ -167,6 +167,8 @@ export type Action =
   /** Runemaster's Smelting in a city: 3 weapons or armour pieces into iron ore or a common item. */
   | { type: 'smelt'; into: 'ore' | 'item' }
   | { type: 'spend'; bonus: Partial<Attributes> }
+  /** Eat this round's meal: the hero has to do it themselves before the turn ends, or go hungry. */
+  | { type: 'eat' }
   | { type: 'endTurn' };
 
 export interface NewPlayer {

@@ -71,7 +71,7 @@ describe('the six professions added after the MVP', () => {
     expect(g.players[0]!.meals).toEqual([{ kind: 'prepared', spice: 'str' }]);
     // One seasoning a round.
     expect(legalActions(g, 'p').some((a) => a.type === 'cook' && a.spice)).toBe(false);
-    g = applyAction(g, 'p', { type: 'endTurn' });
+    g = applyAction(g, 'p', { type: 'eat' });
     const me = g.players[0]!;
     expect(me.meals).toEqual([]);
     const effects = me.effects.filter((e) => e.untilRound >= g.round);
@@ -86,7 +86,7 @@ describe('the six professions added after the MVP', () => {
     expect(g.players[0]!.meals).toEqual([{ kind: 'stew' }]);
     g.players[0]!.character.vitality -= 4;
     const vit = g.players[0]!.character.vitality;
-    g = applyAction(g, 'p', { type: 'endTurn' });
+    g = applyAction(g, 'p', { type: 'eat' });
     expect(g.players[0]!.character.vitality).toBeGreaterThanOrEqual(vit + 2);
   });
 

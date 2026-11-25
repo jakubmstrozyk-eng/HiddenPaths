@@ -74,7 +74,7 @@ describe('terrain actions', () => {
   it('staying in the desert costs 2 food', () => {
     const game = standingOn('desert');
     const food = currentPlayer(game).character.food;
-    expect(currentPlayer(applyAction(game, 'p1', { type: 'endTurn' })).character.food).toBe(food - 2);
+    expect(currentPlayer(applyAction(game, 'p1', { type: 'eat' })).character.food).toBe(food - 2);
   });
 
   it('fatigue lowers every test after 6 and 12 actions without camping', () => {
