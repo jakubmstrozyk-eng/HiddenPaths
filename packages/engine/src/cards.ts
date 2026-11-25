@@ -1,3 +1,4 @@
+import { landAt } from './mapgen';
 import { ENEMIES, ITEMS, TERRAINS, type ArmourSlot, type Attribute } from '@hp/content';
 import { test } from './dice';
 import { EngineError } from './errors';
@@ -48,7 +49,7 @@ export function playableCards(state: GameState, player: PlayerState): string[] {
   if (has(player, 'wraith-haste') && !isSpent(player, 'wraith-haste')) out.push('wraith-haste');
   if (has(player, 'warrior-rations') && usesLeft(player, 'warrior-rations')! > 0) out.push('warrior-rations');
   if (has(player, 'wraith-leaves') && usesLeft(player, 'wraith-leaves')! > 0 && player.staminaLeft >= 1) out.push('wraith-leaves');
-  if (has(player, 'trapper-trap') && state.map.cells[player.position]!.terrain !== 'core' && !player.counters[trapKey(player.position)]) out.push('trapper-trap');
+  if (has(player, 'trapper-trap') && landAt(state.map, player.position) !== 'core' && !player.counters[trapKey(player.position)]) out.push('trapper-trap');
   for (const card of ['elder-nature', 'elder-herb', 'runemaster-empower']) {
     if (has(player, card) && !isSpent(player, card) && player.staminaLeft >= MAP_STAMINA[card]!) out.push(card);
   }
@@ -56,11 +57,11 @@ export function playableCards(state: GameState, player: PlayerState): string[] {
   if (has(player, 'gourmet-stew') && canStew(state, player)) out.push('gourmet-stew');
   // Level 3 cards.
   const affords = (card: string) => has(player, card) && player.staminaLeft >= MAP_STAMINA[card]!;
-  const terrain = state.map.cells[player.position]!.terrain;
+  const terrain = landAt(state.map, player.position);
   if (affords('trapper-tannery') && (player.counters.hides ?? 0) > 0) out.push('trapper-tannery');
   if (affords('elder-power-potion') && canGatherHere(terrain) && !player.counters[`ingredient:${player.position}`]) out.push('elder-power-potion');
   for (const card of ['warrior-way', 'mystic-levitate']) if (affords(card) && !isSpent(player, card)) out.push(card);
-  if (affords('wraith-lookout') && terrain === 'forest' && state.map.cells.some((cell) => isNear(state, player, cell.index) && !player.revealed.includes(cell.index))) {
+  if (affords('wraith-lookout') && terrain === 'forest' && state.map.cells.some((cell) => cell.terrain !== 'void' && isNear(state, player, cell.index) && !player.revealed.includes(cell.index))) {
     out.push('wraith-lookout');
   }
   if (affords('druid-teacher') && (player.companions ?? []).length && !player.counters[roundKey(state, 'taught')]) out.push('druid-teacher');

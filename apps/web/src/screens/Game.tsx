@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
   applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
-  type Action, type GameState, type LogEntry, type PlayerState, type Side,
+  type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
+  landAt,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
@@ -28,14 +29,16 @@ const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W
 const GATE_OUT = 0.9;
 
 /** Where a fragment (or a starting place outside the map) sits, in fragments from the board's top-left corner. */
-function spot(map: { width: number; height: number }, position: number, gate: Side) {
+function spot(map: GameMap, position: number, gate: Side) {
   if (position !== OUTSIDE) return { x: position % map.width, y: Math.floor(position / map.width) };
-  const midX = Math.floor((map.width - 1) / 2);
-  const midY = Math.floor((map.height - 1) / 2);
-  if (gate === 'N') return { x: midX, y: -GATE_OUT };
-  if (gate === 'S') return { x: midX, y: map.height - 1 + GATE_OUT };
-  if (gate === 'W') return { x: -GATE_OUT, y: midY };
-  return { x: map.width - 1 + GATE_OUT, y: midY };
+  // Just outside the fragment a hero steps onto from that side (on shaped maps it need not be the board's edge).
+  const e = entryCell(map, gate);
+  const x = e % map.width;
+  const y = Math.floor(e / map.width);
+  if (gate === 'N') return { x, y: y - GATE_OUT };
+  if (gate === 'S') return { x, y: y + GATE_OUT };
+  if (gate === 'W') return { x: x - GATE_OUT, y };
+  return { x: x + GATE_OUT, y };
 }
 
 /** The icon shown on a fragment for each thing the hero can do there. */
@@ -223,7 +226,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       setLines(acc);
     } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken' || e.type === 'mission')) {
       // Plain actions only open a card for big moments: death, a new level, the Stone.
-      const terrain = cells[nextMe.position]?.terrain ?? 'core';
+      const onIt = cells[nextMe.position]?.terrain;
+      const terrain = !onIt || onIt === 'void' ? 'core' : onIt;
       setStory({ title: terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name), lines: fresh });
     }
     setStoryTitle(title);
@@ -263,7 +267,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     return { x: `${50 + dx * 50}%`, y: `${50 + dy * 50}%` };
   };
 
-  const here = outside ? null : cells[me.position]!;
+  const here = outside ? null : { ...cells[me.position]!, terrain: landAt(game.map, me.position) };
   const hereTerrain = !here || here.terrain === 'core' ? null : TERRAINS[here.terrain];
   const terrainActs = actions.flatMap((a) => (a.type === 'terrain' ? [a.action] : []));
   const inTown = !!here && (here.terrain === 'inn' || here.terrain === 'village' || here.terrain === 'city');
@@ -313,6 +317,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         <div className="board-wrap" ref={wrapRef}>
           <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
             {cells.map((cell) => {
+              // A square outside the map's outline: an empty gap in the board.
+              if (cell.terrain === 'void') return <span key={cell.index} className="frag-hole" aria-hidden="true" />;
               const seen = me.revealed.includes(cell.index);
               const move = quiet ? moves.get(cell.index) : undefined;
               const name = cell.terrain === 'core' ? (me.hasStone ? '◇' : '◆') : tx(TERRAINS[cell.terrain].name);

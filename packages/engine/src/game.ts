@@ -5,7 +5,7 @@ import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } fro
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
-import { generateMap, neighbours } from './mapgen';
+import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
@@ -29,7 +29,8 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
   if (newPlayers.length < 1 || newPlayers.length > 4) throw new EngineError('game.players', 'A game has 1 to 4 players.');
   if (!config.multiplayer && newPlayers.length !== 1) throw new EngineError('game.players', 'A single player game has 1 player.');
   const rng = new Rng(seedFromString(seed));
-  const map = generateMap(config.size, rng);
+  if (config.map) validateMapSetup(config.map);
+  const map = generateMap(config.map ?? config.size, rng);
   const settings = DIFFICULTIES[config.difficulty];
   const taken: number[] = [];
   const players = newPlayers.map((p): PlayerState => {
@@ -73,34 +74,44 @@ export function currentPlayer(state: GameState): PlayerState {
 
 /** A river blocks onward travel until the hero swims across; going back the way they came is always allowed. */
 function blockedByRiver(state: GameState, player: PlayerState, to: number): boolean {
-  if (state.map.cells[player.position]!.terrain !== 'river' || player.crossedRiver || levitating(state, player)) return false;
+  if (landAt(state.map, player.position) !== 'river' || player.crossedRiver || levitating(state, player)) return false;
   if (to === player.cameFrom || player.cameFrom === null) return false;
-  return state.map.cells[to]!.terrain !== 'river';
+  return landAt(state.map, to) !== 'river';
 }
 
 /** Jacob's rule (2026-11-23): stepping onto a fragment also costs 1 Stamina, besides its Speed. */
 export const MOVE_STAMINA = 1;
 
-/** The fragment in the middle of a side of the map: the first step from the starting place on that side. */
-export function entryCell(map: Pick<GameMap, 'width' | 'height'>, side: Side): number {
+/**
+ * The fragment in the middle of a side of the map: the first step from the starting place on that side.
+ * On a shaped map it is the fragment furthest out on that side, nearest the middle line.
+ */
+export function entryCell(map: Pick<GameMap, 'width' | 'height'> & { cells?: GameMap['cells'] }, side: Side): number {
   const midX = Math.floor((map.width - 1) / 2);
   const midY = Math.floor((map.height - 1) / 2);
-  const [x, y] = side === 'N' ? [midX, 0] : side === 'S' ? [midX, map.height - 1] : side === 'W' ? [0, midY] : [map.width - 1, midY];
-  return y * map.width + x;
+  if (!map.cells) {
+    const [x, y] = side === 'N' ? [midX, 0] : side === 'S' ? [midX, map.height - 1] : side === 'W' ? [0, midY] : [map.width - 1, midY];
+    return y * map.width + x;
+  }
+  const land = map.cells.filter(insideMap);
+  const vertical = side === 'N' || side === 'S';
+  const out = (c: { x: number; y: number }) => (side === 'N' ? -c.y : side === 'S' ? c.y : side === 'W' ? -c.x : c.x);
+  const across = (c: { x: number; y: number }) => Math.abs(vertical ? c.x - midX : c.y - midY);
+  return [...land].sort((a, b) => out(b) - out(a) || across(a) - across(b) || a.index - b.index)[0]!.index;
 }
 
 export const isOutside = (player: Pick<PlayerState, 'position'>) => player.position === OUTSIDE;
 
 /** Speed to step onto a fragment: 2 on hard terrain, except for the Explorer (Sense of Direction) or a levitating Mystic. */
 function moveCost(state: GameState, to: number, player?: PlayerState): number {
-  const terrain = state.map.cells[to]!.terrain;
+  const terrain = landAt(state.map, to);
   if (terrain === 'core') return 2;
   const light = !!player && (player.character.cards.includes('explorer-direction') || levitating(state, player));
   return TERRAINS[terrain].hard && !light ? 2 : 1;
 }
 
 function canCamp(state: GameState, player: PlayerState): { ok: boolean; cost: number } {
-  const terrain = state.map.cells[player.position]!.terrain;
+  const terrain = landAt(state.map, player.position);
   if (terrain === 'core' || !TERRAINS[terrain].actions.includes('camp')) return { ok: false, cost: 0 };
   const cost = terrain === 'cave' || TERRAINS[terrain].settlement ? 0 : 1;
   return { ok: player.staminaLeft >= cost, cost };
@@ -186,7 +197,7 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   player.staminaLeft -= MOVE_STAMINA;
   player.cameFrom = isOutside(player) ? null : player.position;
   player.position = to;
-  const terrain = state.map.cells[to]!.terrain;
+  const terrain = landAt(state.map, to);
   const fresh = reveal(state, player, to, rng);
   // Traveller: every second new fragment found in one turn gives the Explorer +1 XP.
   if (fresh && player.character.cards.includes('explorer-traveller')) {
@@ -426,7 +437,7 @@ function readScroll(state: GameState, player: PlayerState, rng: Rng, item: strin
     player.position = to;
     player.crossedRiver = false;
     // A new fragment opens as if walked into: XP and maybe an event.
-    const terrain = state.map.cells[to]!.terrain;
+    const terrain = landAt(state.map, to);
     if (reveal(state, player, to, rng) && drawsEvent(terrain)) {
       const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
       if (card !== null) startEvent(state, player, card);
@@ -471,7 +482,7 @@ function afterAction(state: GameState, player: PlayerState) {
   if (state.winner || player.combat || player.pendingEvent) return;
   const won =
     (state.config.winMode === 'stone' && player.hasStone && isSettlement(state, player.position) && placeOf(state, player) === 'city')
-    || (state.config.winMode === 'exploration' && player.revealed.length === state.map.cells.length);
+    || (state.config.winMode === 'exploration' && player.revealed.length === state.map.cells.filter(insideMap).length);
   if (won) {
     const xp = WIN_XP[state.config.winMode];
     gainXp(state, player, xp);
@@ -491,7 +502,7 @@ export function mealDue(state: GameState, player: PlayerState): { needed: number
   // Sunborn need food only every second round.
   const needsFood = c.race !== 'sunborn' || state.round % 2 === 1;
   // Staying in the desert costs double food.
-  const needed = !needsFood ? 0 : !isOutside(player) && state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
+  const needed = !needsFood ? 0 : !isOutside(player) && landAt(state.map, player.position) === 'desert' ? 2 : 1;
   const eaten = player.counters[ateKey(state)] ?? 0;
   return { needed, eaten, left: Math.max(0, needed - eaten) };
 }

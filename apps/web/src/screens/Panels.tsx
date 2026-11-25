@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { EVENT_BY_ID, TERRAINS } from '@hp/content';
-import { eventOptions, isOutside, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
+import { eventOptions, isOutside, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { cardSwish } from '../Feedback';
 import { outcomeText, testLabel, testOf } from '../outcomeText';
@@ -36,7 +36,7 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
   const card = EVENT_BY_ID[pending.card]!;
   const step = card.steps[pending.step]!;
   const options = eventOptions(game, me);
-  const here = isOutside(me) ? null : game.map.cells[me.position]!.terrain;
+  const here = isOutside(me) ? null : landAt(game.map, me.position);
   // The deck is shown only for the first step: later steps of the same card just turn over.
   const [deck] = useState(deckSpot);
   const [drawing, setDrawing] = useState(true);

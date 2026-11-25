@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import {
   applyAction, careerOf, createGame, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
   type Action, type CharacterInput, type GameConfig, type GameState, type LogEntry,
+  sizeForTiles, validateMapSetup,
 } from '@hp/engine';
 import type { User } from './auth';
 import type { Db } from './db';
@@ -87,6 +88,15 @@ export class Games {
     const levels = ['easy', 'normal', 'hard', 'nightmare'];
     if (!sizes.includes(config?.size) || !levels.includes(config?.difficulty) || !['stone', 'exploration'].includes(config?.winMode)) {
       throw new ApiError(422, 'game.config', 'Unknown map size, difficulty or goal.');
+    }
+    if (config.map !== undefined) {
+      try {
+        validateMapSetup(config.map);
+      } catch (e) {
+        if (e instanceof EngineError) throw new ApiError(422, e.code, e.message);
+        throw e;
+      }
+      if (config.size !== sizeForTiles(config.map.tiles)) throw new ApiError(422, 'game.config', 'The map size does not match its fragments.');
     }
   }
 

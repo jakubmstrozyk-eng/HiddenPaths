@@ -78,7 +78,7 @@ describe('level 3 cards', () => {
 
   it('Elder · Potion of Might: 3 ingredients from 3 fragments make the potion', () => {
     let g = make('nomads', 'elder');
-    const forests = g.map.cells.filter((c) => c.terrain !== 'core' && TERRAINS[c.terrain].actions.some((a) => a === 'gather' || a === 'herbalism')).slice(0, 3);
+    const forests = g.map.cells.filter((c) => c.terrain !== 'core' && c.terrain !== 'void' && TERRAINS[c.terrain].actions.some((a) => a === 'gather' || a === 'herbalism')).slice(0, 3);
     if (forests.length < 3) return;
     g.players[0]!.character.attributes.int = 99;
     for (const cell of forests) {

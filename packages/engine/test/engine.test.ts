@@ -6,6 +6,7 @@ import {
   createCharacter, drawMissionChoices, levelForXp,
   createGame, applyAction, legalActions, currentPlayer, timeoutTurn,
   EngineError, type CharacterInput, type GameConfig, type SizePreset,
+  landAt,
 } from '../src';
 import { onMap } from './helpers';
 
@@ -140,7 +141,7 @@ describe('turns', () => {
     const move = legalActions(game, 'p1').find((a) => a.type === 'move');
     expect(move).toBeDefined();
     if (move?.type !== 'move') return;
-    const terrain = game.map.cells[move.to]!.terrain;
+    const terrain = landAt(game.map, move.to);
     const cost = terrain !== 'core' && TERRAINS[terrain].hard ? 2 : 1;
     game = applyAction(game, 'p1', move);
     const after = currentPlayer(game);

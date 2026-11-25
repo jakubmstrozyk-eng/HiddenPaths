@@ -3,6 +3,7 @@ import { EVENTS, EVENT_BY_ID, ITEMS, ENEMIES } from '@hp/content';
 import {
   applyAction, createGame, currentPlayer, legalActions, neighbours, startCombat, strengthStep, worldView, Rng,
   type Action, type CharacterInput, type GameConfig, type GameState,
+  landAt,
 } from '../src';
 import { onMap } from './helpers';
 
@@ -55,7 +56,7 @@ describe('event cards', () => {
     let state = game();
     const p = currentPlayer(state);
     const target = neighbours(state.map, p.position).find((n) => {
-      const t = state.map.cells[n]!.terrain;
+      const t = landAt(state.map, n);
       return t === 'forest' || t === 'fields';
     });
     if (target === undefined) return;

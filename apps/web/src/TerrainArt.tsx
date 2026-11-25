@@ -162,3 +162,6 @@ export function TerrainArt({ terrain, seed }: { terrain: TerrainId | 'core'; see
     </svg>
   );
 }
+
+/** The main ground colour of a terrain, for small swatches. */
+export const terrainColour = (terrain: TerrainId | 'core') => GROUND[terrain][0];

@@ -810,6 +810,65 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .armour-legend i.heavy { background: rgba(143, 211, 255, 0.55); border-color: #8fd3ff; }
 @media (max-width: 560px) { .doll-figure svg.armour-body { width: auto; height: 130px; } }
 
+/* Squares outside a shaped map's outline: an empty gap. */
+.frag-hole { display: block; aspect-ratio: 1; pointer-events: none; }
+
+/* New game: the player's own map */
+.choice.recommended:not(.active) { border-color: rgba(255, 214, 120, 0.7); box-shadow: inset 0 0 0 1px rgba(255, 214, 120, 0.35); }
+.choice.recommended small { color: #ffd678; opacity: 1; }
+.choice.recommended.active small { color: #6a4a00; }
+.tiles-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tiles-presets .choice { min-height: 0; padding: 10px 12px; }
+.tiles-own { display: grid; gap: 6px; margin-top: 12px; padding: 12px; border: 1px solid var(--line); background: var(--panel); }
+.tiles-inputs { display: flex; align-items: center; gap: 12px; }
+.tiles-inputs input[type='range'] { flex: 1; accent-color: var(--glow); min-width: 0; }
+.tiles-inputs input[type='number'] {
+  width: 76px; padding: 8px; background: #0a0814; color: var(--ink); border: 1px solid var(--line); font: inherit; font-weight: 700; text-align: center;
+}
+.shapes { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.shape-choice { align-items: center; text-align: center; min-height: 0; }
+.shape-preview { display: grid; gap: 1px; height: 64px; margin: 2px auto 4px; align-content: center; }
+.shape-preview i { aspect-ratio: 1; background: rgba(143, 123, 255, 0.45); }
+.shape-preview i.mid { background: #ffd678; }
+.shape-preview i.off { background: transparent; }
+.choice.active .shape-preview i:not(.off):not(.mid) { background: #2a2050; }
+.mix-badge { margin-left: 6px; padding: 2px 8px; font-size: 11px; letter-spacing: 0.04em; text-transform: none; border: 1px solid currentColor; }
+.mix-badge.rec { color: #ffd678; }
+.mix-badge.own { color: #9ad0ff; }
+.terrain-hint { font-size: 12px; margin: -2px 0 12px; line-height: 1.45; }
+.terrain-editor { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; align-items: start; }
+.terrain-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.terrain-group { display: grid; gap: 4px; align-content: start; }
+.group-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 2px; }
+.group-head .warn { color: #ff8a6a; }
+.terrain-row {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) 32px 30px 32px; align-items: center; gap: 6px;
+  padding: 4px 6px; background: var(--panel); border: 1px solid var(--line);
+}
+.terrain-row.is-rec { border-left: 3px solid rgba(255, 214, 120, 0.8); }
+.terrain-row.is-own { border-left: 3px solid #9ad0ff; }
+.terrain-swatch { position: relative; width: 30px; height: 30px; overflow: hidden; display: block; }
+.terrain-swatch .terrain-art { width: 100%; height: 100%; display: block; }
+.terrain-name { display: grid; font-size: 14px; font-weight: 600; line-height: 1.2; }
+.terrain-name small { font-weight: 400; font-size: 11px; color: var(--muted); }
+.terrain-row.is-rec .terrain-name small { color: #ffd678; }
+.terrain-count { text-align: center; font-family: var(--num); font-size: 16px; }
+.step { height: 32px; background: transparent; border: 1px solid var(--line); font-size: 18px; line-height: 1; padding: 0; }
+.step:not(:disabled):hover { border-color: #fff; }
+.step:disabled { opacity: 0.3; }
+.restore { margin-top: 8px; padding: 8px 12px; }
+.map-sample { margin: 0; display: grid; gap: 6px; position: sticky; top: 12px; }
+.sample-board { display: grid; gap: 1px; width: 100%; }
+.sample-board i { position: relative; aspect-ratio: 1; overflow: hidden; display: block; }
+.sample-board i.off { background: transparent; }
+.sample-board .terrain-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.map-sample figcaption { font-size: 11px; line-height: 1.4; }
+@media (max-width: 640px) {
+  .terrain-editor { grid-template-columns: 1fr; }
+  .map-sample { position: static; max-width: 260px; margin: 0 auto; order: -1; }
+  .tiles-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* Event cards: drawn from the deck, turned face up, with the choices set apart below the story */
 .ev-overlay { --evw: min(calc(100vw - 32px), 460px); perspective: 1400px; overflow: hidden; }
 .ev-deck {

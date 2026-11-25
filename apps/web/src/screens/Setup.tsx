@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { DIFFICULTIES, SIZE_PRESETS, type Difficulty, type GameConfig, type SizePreset, type WinMode } from '@hp/engine';
+import { DIFFICULTIES, sizeForTiles, type Difficulty, type GameConfig, type WinMode } from '@hp/engine';
+import { defaultMapChoice, MapSetupPanel, toMapSetup, type MapChoice } from './MapSetup';
 import { useT, type UiKey } from '../i18n';
 
 export function SetupScreen({ onBack, onNext, multiplayer = false }: {
@@ -9,7 +10,7 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
 }) {
   const { t, locale } = useT();
   const [players, setPlayers] = useState(2);
-  const [size, setSize] = useState<SizePreset>('short');
+  const [map, setMap] = useState<MapChoice>(defaultMapChoice);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [winMode, setWinMode] = useState<WinMode>('exploration');
 
@@ -28,20 +29,7 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
         </>
       )}
 
-      <h3>{t('mapSize')}</h3>
-      <div className="choices">
-        {(Object.keys(SIZE_PRESETS) as SizePreset[]).map((s) => {
-          const { width, height } = SIZE_PRESETS[s];
-          return (
-            <Choice key={s} active={size === s} onClick={() => setSize(s)} title={t(s)}>
-              <span className="size-preview" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, width: 14 * width }} aria-hidden="true">
-                {Array.from({ length: width * height }, (_, i) => <i key={i} />)}
-              </span>
-              {width * height} {t('fragments')} · {width}×{height}
-            </Choice>
-          );
-        })}
-      </div>
+      <MapSetupPanel value={map} onChange={setMap} />
 
       <h3>{t('difficulty')}</h3>
       <div className="choices">
@@ -63,7 +51,7 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
 
       <div className="actions">
         <button className="ghost" onClick={onBack}>{t('back')}</button>
-        <button className="primary" onClick={() => onNext({ size, difficulty, winMode, multiplayer }, multiplayer ? players : 1)}>
+        <button className="primary" onClick={() => onNext({ size: sizeForTiles(map.tiles), map: toMapSetup(map), difficulty, winMode, multiplayer }, multiplayer ? players : 1)}>
           {t('next')}
         </button>
       </div>
