@@ -54,7 +54,7 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
           {(shaking) => (
             <span className="dice-row">
               {shown.map((r, i) => (
-                <span className="dice-group" key={i}>
+                <span className={`dice-group${r.kind === 'd100' && r.first ? ' first-throw' : ''}`} key={i}>
                   <span className="dice-pair">
                     {r.kind === 'd100' ? (
                       <>
@@ -89,7 +89,7 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
       {head}
       <div className="dice-row">
         {shown.map((r, i) => (
-          <div className="dice-group" key={i}>
+          <div className={`dice-group${r.kind === 'd100' && r.first ? ' first-throw' : ''}`} key={i}>
             <div className="dice-pair">
               {r.kind === 'd100' ? (
                 <>
@@ -182,7 +182,10 @@ function HeldDie({ sides, tens, shaking, style }: { sides: number; tens?: boolea
 
 /** Above the dice: what the test is for, which attribute it checks, and on the shield the number to roll at or under. */
 function TrayHead({ rolls, heading, base, locale }: { rolls: DiceRoll[]; heading: string | null; base?: Record<Attribute, number>; locale: string }) {
-  const tests = rolls.filter((r): r is Extract<DiceRoll, { kind: 'd100' }> => r.kind === 'd100');
+  const all = rolls.filter((r): r is Extract<DiceRoll, { kind: 'd100' }> => r.kind === 'd100');
+  // A skill card's second throw is the same test again, so it does not count as another test.
+  const tests = all.filter((r) => !r.reroll);
+  const reroll = all.find((r) => r.reroll)?.reroll;
   if (!tests.length && !heading) return null;
   const pl = locale === 'pl';
   const first = tests[0];
@@ -193,6 +196,7 @@ function TrayHead({ rolls, heading, base, locale }: { rolls: DiceRoll[]; heading
     <div className="test-title tray-head" onClick={(e) => e.stopPropagation()}>
       {heading && <small className="tray-heading">{heading}</small>}
       {first && <b>{pl ? 'Test' : 'Test'}: {attr}</b>}
+      {reroll && <span className="tray-reroll">↻ {reroll}: {pl ? 'nieudany rzut powtórzony' : 'failed throw rolled again'}</span>}
       {tests.length === 1 && first && (
         <>
           <span className="target-shield big" title={pl ? 'Rzuć tyle lub mniej' : 'Roll this or lower'}>

@@ -1,4 +1,5 @@
 import type { GameState } from '@hp/engine';
+import { PROFESSIONS } from '@hp/content';
 
 /** A game kept on this device: named by the player, or the automatic save of a game in progress. */
 export interface SaveSlot {
@@ -18,11 +19,22 @@ const MAX_AUTO = 3;
 const valid = (game: GameState | null | undefined): game is GameState =>
   !!game && Array.isArray(game.eventDeck) && typeof game.logSeq === 'number';
 
+/** Games saved before skill cards existed: each hero gets the cards of their profession up to their level. */
+function withCards(game: GameState): GameState {
+  for (const p of game.players) {
+    const c = p.character;
+    if (Array.isArray(c.cards)) continue;
+    c.cards = (PROFESSIONS[c.profession]?.cards ?? []).filter((card) => card.level <= c.level).map((card) => card.id).slice(0, 5);
+  }
+  return game;
+}
+
 function read(): SaveSlot[] {
   try {
     const raw = localStorage.getItem(KEY);
     const list = raw ? (JSON.parse(raw) as SaveSlot[]) : [];
     const slots = Array.isArray(list) ? list.filter((s) => s && valid(s.game)) : [];
+    for (const s of slots) withCards(s.game);
     const old = localStorage.getItem(OLD_KEY);
     if (old) {
       const game = JSON.parse(old) as GameState;

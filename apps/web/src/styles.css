@@ -712,6 +712,8 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 /* Crisp numbers everywhere dice and shields show them. */
 .die, .target-shield span, .damage-pop, .card-cost, .card-uses { font-variant-numeric: tabular-nums; }
 .tray-head { background: rgba(11, 9, 22, 0.88); border: 1px solid var(--line); padding: 12px 22px; min-width: 220px; }
+.tray-head .tray-reroll { font: 700 13px var(--num); color: #9fe8b0; background: #1d3a26cc; border: 1px solid #9fe8b066; border-radius: 999px; padding: 3px 10px; }
+.dice-group.first-throw { opacity: 0.55; filter: grayscale(0.6); }
 .tray-head .tray-heading { font: 700 14px var(--display); color: #ffe066; letter-spacing: 0.06em; text-transform: uppercase; }
 .tray-head > b { font-size: 22px; }
 .target-shield.big { width: 70px; height: 80px; }
