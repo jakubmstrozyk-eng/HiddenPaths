@@ -1,4 +1,5 @@
 /** Game setup choices: how long and how hard a game is. */
+import type { TerrainId } from '@hp/content';
 
 export type SizePreset = 'short' | 'medium' | 'long' | 'epic';
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'nightmare';
@@ -30,8 +31,34 @@ export const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
   nightmare: { testModifier: -10, dangerRings: true, enemyVitality: 1.4, startFood: 3, hostileEvents: 1.6, xp: 2 },
 };
 
+/** Outlines a map can take. Each grows evenly from the middle, so no shape ends up as a thin strip. */
+export type MapShape = 'square' | 'rectangle' | 'rhombus' | 'circle' | 'pentagon' | 'hexagon';
+export const MAP_SHAPES: MapShape[] = ['square', 'rectangle', 'rhombus', 'circle', 'pentagon', 'hexagon'];
+
+/** Jacob (2026-11-25): any number of fragments, but no fewer than 25. */
+export const MIN_TILES = 25;
+export const MAX_TILES = 144;
+
+/** The player's own map: how many fragments, in what outline, and how many of each terrain (the Stone's fragment not counted). */
+export interface MapSetup {
+  tiles: number;
+  shape: MapShape;
+  /** Left out: the game's recommended mix for this many fragments. */
+  terrain?: Partial<Record<TerrainId, number>>;
+}
+
+/** The size band a number of fragments falls in; missions scale their targets by it. */
+export function sizeForTiles(tiles: number): SizePreset {
+  if (tiles <= 30) return 'short';
+  if (tiles <= 42) return 'medium';
+  if (tiles <= 56) return 'long';
+  return 'epic';
+}
+
 export interface GameConfig {
   size: SizePreset;
+  /** A custom map. Without it the map is the square of the size preset. */
+  map?: MapSetup;
   difficulty: Difficulty;
   winMode: WinMode;
   multiplayer: boolean;

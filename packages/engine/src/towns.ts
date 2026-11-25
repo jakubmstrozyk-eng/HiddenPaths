@@ -1,3 +1,4 @@
+import { landAt } from './mapgen';
 import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, TERRAINS, type ArmourSlot, type HerbId, type MaterialId } from '@hp/content';
 import { EngineError } from './errors';
 import { giveItem, runOutcomes } from './events';
@@ -19,7 +20,7 @@ export const TOWN = {
 type Place = 'inn' | 'village' | 'city' | null;
 
 export function placeOf(state: GameState, player: PlayerState): Place {
-  const t = state.map.cells[player.position]!.terrain;
+  const t = landAt(state.map, player.position);
   return t === 'inn' || t === 'village' || t === 'city' ? t : null;
 }
 
@@ -170,7 +171,7 @@ export function sell(state: GameState, player: PlayerState, item: string) {
 /** Cities the hero has found, other than this one, that the portal can reach. */
 export function portalTargets(state: GameState, player: PlayerState): number[] {
   if (placeOf(state, player) !== 'city' || player.counters[onceKey(state, 'portal')]) return [];
-  return player.revealed.filter((cell) => cell !== player.position && state.map.cells[cell]!.terrain === 'city');
+  return player.revealed.filter((cell) => cell !== player.position && landAt(state.map, cell) === 'city');
 }
 
 export function usePortal(state: GameState, player: PlayerState, to: number) {
@@ -182,7 +183,7 @@ export function usePortal(state: GameState, player: PlayerState, to: number) {
 }
 
 export const isSettlement = (state: GameState, cell: number) => {
-  const t = state.map.cells[cell]!.terrain;
+  const t = landAt(state.map, cell);
   return t !== 'core' && !!TERRAINS[t].settlement;
 };
 

@@ -1,6 +1,6 @@
 import { levelForXp, levelUp } from './character';
 import { DIFFICULTIES, dangerLevel } from './config';
-import { neighbours } from './mapgen';
+import { landAt, neighbours } from './mapgen';
 import { trackMissions } from './missions';
 import type { Rng } from './rng';
 import type { GameState, LogEntry, PlayerState } from './state';
@@ -16,7 +16,7 @@ export function worldView(state: GameState): WorldView {
   return {
     round: state.round,
     difficulty: state.config.difficulty,
-    terrainAt: (cell) => state.map.cells[cell]!.terrain,
+    terrainAt: (cell) => landAt(state.map, cell),
     ringAt: (cell) => state.map.cells[cell]!.ring,
     maxRing: state.map.maxRing,
     near: (cell) => neighbours(state.map, cell),

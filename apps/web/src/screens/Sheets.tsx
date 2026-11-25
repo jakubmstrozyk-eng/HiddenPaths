@@ -4,6 +4,7 @@ import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute, type ScrollItem } from '@h
 import {
   buyPrice, heroArmour, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
   type Action, type GameState, type PlayerState, type Service,
+  landAt,
 } from '@hp/engine';
 import { useT } from '../i18n';
 import { attrShort, itemName } from '../logText';
@@ -47,7 +48,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
   const legal = legalActions(game, me.id);
   const services = legal.flatMap((a) => (a.type === 'service' ? [a.service] : []));
   const portals = legal.flatMap((a) => (a.type === 'portal' ? [a.to] : []));
-  const terrain = game.map.cells[me.position]!.terrain;
+  const terrain = landAt(game.map, me.position);
   const place = terrain === 'inn' || terrain === 'city' ? terrain : 'village';
   const [chosen, setChosen] = useState<Spot>(SPOTS[place][0]!);
   const name = (s: Spot) => tx(SPOT_NAME[s]);
