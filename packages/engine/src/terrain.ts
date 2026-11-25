@@ -240,13 +240,17 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
   // Herbalist: +20 to the Intelligence test when gathering herbs or fruit.
   const herbalist = (action === 'gather' || action === 'herbalism') && (actor.character.cards ?? []).includes('druid-herbalist') ? 20 : 0;
   const roll = (attribute: Attribute, extra = 0) => heroTest(world, actor, attribute, rng, extra + herbalist + (skill[action] ?? 0));
+  /** A skill card's second throw at a failed test; the result keeps the card and the first throw so the player sees both. */
+  const retry = (first: TestResult, card: string | null, attribute: Attribute): TestResult =>
+    first.success || !card ? first : { ...roll(attribute), rerolled: card, first: first.roll };
 
   switch (action) {
     case 'hunt': {
       const once = () => {
-        let result = roll('dex');
-        const rerolled = result.success ? null : rerollCard(actor, 'hunt', terrain);
-        if (rerolled) result = roll('dex');
+        const rerolled = (r: TestResult) => (r.success ? null : rerollCard(actor, 'hunt', terrain));
+        const firstThrow = roll('dex');
+        const card = rerolled(firstThrow);
+        const result = retry(firstThrow, card, 'dex');
         if (result.success) {
           const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
           actor.character.food += food;
@@ -255,7 +259,7 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
           // Tannery: each animal caught leaves a hide the Trapper can work.
           if ((actor.character.cards ?? []).includes('trapper-tannery')) add(actor.counters, 'hides');
         }
-        return { result, rerolled };
+        return { result, rerolled: card };
       };
       let { result, rerolled } = once();
       // Fisher: on a lake or river the Gourmet hunts twice in one go.
@@ -289,20 +293,18 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
     case 'mine': {
       const vise = rerollCard(actor, 'mine', terrain);
       if (terrain === 'forest') {
-        let result = roll('dex');
-        const again = !result.success && vise;
-        if (again) result = roll('dex');
+        const result = retry(roll('dex'), vise, 'dex');
+        const again = !!result.rerolled;
         if (result.success) {
           add(actor.inventory.materials, 'wood');
           gained.push('material:wood');
         }
-        return { type: 'test', action, attribute: 'dex', result, gained, ...(again ? { rerolled: vise } : {}) };
+        return { type: 'test', action, attribute: 'dex', result, gained, ...(again ? { rerolled: vise! } : {}) };
       }
       // Mountains and caves: common ores on a Dexterity test, plus one rare find on a harder Intelligence test.
       const common = terrain === 'cave' ? 1 : 2;
-      let result = roll('dex');
-      let again = !result.success && !!vise;
-      if (again) result = roll('dex');
+      const result = retry(roll('dex'), vise, 'dex');
+      let again = result.rerolled === vise && !!vise;
       const rareFind = (): boolean => {
         if (heroTest(world, actor, 'int', rng, -10 + (skill.mine ?? 0)).success) return true;
         if (!vise) return false;
@@ -332,12 +334,10 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
       const fishCard = cards.includes('diver-fish') ? 'diver-fish' : cards.includes('gourmet-fish') ? 'gourmet-fish' : null;
       const fish = !!fishCard;
       // Fish: each failed swim test is rolled again once.
-      let dex = roll('dex');
-      const dexAgain = !dex.success && fish;
-      if (dexAgain) dex = roll('dex');
-      let str = roll('str');
-      const strAgain = !str.success && fish;
-      if (strAgain) str = roll('str');
+      const dex = retry(roll('dex'), fishCard, 'dex');
+      const dexAgain = fish && dex.rerolled === fishCard;
+      const str = retry(roll('str'), fishCard, 'str');
+      const strAgain = fish && str.rerolled === fishCard;
       const again = dexAgain || strAgain ? { rerolled: fishCard! } : {};
       const result = dex.success && str.success ? dex : dex.success ? str : dex;
       if (dex.success && str.success) {
