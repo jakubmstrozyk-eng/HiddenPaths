@@ -22,7 +22,7 @@ describe('starting outside the map', () => {
 
   it('offers only stepping in from a side, or ending the turn', () => {
     const types = new Set(legalActions(fresh(), 'p').map((a) => a.type));
-    expect([...types].every((t) => t === 'enter' || t === 'endTurn' || t === 'spend')).toBe(true);
+    expect([...types].every((t) => t === 'enter' || t === 'endTurn' || t === 'spend' || t === 'eat')).toBe(true);
     expect(types.has('enter')).toBe(true);
     expect(() => applyAction(fresh(), 'p', { type: 'camp' })).toThrow(/map first/);
   });

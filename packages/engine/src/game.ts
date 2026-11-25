@@ -131,6 +131,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     for (const side of SIDES) {
       if (moveCost(state, entryCell(state.map, side), player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA) actions.push({ type: 'enter', side });
     }
+    if (canEat(state, player)) actions.push({ type: 'eat' });
     actions.push({ type: 'endTurn' });
     return actions;
   }
@@ -169,6 +170,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   for (const slot of reinforceSlots(state, player, heroArmour(player))) actions.push({ type: 'reinforce', slot });
   if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
   if (player.character.newCards?.length) actions.push({ type: 'keepCards', cards: [] });
+  if (canEat(state, player)) actions.push({ type: 'eat' });
   actions.push({ type: 'endTurn' });
   return actions;
 }
@@ -218,7 +220,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
   const anytime = action.type === 'spend' || action.type === 'keepCards';
   if (action.type !== 'combat' && action.type !== 'event' && !anytime) busy(player);
-  if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && !anytime) {
+  if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'eat' && !anytime) {
     throw new EngineError('enter.first', 'Step onto the map first.');
   }
 
@@ -323,6 +325,10 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     case 'spend':
       if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
       spendPoints(player.character, action.bonus);
+      break;
+    case 'eat':
+      if (!canEat(state, player)) throw new EngineError('eat.notNow', mealDue(state, player).left ? 'Not enough food.' : 'You have eaten this round.');
+      eat(state, player);
       break;
     case 'endTurn':
       endTurn(state, player, rng);
@@ -474,27 +480,48 @@ function afterAction(state: GameState, player: PlayerState) {
   }
 }
 
-/** End-of-turn upkeep for one player, then the turn passes on. */
-function endTurn(state: GameState, player: PlayerState, rng: Rng) {
+const ateKey = (state: GameState) => `ate@${state.round}`;
+
+/**
+ * This round's meal: how many rations the hero needs (0 for the Sunborn on an even round,
+ * 2 in the desert, else 1), how many they have eaten so far and how many are still to eat.
+ */
+export function mealDue(state: GameState, player: PlayerState): { needed: number; eaten: number; left: number } {
   const c = player.character;
   // Sunborn need food only every second round.
   const needsFood = c.race !== 'sunborn' || state.round % 2 === 1;
   // Staying in the desert costs double food.
-  const meals = !isOutside(player) && state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
-  if (needsFood) {
-    if (c.food >= meals) {
-      eatMeal(state, player, meals);
-      c.food -= meals;
-      trimMeals(player);
-      player.roundsWithoutFood = 0;
-      log(state, { type: 'ate', player: player.id, foodLeft: c.food });
-    } else {
-      player.roundsWithoutFood++;
-      const lost = player.roundsWithoutFood === 3 ? 5 : player.roundsWithoutFood === 6 ? 10 : 0;
-      if (player.roundsWithoutFood >= 9) c.vitality = 0;
-      else c.vitality -= lost;
-      log(state, { type: 'hungry', player: player.id, rounds: player.roundsWithoutFood, vitalityLost: lost });
-    }
+  const needed = !needsFood ? 0 : !isOutside(player) && state.map.cells[player.position]!.terrain === 'desert' ? 2 : 1;
+  const eaten = player.counters[ateKey(state)] ?? 0;
+  return { needed, eaten, left: Math.max(0, needed - eaten) };
+}
+
+function canEat(state: GameState, player: PlayerState): boolean {
+  const { left } = mealDue(state, player);
+  return left > 0 && player.character.food >= left;
+}
+
+/** The hero eats what this round still asks for. */
+function eat(state: GameState, player: PlayerState) {
+  const c = player.character;
+  const { left, eaten } = mealDue(state, player);
+  eatMeal(state, player, left);
+  c.food -= left;
+  trimMeals(player);
+  player.roundsWithoutFood = 0;
+  player.counters[ateKey(state)] = eaten + left;
+  log(state, { type: 'ate', player: player.id, foodLeft: c.food });
+}
+
+/** End-of-turn upkeep for one player, then the turn passes on. A hero who has not eaten goes hungry. */
+function endTurn(state: GameState, player: PlayerState, rng: Rng) {
+  const c = player.character;
+  if (mealDue(state, player).left > 0) {
+    player.roundsWithoutFood++;
+    const lost = player.roundsWithoutFood === 3 ? 5 : player.roundsWithoutFood === 6 ? 10 : 0;
+    if (player.roundsWithoutFood >= 9) c.vitality = 0;
+    else c.vitality -= lost;
+    log(state, { type: 'hungry', player: player.id, rounds: player.roundsWithoutFood, vitalityLost: lost });
   }
   if (c.vitality <= 0) respawn(state, player);
 
@@ -545,6 +572,8 @@ export function timeoutTurn(prev: GameState): GameState {
     }
   }
   log(state, { type: 'timedOut', player: player.id });
+  // An absent player is not starved for being away: the hero eats if there is food.
+  if (canEat(state, player)) eat(state, player);
   afterAction(state, player);
   endTurn(state, player, rng);
   state.rng = rng.state;

@@ -4,7 +4,7 @@ import {
   Rng, seedFromString, test as d100, successChance,
   SIZE_PRESETS, generateMap, terrainPool, regionOf, neighbours,
   createCharacter, drawMissionChoices, levelForXp,
-  createGame, applyAction, legalActions, currentPlayer,
+  createGame, applyAction, legalActions, currentPlayer, timeoutTurn,
   EngineError, type CharacterInput, type GameConfig, type SizePreset,
 } from '../src';
 import { onMap } from './helpers';
@@ -183,13 +183,40 @@ describe('turns', () => {
     expect(game.round).toBe(2);
   });
 
-  it('eats 1 food per round and goes hungry without it', () => {
+  it('eats 1 food per round when the hero eats, and goes hungry without it', () => {
     let game = createGame('turns-5', { ...solo, difficulty: 'nightmare' }, [{ id: 'p1', character: hero() }]);
     expect(currentPlayer(game).character.food).toBe(3);
-    for (let i = 0; i < 6; i++) game = applyAction(game, 'p1', { type: 'endTurn' });
+    for (let i = 0; i < 6; i++) {
+      if (legalActions(game, 'p1').some((a) => a.type === 'eat')) game = applyAction(game, 'p1', { type: 'eat' });
+      game = applyAction(game, 'p1', { type: 'endTurn' });
+    }
     const p = currentPlayer(game);
     expect(p.character.food).toBe(0);
     expect(p.roundsWithoutFood).toBe(3);
     expect(p.character.vitality).toBe(RACES.keepers.vitality - 5);
+  });
+
+  it('eating is the player\'s own action: once a round, and ending the turn without it is hunger', () => {
+    let game = createGame('turns-6', solo, [{ id: 'p1', character: hero() }]);
+    const food = currentPlayer(game).character.food;
+    expect(legalActions(game, 'p1').some((a) => a.type === 'eat')).toBe(true);
+    game = applyAction(game, 'p1', { type: 'eat' });
+    expect(currentPlayer(game).character.food).toBe(food - 1);
+    expect(legalActions(game, 'p1').some((a) => a.type === 'eat')).toBe(false);
+    expect(() => applyAction(game, 'p1', { type: 'eat' })).toThrow(/eaten/);
+    game = applyAction(game, 'p1', { type: 'endTurn' });
+    expect(currentPlayer(game).roundsWithoutFood).toBe(0);
+    // Forgetting to eat: the food stays in the bag, the hero goes hungry.
+    game = applyAction(game, 'p1', { type: 'endTurn' });
+    expect(currentPlayer(game).character.food).toBe(food - 1);
+    expect(currentPlayer(game).roundsWithoutFood).toBe(1);
+  });
+
+  it('an absent player who times out still eats', () => {
+    let game = createGame('turns-7', solo, [{ id: 'p1', character: hero() }]);
+    const food = currentPlayer(game).character.food;
+    game = timeoutTurn(game);
+    expect(currentPlayer(game).character.food).toBe(food - 1);
+    expect(currentPlayer(game).roundsWithoutFood).toBe(0);
   });
 });

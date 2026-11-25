@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, currentPlayer, entryCell, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type Side,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
@@ -19,6 +19,7 @@ import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { KeepCards, SkillHand } from '../SkillCards';
 import { CardCastHost } from '../CardArt';
+import { HurtFlash, hurtSound, munch } from '../Feedback';
 
 /** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
 const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W', flintborn: 'N', nomads: 'N', myrmids: 'E' };
@@ -132,6 +133,34 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   // True from the very render in which the hero changes fragment, before the effect above runs.
   const onTheWay = walking || lastPos.current !== me.position;
 
+  // Losing Vitality outside a fight (a fall, a trap on a card, hunger, poison) is felt: a red flash,
+  // a thump and a shudder, once the dice for it have landed. Fights show their own blows.
+  const prevVit = useRef({ v: c.vitality, id: me.id });
+  const [queuedHurt, setQueuedHurt] = useState<{ amount: number; fatal: boolean; cause?: string } | null>(null);
+  const [hurt, setHurt] = useState<{ amount: number; fatal: boolean; cause?: string; key: number } | null>(null);
+  const [shaking, setShaking] = useState(false);
+  useEffect(() => {
+    const prev = prevVit.current;
+    prevVit.current = { v: c.vitality, id: me.id };
+    if (prev.id !== me.id || me.combat || replay) return;
+    const died = last.some((e) => e.type === 'died' && e.player === me.id);
+    const lost = prev.v - c.vitality;
+    if (lost <= 0 && !died) return;
+    const hungry = last.some((e) => e.type === 'hungry' && e.player === me.id && e.vitalityLost > 0);
+    setQueuedHurt({ amount: died ? Math.max(1, prev.v) : lost, fatal: died, cause: hungry ? tx({ pl: 'Głód!', en: 'Hunger!' }) : undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.version]);
+  useEffect(() => {
+    if (!queuedHurt || dice || onTheWay) return;
+    setHurt({ ...queuedHurt, key: Date.now() });
+    setQueuedHurt(null);
+    hurtSound(queuedHurt.fatal || queuedHurt.amount >= 5);
+    setShaking(true);
+    const stop = setTimeout(() => setShaking(false), 460);
+    const clear = setTimeout(() => setHurt(null), 2000);
+    return () => { clearTimeout(stop); clearTimeout(clear); };
+  }, [queuedHurt, dice, onTheWay]);
+
   /** What a throw is for, shown above the dice: the action, the service or the event that asked for it. */
   const rollHeading = (a: Action, who: PlayerState, entries: LogEntry[]): string | null => {
     const drawn = entries.find((e) => e.type === 'eventDrawn');
@@ -202,6 +231,25 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     void submit?.(game, a);
   }, [game, me, lines, storyTitle, T, t, tx, cells, onChange, submit]);
 
+  // Eating is the player's own move. Ending the turn (or camping, which ends it) without having eaten
+  // asks first: eat now and go on, or go on hungry.
+  const meal = mealDue(game, me);
+  const canEat = actions.some((a) => a.type === 'eat');
+  const [mealAsk, setMealAsk] = useState<Action | null>(null);
+  const afterEat = useRef<Action | null>(null);
+  const eat = useCallback(() => { munch(); act({ type: 'eat' }); }, [act]);
+  const endWith = (a: Action) => {
+    if (canEat) setMealAsk(a);
+    else act(a);
+  };
+  useEffect(() => {
+    const a = afterEat.current;
+    afterEat.current = null;
+    if (a && mealDue(game, me).left === 0) act(a);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.version]);
+  const noMovesLeft = !actions.some((a) => a.type === 'move' || a.type === 'enter');
+
   // Fragments revealed by the last action dissolve from the side the hero came in.
   const revealedNow = new Set(last.flatMap((e) => (e.type === 'revealed' ? [e.cell] : [])));
   const steppedIn = last.some((e) => e.type === 'moved' && e.player === me.id && e.from === OUTSIDE);
@@ -235,7 +283,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const lastNote = last.map((e) => describe(e, T)).filter(Boolean).slice(-3).join(' · ');
 
   return (
-    <div className="game">
+    <div className={`game ${shaking ? 'shaking' : ''}`}>
       <header className="hud">
         <button className="ghost small with-icon" onClick={onMenu}><Icon name="menu" />{t('menu')}</button>
         {canSave && (
@@ -252,8 +300,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         <div className="stats">
           <MoveBar icon="speed" label={t('speed')} left={me.speedLeft} max={c.speed} kind="speed" />
           <MoveBar icon="stamina" label={t('stamina')} left={me.staminaLeft} max={c.stamina} kind="stamina" />
-          <Stat icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} />
-          <FoodBar food={c.food} meals={mealsToday(game, me)} label={t('food')} />
+          <Stat key={hurt?.key ?? 'vit'} icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} hit={!!hurt} />
+          <FoodBar food={c.food} meals={meal.needed} eaten={meal.eaten} label={t('food')} canEat={canEat && quiet} urgent={noMovesLeft} onEat={eat} />
           <Stat icon="gold" label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
           <Stat icon="xp" label={t('xp')} value={Math.floor(c.xp)} />
         </div>
@@ -408,10 +456,10 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               </button>
             )}
             {myTurn && actions.some((a) => a.type === 'camp') && (
-              <button className="ghost with-icon" onClick={() => act({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
+              <button className="ghost with-icon" onClick={() => endWith({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
             )}
             {myTurn && actions.some((a) => a.type === 'camp' && a.research) && (
-              <button className="ghost with-icon" onClick={() => act({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
+              <button className="ghost with-icon" onClick={() => endWith({ type: 'camp', research: true })}><Icon name="cards" />{t('campResearch')} <small className="odds">+1 Int</small></button>
             )}
             {myTurn && quiet && actions.some((a) => a.type === 'cook') && (
               <div className="cook-box">
@@ -450,14 +498,19 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 </span>
                 <span className="cook-spices">
                   {actions.flatMap((a) => (a.type === 'reinforce' ? [a.slot] : [])).map((slot) => (
-                    <button key={slot} className="ghost small" onClick={() => act({ type: 'reinforce', slot })}>{t(slot)}</button>
+                    <button key={slot} className="ghost small" onClick={() => endWith({ type: 'reinforce', slot })}>{t(slot)}</button>
                   ))}
                 </span>
               </div>
             )}
-            <button className="primary end-turn" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>
+            {myTurn && quiet && canEat && (
+              <button className={`eat-btn act-meal due ${noMovesLeft ? 'urgent' : ''}`} onClick={eat}>
+                <Icon name="food" size={16} />{tx({ pl: 'Zjedz posiłek', en: 'Eat a meal' })} · −{meal.left}
+              </button>
+            )}
+            <button className="primary end-turn" disabled={!quiet} onClick={() => endWith({ type: 'endTurn' })}>
               {t('endTurn')}
-              <small>{mealNote(mealsToday(game, me), c.food, locale)}</small>
+              <small>{mealNote(meal, c.food, locale)}</small>
             </button>
           </div>
         </aside>
@@ -515,55 +568,110 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {myTurn && !onTheWay && !replay && !me.combat && !dice && !!c.newCards?.length && (
           <KeepCards key="keep" profession={c.profession} held={c.cards} fresh={c.newCards} onKeep={(cards) => act({ type: 'keepCards', cards })} />
         )}
+        {mealAsk && (
+          <MealReminder
+            key="meal"
+            left={meal.left}
+            food={c.food}
+            hungerRounds={me.roundsWithoutFood + 1}
+            onEat={() => { afterEat.current = mealAsk; setMealAsk(null); eat(); }}
+            onSkip={() => { const a = mealAsk; setMealAsk(null); act(a); }}
+            onBack={() => setMealAsk(null)}
+          />
+        )}
         {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
       {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
       <CardCastHost />
+      <AnimatePresence>{hurt && <HurtFlash key={hurt.key} amount={hurt.amount} fatal={hurt.fatal} cause={hurt.cause} />}</AnimatePresence>
     </div>
   );
 }
 
-function Stat({ icon, label, value, warn }: { icon: IconName; label: string; value: string | number; warn?: boolean }) {
+function Stat({ icon, label, value, warn, hit }: { icon: IconName; label: string; value: string | number; warn?: boolean; hit?: boolean }) {
   return (
-    <span className={`stat ${warn ? 'warn' : ''}`}>
+    <span className={`stat ${warn ? 'warn' : ''} ${hit ? 'hit' : ''}`}>
       <small>{label}</small>
       <b><Icon name={icon} size={14} /> {value}</b>
     </span>
   );
 }
 
-/** Food the hero eats when this turn ends: 0 for the Sunborn on an even round, 2 in the desert, else 1. Mirrors endTurn in the engine. */
-function mealsToday(game: GameState, me: PlayerState): number {
-  if (me.character.race === 'sunborn' && game.round % 2 === 0) return 0;
-  return !isOutside(me) && game.map.cells[me.position]!.terrain === 'desert' ? 2 : 1;
-}
-
-/** What the end of the turn does to the food bag, in words. */
-function mealNote(meals: number, food: number, locale: string): string {
+/** What this round's meal still asks of the player, in words, under the end-turn button. */
+function mealNote(meal: { needed: number; left: number }, food: number, locale: string): string {
   const pl = locale === 'pl';
-  if (meals === 0) return pl ? 'dziś bez posiłku' : 'no meal today';
-  if (food < meals) return pl ? 'brak jedzenia: głód!' : 'no food: hunger!';
-  return pl ? `−${meals} jedzenia` : `−${meals} food`;
+  if (meal.needed === 0) return pl ? 'dziś bez posiłku' : 'no meal today';
+  if (meal.left === 0) return pl ? 'posiłek zjedzony' : 'meal eaten';
+  if (food < meal.left) return pl ? 'brak jedzenia: głód!' : 'no food: hunger!';
+  return pl ? 'najpierw zjedz posiłek!' : 'eat your meal first!';
 }
 
-/** Food as a row of rations; the ones the hero eats at the end of the turn are marked. */
-function FoodBar({ food, meals, label }: { food: number; meals: number; label: string }) {
+/**
+ * Food as a row of rations, with the bread button: the player eats this round's meal themselves.
+ * The button glows until they do, and pulses red once the hero has nowhere left to walk this turn.
+ */
+function FoodBar({ food, meals, eaten, label, canEat, urgent, onEat }: {
+  food: number; meals: number; eaten: number; label: string; canEat: boolean; urgent: boolean; onEat: () => void;
+}) {
   const { locale } = useT();
   const pl = locale === 'pl';
+  const left = Math.max(0, meals - eaten);
   const shown = Math.min(food, 12);
   const days = meals === 0 ? null : Math.floor(food / Math.max(1, meals));
   return (
-    <span className={`stat movebar food ${food < Math.max(1, meals) ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuenow={food}>
-      <small>{label} · {meals === 0 ? (pl ? 'dziś bez posiłku' : 'no meal today') : `−${meals}/${pl ? 'dzień' : 'day'}`}</small>
-      <b><Icon name="food" size={14} /> {food}{days !== null ? <em className="food-days">{pl ? ` · na ${days} ${days === 1 ? 'dzień' : 'dni'}` : ` · ${days} ${days === 1 ? 'day' : 'days'}`}</em> : null}</b>
+    <span className={`stat movebar food food-stat ${left > 0 && food < left ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuenow={food}>
+      <small>{label} · {meals === 0 ? (pl ? 'dziś bez posiłku' : 'no meal today') : `${meals}/${pl ? 'runda' : 'round'}`}</small>
+      <b><Icon name="food" size={14} /> {food}{days !== null ? <em className="food-days">{pl ? ` · na ${days} ${days === 1 ? 'rundę' : 'rund'}` : ` · ${days} ${days === 1 ? 'round' : 'rounds'}`}</em> : null}</b>
       <span className="pips" aria-hidden="true">
         {food === 0 && <i className="empty" />}
         {Array.from({ length: shown }, (_, i) => (
-          <motion.i key={i} className={`on ${i >= shown - meals ? 'eaten' : ''}`} initial={false} animate={{ scaleY: 1, opacity: 1 }} />
+          <motion.i key={i} className={`on ${i >= shown - left ? 'eaten' : ''}`} initial={false} animate={{ scaleY: 1, opacity: 1 }} />
         ))}
         {food > shown && <small className="more">+{food - shown}</small>}
       </span>
+      {canEat ? (
+        <button className={`eat-btn due ${urgent ? 'urgent' : ''}`} onClick={onEat} title={pl ? 'Zjedz posiłek na tę rundę' : 'Eat this round\'s meal'}>
+          <Icon name="food" size={14} />{pl ? 'Zjedz' : 'Eat'}
+        </button>
+      ) : meals > 0 && left === 0 ? (
+        <span className="eat-done">✓ {pl ? 'najedzony' : 'fed'}</span>
+      ) : meals > 0 && food < left ? (
+        <span className="eat-hungry">{pl ? 'brak jedzenia!' : 'no food!'}</span>
+      ) : null}
     </span>
+  );
+}
+
+/** Asked when the turn would end before the hero has eaten: eat and go on, or go on hungry. */
+function MealReminder({ left, food, hungerRounds, onEat, onSkip, onBack }: {
+  left: number; food: number; hungerRounds: number; onEat: () => void; onSkip: () => void; onBack: () => void;
+}) {
+  const { tx } = useT();
+  const penalty = hungerRounds >= 9
+    ? tx({ pl: 'To już 9. runda głodu: bohater umrze z wycieńczenia!', en: 'The 9th hungry round: the hero will die of starvation!' })
+    : hungerRounds === 3 || hungerRounds === 6
+      ? tx({ pl: `To będzie ${hungerRounds}. runda bez jedzenia: stracisz ${hungerRounds === 3 ? 5 : 10} Żyw.!`, en: `That will be round ${hungerRounds} without food: you lose ${hungerRounds === 3 ? 5 : 10} Vitality!` })
+      : tx({ pl: `To będzie ${hungerRounds}. runda bez jedzenia. Po 3 rundach głód odbiera 5 Żyw., po 6 kolejne 10.`, en: `That will be round ${hungerRounds} without food. After 3 rounds hunger takes 5 Vitality, after 6 another 10.` });
+  return (
+    <div className="overlay" onClick={onBack}>
+      <motion.article className="card meal-card" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()} role="alertdialog">
+        <motion.span className="meal-bread" animate={{ rotate: [0, -8, 8, -4, 0] }} transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 0.8 }}>
+          <Icon name="food" size={56} />
+        </motion.span>
+        <header className="card-head">
+          <small>{tx({ pl: 'Koniec rundy', en: 'End of the round' })}</small>
+          <h2>{tx({ pl: 'Musisz się posilić', en: 'You need to eat' })}</h2>
+        </header>
+        <p className="card-text">
+          {tx({ pl: `Twój bohater nie zjadł jeszcze posiłku w tej rundzie. Zjedz ${left} ${left === 1 ? 'porcję' : 'porcje'} jedzenia (masz ${food}), żeby nie tracić Żywotności.`, en: `You have not eaten this round. Eat ${left} food (you have ${food}) so you do not lose Vitality.` })}
+        </p>
+        <p className="card-text"><small>{penalty}</small></p>
+        <div className="card-options">
+          <button className="eat-big" onClick={onEat}>{tx({ pl: `Zjedz (−${left}) i kontynuuj`, en: `Eat (−${left}) and go on` })}</button>
+          <button className="ghost" onClick={onSkip}>{tx({ pl: 'Kontynuuj bez jedzenia', en: 'Go on without eating' })}</button>
+        </div>
+      </motion.article>
+    </div>
   );
 }
 
