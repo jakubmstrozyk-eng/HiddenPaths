@@ -105,6 +105,10 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         out.push({ kind: 'hit', who: 'fire', target: ev.uid, damage: ev.damage });
         out.push({ kind: 'note', who: ev.uid, text: ev.dead ? (pl ? 'Spłonął!' : 'Burnt to death!') : ev.out ? (pl ? 'Gasi ogień' : 'Puts the fire out') : (pl ? 'Płonie!' : 'Burning!') });
         break;
+      case 'shock':
+        out.push({ kind: 'roll', who: ev.uid, test: 'foeShock', result: ev.result });
+        out.push({ kind: 'note', who: ev.uid, text: ev.stunned ? (pl ? 'Ogłuszony!' : 'Stunned!') : (pl ? 'Otrząsa się' : 'Shrugs it off') });
+        break;
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
     }
   }

@@ -7,14 +7,14 @@ import { useT, type UiKey } from './i18n';
 import { Icon } from './Icons';
 
 /** Cards the player plays on the map and in a fight. Every other card works on its own. */
-const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew'];
+const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-nature', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew'];
 const FIGHT_PLAY = [
   'trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves',
   'explorer-disarm', 'guardian-stance', 'druid-companion', 'elder-herb', 'explorer-bandages', 'runemaster-empower',
 ];
 /** Cards used through another button: at camp, when preparing food, in a city, or not yet in the game. */
 const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city'> = {
-  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'elder-nature': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city',
+  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city',
 };
 
 /** A card that is never played: it works by itself whenever its moment comes. */

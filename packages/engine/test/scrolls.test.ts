@@ -72,4 +72,26 @@ describe('magic scrolls', () => {
     }
     expect(seen).toBe(true);
   });
+
+  it('Lightning: power S+2; a foe hit tests Strength and is stunned for a round on a failure', () => {
+    const g = make();
+    let stunned = false;
+    for (let seed = 1; seed < 200 && !stunned; seed++) {
+      const a = structuredClone(g.players[0]!);
+      a.inventory.items.push('scrollLightning');
+      a.character.vitality = 99;
+      const c = startCombat(worldView(g), ['bear']);
+      const { events } = combatTurn(worldView(g), a, c, { move: 'scroll', item: 'scrollLightning', target: 'bear-1' }, new Rng(seed));
+      const shock = events.find((e) => e.type === 'shock');
+      if (shock && shock.type === 'shock' && shock.stunned) {
+        // The stunned bear loses its next attack.
+        if (c.foes[0]!.vitality <= 0) continue;
+        const next = combatTurn(worldView(g), a, c, { move: 'focus' }, new Rng(seed + 1));
+        expect(next.events.some((e) => e.type === 'stunned' && e.who === 'bear-1')).toBe(true);
+        expect(next.events.some((e) => e.type === 'strike' && e.by === 'bear-1')).toBe(false);
+        stunned = true;
+      }
+    }
+    expect(stunned).toBe(true);
+  });
 });

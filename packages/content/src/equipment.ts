@@ -157,8 +157,8 @@ const list: Item[] = [
     effect: t('Usuwa wszystkie negatywne efekty', 'Removes every negative effect'),
   },
   {
-    id: 'scrollLightning', kind: 'scroll', spell: 'lightning', power: 3, name: t('Zwój: Błyskawica', 'Scroll: Lightning'), sell: 10, buy: 5, rare: false, cityOnly: true,
-    effect: t('W walce: test Walki, siła S+3', 'In a fight: Combat test, power S+3'),
+    id: 'scrollLightning', kind: 'scroll', spell: 'lightning', power: 2, name: t('Zwój: Błyskawica', 'Scroll: Lightning'), sell: 10, buy: 5, rare: false, cityOnly: true,
+    effect: t('W walce: test Walki, siła S+2; trafiony testuje Siłę, porażka = ogłuszenie na rundę', 'In a fight: Combat test, power S+2; a foe hit tests Strength or is stunned for a round'),
   },
 ];
 

@@ -175,6 +175,7 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'tame': return `${cardName('druid-companion', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'oswojony!' : 'tamed!') : (pl ? 'nie daje się oswoić' : 'will not be tamed')}`;
     case 'companionDown': return `${foeName(ev.uid, locale)} ✕`;
     case 'scroll': return `${itemName(ev.item, locale)}${ev.amount ? `: +${ev.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'shock': return `${foeName(ev.uid, locale)}: ${ev.stunned ? (pl ? 'ogłuszony błyskawicą' : 'stunned by lightning') : (pl ? 'otrząsa się z porażenia' : 'shrugs off the lightning')}`;
     case 'burn': return `${foeName(ev.uid, locale)}: ${ev.dead ? (pl ? 'spłonął!' : 'burnt to death!') : ev.out ? (pl ? 'gasi ogień, −1' : 'puts the fire out, −1') : (pl ? 'płonie, −1' : 'burns, −1')}`;
   }
 }

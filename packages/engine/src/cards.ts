@@ -4,7 +4,7 @@ import { EngineError } from './errors';
 import { log, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, Meal, PlayerState } from './state';
-import { heroTest, type ActorState } from './terrain';
+import { heroTest, NATURE_BONUS, type ActorState } from './terrain';
 import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 
 /**
@@ -16,7 +16,9 @@ import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 /** Cards with a fixed number of uses per game. */
 export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3 };
 /** Cards that turn sideways when used and come back at the next camp. */
-export const CARDS_PER_CAMP = ['wraith-haste', 'elder-wisdom', 'elder-herb', 'runemaster-empower'];
+export const CARDS_PER_CAMP = ['wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower'];
+/** Cards that cost Stamina when played on the map (Jacob, 2026-11-25); in a fight they take the hero's round instead. */
+export const MAP_STAMINA: Record<string, number> = { 'elder-nature': 1, 'elder-herb': 1, 'runemaster-empower': 1, 'explorer-bandages': 1 };
 
 export const has = (actor: Pick<ActorState, 'character'>, card: string) => actor.character.cards.includes(card);
 
@@ -43,14 +45,16 @@ export function playableCards(state: GameState, player: PlayerState): string[] {
   if (has(player, 'warrior-rations') && usesLeft(player, 'warrior-rations')! > 0) out.push('warrior-rations');
   if (has(player, 'wraith-leaves') && usesLeft(player, 'wraith-leaves')! > 0 && player.staminaLeft >= 1) out.push('wraith-leaves');
   if (has(player, 'trapper-trap') && state.map.cells[player.position]!.terrain !== 'core' && !player.counters[trapKey(player.position)]) out.push('trapper-trap');
-  for (const card of ['elder-herb', 'runemaster-empower']) if (has(player, card) && !isSpent(player, card)) out.push(card);
+  for (const card of ['elder-nature', 'elder-herb', 'runemaster-empower']) {
+    if (has(player, card) && !isSpent(player, card) && player.staminaLeft >= MAP_STAMINA[card]!) out.push(card);
+  }
   if (has(player, 'explorer-bandages') && player.staminaLeft >= BANDAGE_STAMINA) out.push('explorer-bandages');
   if (has(player, 'gourmet-stew') && canStew(state, player)) out.push('gourmet-stew');
   return out;
 }
 
 /** Bandages cost 1 Stamina on the map; in a fight they take the hero's move instead. */
-export const BANDAGE_STAMINA = 1;
+export const BANDAGE_STAMINA = MAP_STAMINA['explorer-bandages']!;
 /** Healing Stew: the most stews a Gourmet keeps ready. */
 export const MAX_STEWS = 3;
 
@@ -206,7 +210,15 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       player.counters[trapKey(player.position)] = 1;
       log(state, { type: 'card', player: player.id, card, ok: true });
       break;
+    case 'elder-nature':
+      // Close to Nature: renewed at camp; played for 1 Stamina, +10 to the next attribute test.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.counters['used:elder-nature'] = 1;
+      player.counters.nature = 1;
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: NATURE_BONUS });
+      break;
     case 'elder-herb':
+      player.staminaLeft -= MAP_STAMINA[card]!;
       log(state, { type: 'card', player: player.id, card, ok: true, amount: healingHerb(player) });
       break;
     case 'explorer-bandages':
@@ -214,6 +226,7 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       log(state, { type: 'card', player: player.id, card, ok: true, amount: bandage(player) });
       break;
     case 'runemaster-empower':
+      player.staminaLeft -= MAP_STAMINA[card]!;
       empower(state.round, player);
       log(state, { type: 'card', player: player.id, card, ok: true, amount: 2 });
       break;

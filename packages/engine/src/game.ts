@@ -249,11 +249,6 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       log(state, { type: 'camped', player: player.id, cell: player.position, healed });
       // Companions rest too.
       for (const pet of player.companions ?? []) pet.vitality = Math.min(pet.maxVitality, pet.vitality + 2);
-      // Close to Nature: the Elder meditates at camp, +10 to the next attribute test.
-      if (player.character.cards.includes('elder-nature')) {
-        player.counters.nature = 1;
-        log(state, { type: 'card', player: player.id, card: 'elder-nature', ok: true, amount: 10 });
-      }
       endTurn(state, player, rng);
       break;
     }

@@ -25,29 +25,26 @@ describe('the six professions added after the MVP', () => {
     }
   });
 
-  it('Elder · Wisdom of Ages: a failed Intelligence test is thrown again once until camp', () => {
+  it('Elder · Wisdom of Ages: every failed Intelligence test is thrown again once', () => {
     const g = make('nomads', 'elder');
     const p = g.players[0]!;
     p.character.attributes.int = 2;
     let rerolled = 0;
-    for (let seed = 1; seed < 20; seed++) {
-      const r = heroTest(worldView(g), p, 'int', new Rng(seed));
-      if (r.rerolled === 'elder-wisdom') rerolled++;
-    }
-    expect(rerolled).toBe(1);
-    expect(p.counters['used:elder-wisdom']).toBe(1);
+    for (let seed = 1; seed < 20; seed++) if (heroTest(worldView(g), p, 'int', new Rng(seed)).rerolled === 'elder-wisdom') rerolled++;
+    expect(rerolled).toBeGreaterThan(1);
   });
 
-  it('Elder · Close to Nature: camping gives +10 to the next test only', () => {
+  it('Elder · Close to Nature: 1 Stamina for +10 to the next test only, renewed at camp', () => {
     let g = make('nomads', 'elder');
-    const camp = legalActions(g, 'p').find((a) => a.type === 'camp');
-    if (!camp) return;
-    g = applyAction(g, 'p', camp);
+    const sta = g.players[0]!.staminaLeft;
+    const base = testModifier(worldView(g), g.players[0]!, 'dex');
+    g = applyAction(g, 'p', { type: 'card', card: 'elder-nature' });
     const p = g.players[0]!;
-    expect(p.counters.nature).toBe(1);
-    const base = testModifier(worldView(g), p, 'dex');
+    expect(p.staminaLeft).toBe(sta - 1);
+    expect(testModifier(worldView(g), p, 'dex')).toBe(base + 10);
     heroTest(worldView(g), p, 'dex', new Rng(1));
-    expect(testModifier(worldView(g), p, 'dex')).toBe(base - 10);
+    expect(testModifier(worldView(g), p, 'dex')).toBe(base);
+    expect(legalActions(g, 'p').some((a) => a.type === 'card' && a.card === 'elder-nature')).toBe(false);
   });
 
   it('Elder · Healing Herb: +2 Vitality and poison cured, then waits for camp', () => {
@@ -56,8 +53,10 @@ describe('the six professions added after the MVP', () => {
     p.character.vitality -= 5;
     p.conditions.push({ id: 'poison', name: { pl: 'x', en: 'x' }, test: 'str', modifier: 0, worsen: 0, each: [] });
     const vit = p.character.vitality;
+    const sta = p.staminaLeft;
     g = applyAction(g, 'p', { type: 'card', card: 'elder-herb' });
     expect(g.players[0]!.character.vitality).toBe(vit + 2);
+    expect(g.players[0]!.staminaLeft).toBe(sta - 1);
     expect(g.players[0]!.conditions).toEqual([]);
     expect(legalActions(g, 'p').some((a) => a.type === 'card' && a.card === 'elder-herb')).toBe(false);
   });
@@ -115,6 +114,11 @@ describe('the six professions added after the MVP', () => {
     const g = make('humans', 'explorer');
     const p = g.players[0]!;
     expect(combatMoves(p, startCombat(worldView(g), ['wolf'])).some((m) => m.move === 'card' && m.card === 'explorer-disarm')).toBe(false);
+    // Only a hand weapon can be knocked away: not a bow, claws or a spell.
+    for (const foe of ['nomadWarrior', 'witch', 'bear']) {
+      expect(combatMoves(p, startCombat(worldView(g), [foe])).some((m) => m.move === 'card' && m.card === 'explorer-disarm')).toBe(false);
+    }
+    expect(combatMoves(p, startCombat(worldView(g), ['imp'])).some((m) => m.move === 'card' && m.card === 'explorer-disarm')).toBe(true);
     let seen = false;
     for (let seed = 1; seed < 200 && !seen; seed++) {
       const c = startCombat(worldView(g), ['bandit']);
@@ -180,7 +184,9 @@ describe('the six professions added after the MVP', () => {
 
   it('Runemaster · Empowered Weapon: +2 damage for 3 rounds, renews at camp', () => {
     let g = make('flintborn', 'runemaster');
+    const sta = g.players[0]!.staminaLeft;
     g = applyAction(g, 'p', { type: 'card', card: 'runemaster-empower' });
+    expect(g.players[0]!.staminaLeft).toBe(sta - 1);
     const e = g.players[0]!.effects.find((x) => x.id === 'empower')!;
     expect(e.amount).toBe(2);
     expect(e.untilRound).toBe(g.round + 2);

@@ -16,9 +16,9 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
   elder: {
     id: 'elder', race: 'nomads', mvp: true, name: { pl: 'Starszy', en: 'Elder' },
     cards: [
-      { id: 'elder-wisdom', level: 1, name: { pl: 'Mądrość Wieków', en: 'Wisdom of Ages' }, summary: { pl: 'Następny nieudany test Int. powtarzasz raz (odnawia się po obozowisku).', en: 'The next failed Intelligence test is rolled again once (renews at camp).' } },
-      { id: 'elder-nature', level: 1, name: { pl: 'Bliskość Natury', en: 'Close to Nature' }, summary: { pl: 'Przy obozowisku medytujesz: +10 do następnego testu cechy.', en: 'At camp you meditate: +10 to your next attribute test.' } },
-      { id: 'elder-herb', level: 1, name: { pl: 'Lecznicze Ziele', en: 'Healing Herb' }, summary: { pl: 'Tamuje krwawienie, leczy zatrucie i +2 Żyw. (odnawia się po obozowisku).', en: 'Stops bleeding, cures poison and heals 2 Vitality (renews at camp).' } },
+      { id: 'elder-wisdom', level: 1, name: { pl: 'Mądrość Wieków', en: 'Wisdom of Ages' }, summary: { pl: 'Każdy nieudany test Int. powtarzasz raz.', en: 'Every failed Intelligence test is rolled again once.' } },
+      { id: 'elder-nature', level: 1, name: { pl: 'Bliskość Natury', en: 'Close to Nature' }, summary: { pl: '1 Wt.: medytujesz, +10 do następnego testu cechy (odnawia się po obozowisku).', en: '1 Stamina: you meditate, +10 to your next attribute test (renews at camp).' } },
+      { id: 'elder-herb', level: 1, name: { pl: 'Lecznicze Ziele', en: 'Healing Herb' }, summary: { pl: '1 Wt. (w walce cała runda): tamuje krwawienie, leczy zatrucie i +2 Żyw. (odnawia się po obozowisku).', en: '1 Stamina (in a fight, your round): stops bleeding, cures poison and heals 2 Vitality (renews at camp).' } },
     ],
   },
   diver: {
@@ -42,7 +42,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
     cards: [
       { id: 'explorer-traveller', level: 1, name: { pl: 'Podróżnik', en: 'Traveller' }, summary: { pl: 'Co 2 nowe fragmenty odkryte w jednej turze = +1 PD.', en: 'Every 2 new fragments revealed in one turn give +1 XP.' } },
       { id: 'explorer-bandages', level: 1, name: { pl: 'Opatrunki', en: 'Bandages' }, summary: { pl: '1 Wt. (w walce cała tura): +2 Żyw. i tamuje krwawienie.', en: '1 Stamina (in a fight, your move): +2 Vitality and stops bleeding.' } },
-      { id: 'explorer-disarm', level: 1, combat: true, name: { pl: 'Rozbrojenie', en: 'Disarm' }, summary: { pl: 'Atak; trafiony wróg testuje Zr. Porażka = traci broń, póki nie wygra przeciwstawnego testu Zr.', en: 'An attack; a foe hit tests Dexterity. On a failure it loses its weapon until it wins an opposed Dexterity test.' } },
+      { id: 'explorer-disarm', level: 1, combat: true, name: { pl: 'Rozbrojenie', en: 'Disarm' }, summary: { pl: 'Atak na wroga z bronią białą; trafiony testuje Zr. Porażka = traci broń, póki nie wygra przeciwstawnego testu Zr.', en: 'An attack on a foe with a hand weapon; a foe hit tests Dexterity. On a failure it loses its weapon until it wins an opposed Dexterity test.' } },
     ],
   },
   warrior: {
@@ -88,7 +88,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
   runemaster: {
     id: 'runemaster', race: 'flintborn', mvp: true, name: { pl: 'Runmistrz', en: 'Runemaster' },
     cards: [
-      { id: 'runemaster-empower', level: 1, combat: true, name: { pl: 'Wzmocnienie Broni', en: 'Empowered Weapon' }, summary: { pl: 'Na 3 rundy każde trafienie +2 Obr. (odnawia się po obozowisku).', en: 'For 3 rounds every hit deals +2 damage (renews at camp).' } },
+      { id: 'runemaster-empower', level: 1, combat: true, name: { pl: 'Wzmocnienie Broni', en: 'Empowered Weapon' }, summary: { pl: '1 Wt. (w walce cała runda): na 3 rundy każde trafienie +2 Obr. (odnawia się po obozowisku).', en: '1 Stamina (in a fight, your round): for 3 rounds every hit deals +2 damage (renews at camp).' } },
       { id: 'runemaster-vise', level: 1, name: { pl: 'Imadło', en: 'Vise' }, summary: { pl: 'Nieudany test wydobycia surowców możesz raz powtórzyć.', en: 'A failed test for gathering materials may be rolled again once.' } },
       { id: 'runemaster-smelt', level: 1, name: { pl: 'Przetapianie', en: 'Smelting' }, summary: { pl: 'W mieście 3 sztuki broni lub zbroi przetapiasz na rudę żelaza albo nowy zwykły przedmiot.', en: 'In a city, melt 3 weapons or armour pieces into iron ore or a new common item.' } },
     ],

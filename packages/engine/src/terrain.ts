@@ -151,7 +151,7 @@ export const NATURE_BONUS = 10;
 /**
  * A test of one of the hero's base attributes, with every modifier and the cards that act on any test:
  * Close to Nature's +10 is used up by it, and Wisdom of Ages gives a failed Intelligence test a second throw
- * once until the next camp.
+ * once more.
  */
 export function heroTest(world: WorldView, actor: ActorState, attribute: Attribute, rng: Rng, extra = 0, vs?: string): TestResult {
   const modifier = testModifier(world, actor, attribute, extra, vs);
@@ -159,8 +159,8 @@ export function heroTest(world: WorldView, actor: ActorState, attribute: Attribu
   let result = test(rng, value, modifier);
   if (actor.counters.nature) delete actor.counters.nature;
   const cards = actor.character.cards ?? [];
-  if (!result.success && attribute === 'int' && cards.includes('elder-wisdom') && !actor.counters['used:elder-wisdom']) {
-    actor.counters['used:elder-wisdom'] = 1;
+  // Wisdom of Ages: every failed Intelligence test is thrown once more (Jacob, 2026-11-25).
+  if (!result.success && attribute === 'int' && cards.includes('elder-wisdom')) {
     result = { ...test(rng, value, modifier), rerolled: 'elder-wisdom', first: result.roll };
   }
   return result;

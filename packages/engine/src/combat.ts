@@ -84,6 +84,8 @@ export type CombatEvent =
   /** A burning foe: loses 1 Vitality and tests Strength to put the fire out; the 3rd failure kills it. */
   | { type: 'burn'; uid: string; result: TestResult; damage: number; out: boolean; dead: boolean }
   | { type: 'trap'; uid: string; result: TestResult; damage: number }
+  /** Lightning: the foe hit tests Strength; `stunned` when it failed and loses its next attack. */
+  | { type: 'shock'; uid: string; result: TestResult; stunned: boolean }
   /** Guardian's Defensive Stance taken for the round. */
   | { type: 'stance' }
   /** Disarm: the foe's Dexterity roll to keep its weapon; `kept` false means it lost it. */
@@ -181,8 +183,8 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   return moves;
 }
 
-/** Disarm only works on foes that fight with a weapon in hand, not on beasts or spirits. */
-export const canDisarm = (foe: Foe) => !foe.disarmed && ['human', 'thug', 'demon'].includes(ENEMIES[foe.enemy]!.kind);
+/** Disarm only works on a foe holding a hand weapon (a blade or an axe), not on claws, teeth, bows or spells (Jacob, 2026-11-25). */
+export const canDisarm = (foe: Foe) => !foe.disarmed && !!ENEMIES[foe.enemy]!.weapon.blade;
 
 /** Most beasts that follow a Druid at once (Companion). */
 export const MAX_COMPANIONS = 2;
@@ -282,6 +284,12 @@ export function combatTurn(
     if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
     events.push({ ...base, location, damage, ...(dodge ? { dodge } : {}) });
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+    // Lightning: a foe that is hit tests Strength; a failure leaves it stunned for a round.
+    else if (opts.scroll && scrollOf(opts.scroll)?.spell === 'lightning') {
+      const shock = test(rng, enemy.str);
+      if (!shock.success) target.stunned = true;
+      events.push({ type: 'shock', uid: target.uid, result: shock, stunned: !shock.success });
+    }
     return true;
   };
   const targetOf = (uid?: string) => alive().find((f) => f.uid === uid) ?? alive()[0];
