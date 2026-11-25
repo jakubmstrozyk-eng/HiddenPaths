@@ -147,6 +147,8 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${itemName(e.item, locale)}${e.amount ? `: +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
     case 'smelted':
       return `${pl ? 'Przetopione' : 'Smelted'}: ${e.items.map((i) => itemName(i, locale)).join(', ')} → ${itemName(e.into, locale)}`;
+    case 'ate':
+      return pl ? `Posiłek zjedzony · zostało ${e.foodLeft} jedzenia` : `Meal eaten · ${e.foodLeft} food left`;
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:

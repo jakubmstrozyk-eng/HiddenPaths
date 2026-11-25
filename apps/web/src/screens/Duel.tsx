@@ -11,6 +11,7 @@ import { diceStyle, diceVars, DieFace } from '../DiceFace';
 import { ArmourBody, spotName } from '../ArmourBody';
 import { buzz, clack, ShakeToThrow, Verdict } from '../Throw';
 import { HitFx, hitKind } from '../HitFx';
+import { hurtSound } from '../Feedback';
 import { PixelFoe, PixelHero } from '../PixelHero';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
@@ -195,6 +196,12 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     setRolled(false);
   }, [entries]);
   const step = entries ? steps[at] : undefined;
+  // A blow on the hero is felt too: a thump, a shudder and a red flash at the edges.
+  const heroHurt = step?.kind === 'hit' && step.target === HERO && step.damage > 0;
+  useEffect(() => {
+    if (heroHurt && step?.kind === 'hit') hurtSound(step.damage >= 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at, heroHurt]);
   // The tap that chose the move throws the first die; every later throw of the hero waits for its own tap.
   const waitingForTap = step?.kind === 'roll' && step.who === HERO && at > 0 && !rolled;
 
@@ -296,6 +303,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
 
   return (
     <div className="overlay combat">
+      {heroHurt && (
+        <motion.div key={`hurt-${at}`} className="hurt-vignette duel-hurt" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.9, 0] }} transition={{ duration: 0.9 }} aria-hidden="true" />
+      )}
       <motion.section className="arena duel" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}>
         <header className="card-head duel-head">
           <div>

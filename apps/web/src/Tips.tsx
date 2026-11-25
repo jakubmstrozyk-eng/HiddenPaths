@@ -23,8 +23,8 @@ const TIPS: Record<TipId, { pl: string; en: string }> = {
     en: 'You are in a settlement. Open "Town" to buy, sell or use its services.',
   },
   endTurn: {
-    pl: 'Nie możesz już iść dalej. Rozbij obóz, jeśli masz Wytrzymałość, albo zakończ turę. Nowa tura przywraca Szybkość i Wytrzymałość.',
-    en: 'You cannot travel further. Camp if you have Stamina left, or end your turn. A new turn restores Speed and Stamina.',
+    pl: 'Nie możesz już iść dalej. Rozbij obóz, jeśli masz Wytrzymałość, albo zakończ turę. Nowa tura przywraca Szybkość i Wytrzymałość. Nie zapomnij zjeść posiłku (ikona bochenka), inaczej grozi głód.',
+    en: 'You cannot travel further. Camp if you have Stamina left, or end your turn. A new turn restores Speed and Stamina. Do not forget to eat (the bread icon), or hunger sets in.',
   },
 };
 
