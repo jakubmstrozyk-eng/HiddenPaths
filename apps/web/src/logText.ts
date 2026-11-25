@@ -54,6 +54,7 @@ export function diceOf(entries: LogEntry[], { locale }: T): DiceRoll[] {
       out.push({ kind: 'd100', value: e.event.result.roll, target: e.event.result.target, success: e.event.result.success, label: by });
     }
     if (e.type === 'combat' && e.event.type === 'flee') {
+      // A flight shows the hero's throw; the foe's chase, when there is one, follows below.
       out.push({ kind: 'd100', value: e.event.hero.roll, target: e.event.hero.target, success: e.event.hero.success, label: attrShort('dex', locale), attr: 'dex' });
     }
   }
@@ -96,11 +97,17 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
     case 'condition':
       return e.added ? (pl ? `Nowy stan: ${e.id}` : `New condition: ${e.id}`) : (pl ? `Stan minął: ${e.id}` : `Condition cleared: ${e.id}`);
     case 'combatEnded':
-      return e.result === 'won' ? `${t('won')} +${fmt(e.xp)} ${t('xp')}` : e.result === 'lost' ? t('lost') : e.result === 'fled' ? t('fled') : t('enthralled');
+      return e.result === 'won' ? `${t('won')} +${fmt(e.xp)} ${t('xp')}` : e.result === 'lost' ? t('lost') : e.result === 'fled' ? t('fled') : e.result === 'hidden' ? t('hidden') : t('enthralled');
     case 'camped':
       return `${t('camp')}: +${e.healed} ${t('vitality').toLowerCase()}`;
     case 'levelUp':
-      return `${t('level')} ${e.level}!`;
+      return `${t('level')} ${e.level}!${e.cards?.length ? ` ${pl ? 'Nowe karty' : 'New cards'}: ${e.cards.map((c) => cardName(c, locale)).join(', ')}` : ''}`;
+    case 'cardsKept':
+      return `${pl ? 'Zatrzymane karty' : 'Cards kept'}: ${e.cards.map((c) => cardName(c, locale)).join(', ')}`;
+    case 'crafted':
+      return `${cardName(e.card, locale)}: ${itemName(e.item, locale)}`;
+    case 'reinforced':
+      return `${cardName('runemaster-reinforce', locale)}: +1 ${pl ? 'pancerza' : 'armour'} (${t(e.slot)})`;
     case 'mission': {
       const m = MISSIONS.find((x) => x.id === e.mission);
       return `${pl ? 'Cel osiągnięty' : 'Goal reached'}: ${m ? m.name[pl ? 'pl' : 'en'] : e.mission} (+${Math.round(e.xp)} ${t('xp')})`;
@@ -158,7 +165,16 @@ export function combatLine(e: LogEntry, T: T): string | null {
       if (ev.card || ev.scroll) return `${tag}${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
       return `${by} → ${on}: ${t('hit')} ${ev.location ? `(${t(ev.location)})` : ''} −${ev.damage ?? 0}`;
     }
-    case 'flee': return ev.success ? t('fled') : `${t('flee')}: ${t('failure')}`;
+    case 'flee': return `${ev.card ? `${cardName(ev.card, locale)} · ` : ''}${ev.success ? t('fled') : `${t('flee')}: ${t('failure')}`}`;
+    case 'wound':
+      if (ev.result) return `${foeName(ev.uid, locale)}: ${ev.staunched ? (pl ? 'tamuje ranę' : 'staunches the wound') : (pl ? 'nie tamuje rany' : 'cannot staunch the wound')}`;
+      return `${foeName(ev.uid, locale)}: ${ev.dead ? (pl ? 'wykrwawia się!' : 'bleeds out!') : (pl ? 'krwawi, −1' : 'bleeds, −1')}`;
+    case 'vines': return `${cardName('mystic-vines', locale)}: ${foeName(ev.uid, locale)} ${ev.bound ? (pl ? 'oplątany' : 'bound') : (pl ? 'wolny' : 'free')}`;
+    case 'master': return `${cardName('elder-beast-master', locale)} ${ev.step}/3: ${ev.companion ? (pl ? 'nowy towarzysz!' : 'a new companion!') : ev.result.success ? (pl ? 'bestia słucha' : 'the beast obeys') : (pl ? 'bestia się wyrywa' : 'the beast breaks free')}`;
+    case 'hide': return `${cardName('diver-camouflage', locale)}: ${ev.hidden ? (pl ? 'nikt cię nie widzi' : 'nobody sees you') : (pl ? 'zauważony' : 'spotted')}`;
+    case 'blind': return `${cardName('cavedelver-blind', locale)}: ${ev.foes.filter((f) => !f.result.success).map((f) => foeName(f.uid, locale)).join(', ') || (pl ? 'nikt' : 'nobody')}`;
+    case 'tear': return `${cardName('druid-fangs', locale)}: ${ev.torn ? (pl ? 'rozrywasz ciało, +4' : 'you tear it open, +4') : (pl ? 'wróg się wyrywa' : 'it pulls free')}`;
+    case 'held': return `${foeName(ev.uid, locale)}: ${pl ? 'walczy po twojej stronie' : 'fights on your side'}`;
     case 'focus': return `${t('focus')}: +10`;
     case 'stunned': return ev.who === 'hero' ? (locale === 'pl' ? 'Jesteś ogłuszony' : 'You are stunned') : `${foeName(ev.who, locale)}: ${locale === 'pl' ? 'ogłuszony' : 'stunned'}`;
     case 'drink': return `${t('use')}: ${itemName(ev.item, locale)}`;
@@ -197,6 +213,15 @@ function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: numbe
     case 'runemaster-empower': return `${name}: +2 ${pl ? 'Obr. na 3 rundy' : 'damage for 3 rounds'}`;
     case 'gourmet-seasoning': return `${name}: +5`;
     case 'runemaster-smelt': return name;
+    case 'elder-power-potion': return `${name}: ${e.amount ?? 0}/3 ${pl ? 'składników' : 'ingredients'}`;
+    case 'warrior-way': return `${name}: +1 ${pl ? 'Walki' : 'Combat'}`;
+    case 'warrior-strategist': return `${name}: +10 ${pl ? 'Walki do końca walki' : 'Combat until the fight ends'}`;
+    case 'mystic-levitate': return `${name}: ${e.ok ? (pl ? 'unosisz się do końca rundy' : 'you float until the round ends') : (pl ? 'medytacja się nie udała' : 'the meditation failed')}`;
+    case 'wraith-lookout': return `${name}: ${pl ? 'odkryte fragmenty' : 'fragments revealed'} ${e.amount ?? 0}`;
+    case 'wraith-mist': return `${name}: ${pl ? 'mgła na 2 rundy' : 'mist for 2 rounds'}`;
+    case 'druid-teacher': return `${name}: ${e.ok ? `${pl ? 'towarzysz' : 'companion'} +${e.amount ?? 1}` : (pl ? 'lekcja nie wyszła' : 'the lesson failed')}`;
+    case 'runemaster-safety-rune': return `${name}: +20 ${pl ? 'inicjatywy' : 'initiative'}`;
+    case 'guardian-scalp': return `${name}: +1 ${pl ? 'Walki przeciw temu wrogowi' : 'Combat against this foe'}`;
     default: return name;
   }
 }

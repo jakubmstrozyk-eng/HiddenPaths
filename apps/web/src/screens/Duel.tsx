@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ENEMIES, ITEMS, type DiceLook } from '@hp/content';
 import {
-  attacksPerTurn, canDisarm, canTame, combatMoves, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  attacksPerTurn, canDisarm, canMaster, canTame, combatMoves, MASTER_STEPS, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
@@ -28,7 +28,9 @@ type Step =
 
 const HERO = 'hero';
 /** Cards that act at once in a fight, with no throw for the player to make. */
-const INSTANT = ['warrior-rations', 'wraith-leaves', 'trapper-trap', 'guardian-stance', 'elder-herb', 'explorer-bandages', 'runemaster-empower'];
+const INSTANT = ['warrior-rations', 'wraith-leaves', 'trapper-trap', 'guardian-stance', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'warrior-strategist', 'wraith-mist', 'cavedelver-blind'];
+/** Combat penalty of the attacking cards, shown on the shield before the throw. */
+const CARD_HIT: Record<string, number> = { 'warrior-heavy-swing': -10, 'diver-fillet': -10, 'druid-fangs': -20 };
 const ROLL_MS = 1100;
 const PAUSE_MS = 650;
 /** How long each step of the foes' moves stays on screen, at normal pace; "faster" shortens it. */
@@ -64,8 +66,8 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         break;
       }
       case 'flee':
-        out.push({ kind: 'roll', who: HERO, test: 'testFlee', result: ev.hero });
-        out.push({ kind: 'roll', who: 'foe', test: 'foeChase', result: ev.foe });
+        out.push({ kind: 'roll', who: HERO, test: 'testFlee', result: ev.hero, card: ev.card });
+        if (ev.foe) out.push({ kind: 'roll', who: 'foe', test: 'foeChase', result: ev.foe });
         out.push({ kind: 'note', who: HERO, text: ev.success ? t('fled') : `${t('flee')}: ${t('failure')}` });
         break;
       case 'focus': out.push({ kind: 'note', who: HERO, text: `${t('focus')}: +10` }); break;
@@ -109,6 +111,41 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         out.push({ kind: 'roll', who: ev.uid, test: 'foeShock', result: ev.result });
         out.push({ kind: 'note', who: ev.uid, text: ev.stunned ? (pl ? 'Ogłuszony!' : 'Stunned!') : (pl ? 'Otrząsa się' : 'Shrugs it off') });
         break;
+      case 'wound':
+        if (ev.result) {
+          out.push({ kind: 'roll', who: ev.uid, test: 'foeStaunch', result: ev.result });
+          out.push({ kind: 'note', who: ev.uid, text: ev.staunched ? (pl ? 'Tamuje ranę' : 'Staunches the wound') : (pl ? 'Krew wciąż płynie' : 'Still bleeding') });
+        } else {
+          out.push({ kind: 'hit', who: 'venom', target: ev.uid, damage: ev.damage ?? 1 });
+          if (ev.dead) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Wykrwawia się!' : 'Bleeds out!' });
+        }
+        break;
+      case 'vines':
+        if (ev.by === 'hero') out.push({ kind: 'roll', who: HERO, test: 'testIntVines', result: ev.result, card: 'mystic-vines' });
+        else out.push({ kind: 'roll', who: ev.uid, test: 'foeTearFree', result: ev.result });
+        out.push({ kind: 'note', who: ev.uid, text: ev.bound ? (pl ? 'Oplątany pnączami!' : 'Bound by vines!') : ev.by === 'hero' ? (pl ? 'Pnącza nie chwytają' : 'The vines miss') : (pl ? 'Zrywa pnącza' : 'Tears free') });
+        break;
+      case 'master':
+        out.push({ kind: 'roll', who: HERO, test: 'testChaMaster', result: ev.result, card: 'elder-beast-master' });
+        out.push({ kind: 'note', who: ev.uid, text: ev.companion ? (pl ? 'Bestia zostaje z tobą na zawsze!' : 'The beast stays with you for good!') : ev.result.success ? (pl ? `Bestia słucha (${ev.step}/3)` : `The beast obeys (${ev.step}/3)`) : (pl ? 'Bestia się wyrywa' : 'The beast breaks free') });
+        break;
+      case 'hide':
+        out.push({ kind: 'roll', who: HERO, test: 'testDexHide', result: ev.hero, card: 'diver-camouflage' });
+        for (const f of ev.foes) out.push({ kind: 'roll', who: f.uid, test: 'foeSpot', result: f.result });
+        out.push({ kind: 'note', who: HERO, text: ev.hidden ? t('hidden') : (pl ? 'Zauważony!' : 'Spotted!') });
+        break;
+      case 'blind':
+        for (const f of ev.foes) {
+          out.push({ kind: 'roll', who: f.uid, test: 'foeBlind', result: f.result });
+          if (!f.result.success) out.push({ kind: 'note', who: f.uid, text: pl ? 'Oślepiony! −30' : 'Blinded! −30' });
+        }
+        break;
+      case 'tear':
+        out.push({ kind: 'roll', who: HERO, test: 'testStrTear', result: ev.hero, card: 'druid-fangs' });
+        out.push({ kind: 'roll', who: ev.uid, test: 'foeStrTear', result: ev.foe });
+        if (ev.torn) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Rozdarcie! +4' : 'Torn open! +4' });
+        break;
+      case 'held': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Walczy po twojej stronie!' : 'Fights on your side!' }); break;
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
     }
   }
@@ -193,18 +230,30 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const promptScroll = typeof prompt === 'object' && prompt && 'scroll' in prompt ? prompt.scroll : undefined;
   const scrollMoves = moves.flatMap((m) => (m.move === 'scroll' ? [m] : []));
   // Disarm and Companion work only on some foes: the chosen one if it fits, otherwise the first that does.
-  const fits = (card: string, f: (typeof alive)[number]) => (card === 'explorer-disarm' ? canDisarm(f) : card === 'druid-companion' ? canTame(me, f) : true);
+  const fits = (card: string, f: (typeof alive)[number]) => (card === 'explorer-disarm' ? canDisarm(f) : card === 'druid-companion' ? canTame(me, f)
+    : card === 'elder-beast-master' ? canMaster(me, f) : card === 'mystic-vines' ? !f.vined : true);
   const cardFoe = promptCard && chosen && fits(promptCard, chosen) ? chosen
     : promptCard ? alive.find((f) => f.uid === (moves.find((m) => m.move === 'card' && m.card === promptCard) as { target?: string } | undefined)?.target) ?? chosen
     : chosen;
   const hitOn = (f: typeof chosen) => (f ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + (c.equipment.rune === 'precise' ? 5 : 0), ENEMIES[f.enemy]!.kind))) : 0);
   const tameTarget = Math.round(successChance(c.attributes.cha, testModifier(world, me, 'cha', focus)) * 100);
-  const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : promptScroll ? 'testScroll' : promptCard === 'mystic-barrier' ? 'testIntBarrier' : promptCard === 'druid-companion' ? 'testChaTame' : 'testCombat';
+  const chance = (attr: 'dex' | 'int' | 'cha', extra = 0) => Math.round(successChance(c.attributes[attr], testModifier(world, me, attr, focus + extra)) * 100);
+  const guardian = c.cards.includes('guardian-vigilance') ? 10 : 0;
+  /** The throw and the number to beat for each card that tests something other than a plain blow. */
+  const CARD_TEST: Record<string, [UiKey, number]> = {
+    'mystic-barrier': ['testIntBarrier', barrierTarget],
+    'druid-companion': ['testChaTame', tameTarget],
+    'elder-beast-master': ['testChaMaster', chance('cha', MASTER_STEPS[cardFoe?.controlled ?? 0] ?? 0)],
+    'diver-camouflage': ['testDexHide', chance('dex')],
+    'explorer-smoke': ['testFlee', chance('dex', guardian)],
+    'mystic-vines': ['testIntVines', chance('int')],
+  };
+  const cardTest = promptCard ? CARD_TEST[promptCard] : undefined;
+  const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : promptScroll ? 'testScroll' : cardTest ? cardTest[0] : 'testCombat';
   const promptTarget = prompt === 'flee' ? fleeTarget
     : promptScroll ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + magicBonus(world, me), ENEMIES[(chosen ?? alive[0])?.enemy ?? 'wolf']!.kind)))
-    : promptCard === 'mystic-barrier' ? barrierTarget
-    : promptCard === 'druid-companion' ? tameTarget
-    : promptCard ? Math.max(1, hitOn(cardFoe) - (promptCard === 'warrior-heavy-swing' ? 10 : 0))
+    : cardTest ? cardTest[1]
+    : promptCard ? Math.max(1, hitOn(cardFoe) + (CARD_HIT[promptCard] ?? 0))
     : hitTarget;
   const pets = me.companions ?? [];
   const weapon = heroWeapon(me);
@@ -333,6 +382,16 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                   {(petFx ?? hitFx) && step?.kind === 'hit' && step.target === f.uid && <HitFx key={`fx-${at}`} kind={(petFx ?? hitFx)!} />}
                   {f.disarmed && !down && <span className="foe-flag unarmed">{locale === 'pl' ? 'Bez broni' : 'Unarmed'}</span>}
                   {f.tamed && <span className="foe-flag tamed">{locale === 'pl' ? 'Oswojony' : 'Tamed'}</span>}
+                  {!down && !f.tamed && (
+                    <span className="foe-states">
+                      {f.wound !== undefined && <i className="state wound">{locale === 'pl' ? `Rana ${f.wound}/3` : `Wound ${f.wound}/3`}</i>}
+                      {f.poisoned && <i className="state poison">{locale === 'pl' ? 'Krwawi' : 'Bleeding'}</i>}
+                      {f.burning !== undefined && <i className="state fire">{locale === 'pl' ? 'Płonie' : 'Burning'}</i>}
+                      {f.vined && <i className="state vines">{locale === 'pl' ? 'Pnącza' : 'Vines'}</i>}
+                      {!!f.controlled && <i className="state held">{locale === 'pl' ? `Ujarzmiony ${f.controlled}/3` : `Mastered ${f.controlled}/3`}</i>}
+                      {(f.blindUntil ?? 0) >= combat.turn && <i className="state blind">{locale === 'pl' ? 'Oślepiony' : 'Blinded'}</i>}
+                    </span>
+                  )}
                   <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} damage={step.damage} location={step.location} />}</AnimatePresence>
                 </motion.button>
               );

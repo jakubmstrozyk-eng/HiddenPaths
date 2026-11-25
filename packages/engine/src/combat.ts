@@ -123,7 +123,7 @@ export type CombatEvent =
   /** A deep wound: the foe's Dexterity test to staunch it (its move), or the round's blood loss; `dead` at the 3rd. */
   | { type: 'wound'; uid: string; result?: TestResult; staunched?: boolean; damage?: number; dead?: boolean }
   /** Black Vines: the hero's Intelligence test to bind, or the bound foe's Strength test to tear free. */
-  | { type: 'vines'; uid: string; result: TestResult; bound: boolean }
+  | { type: 'vines'; uid: string; by: 'hero' | 'foe'; result: TestResult; bound: boolean }
   /** Master of Beasts: the Charisma test of `step` (1–3); `companion` when the third one made the beast stay. */
   | { type: 'master'; uid: string; result: TestResult; step: number; companion?: boolean }
   /** Camouflage: the hero's Dexterity test and the foes' Intelligence tests; `hidden` avoids the fight. */
@@ -583,7 +583,7 @@ export function combatTurn(
             if (!target) break;
             const result = heroTest(world, actor, 'int', rng, focus);
             if (result.success) target.vined = true;
-            events.push({ type: 'vines', uid: target.uid, result, bound: result.success });
+            events.push({ type: 'vines', uid: target.uid, by: 'hero', result, bound: result.success });
             break;
           }
           case 'wraith-mist':
@@ -637,7 +637,7 @@ export function combatTurn(
     if (foe.vined) {
       const result = test(rng, enemy.str);
       if (result.success) foe.vined = false;
-      events.push({ type: 'vines', uid: foe.uid, result, bound: !result.success });
+      events.push({ type: 'vines', uid: foe.uid, by: 'foe', result, bound: !result.success });
       if (!result.success && !enemy.weapon.ranged) return;
     }
     if (foe.disarmed) {
