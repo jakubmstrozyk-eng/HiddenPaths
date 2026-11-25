@@ -29,7 +29,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   background: transparent; border: 1px solid var(--line); border-radius: 0; padding: 6px 10px; font-size: 12px;
 }
 
-/* Main menu: black void, white square tiles */
+/* Main menu: black void, outlined square tiles with white labels that light up white, like a fragment being entered */
 .menu {
   position: relative; z-index: 1; min-height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -41,18 +41,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   text-shadow: 0 0 24px rgba(143, 123, 255, 0.55);
 }
 .tagline { color: var(--muted); margin: 0 0 24px; }
-.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); gap: 16px; }
-@media (min-width: 640px) { .tiles { grid-template-columns: repeat(3, minmax(0, 160px)); } }
+.tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 512px; }
 .tile {
-  aspect-ratio: 1; background: var(--tile); color: #0a0814; border: 0; border-radius: 0;
+  width: 160px; aspect-ratio: 1; background: rgba(10, 8, 20, 0.35); color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   font-weight: 700; font-size: 17px; padding: 12px;
-  box-shadow: 0 0 0 rgba(255,255,255,0);
-  transition: box-shadow 0.25s;
+  box-shadow: 0 0 0 rgba(255, 255, 255, 0), inset 0 0 0 rgba(255, 255, 255, 0);
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.35s ease, border-color 0.3s ease;
 }
-.tile:hover:not(:disabled) { box-shadow: 0 0 32px rgba(255, 255, 255, 0.35); }
-.tile:disabled { background: rgba(255, 255, 255, 0.18); color: rgba(255, 255, 255, 0.6); }
 .tile small { font-weight: 400; font-size: 12px; opacity: 0.7; }
+.tile:hover:not(:disabled), .tile:focus-visible:not(:disabled), .tile:active:not(:disabled) {
+  background: var(--tile); color: #0a0814; border-color: var(--tile); outline: none;
+  box-shadow: 0 0 36px rgba(255, 255, 255, 0.45), 0 0 90px rgba(143, 123, 255, 0.25);
+}
+.tile:disabled { border-color: rgba(255, 255, 255, 0.25); color: rgba(255, 255, 255, 0.5); background: transparent; }
 
 /* A screen opened from a tile */
 .opened { position: relative; z-index: 2; min-height: 100%; }
@@ -293,7 +296,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 }
 
 @media (max-width: 560px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 340px; }
+  .tiles { width: 100%; max-width: 340px; gap: 12px; }
+  .tile { width: calc(50% - 6px); }
   .stats { margin-left: 0; }
   .stat { min-width: 0; flex: 1 1 28%; }
   .dock-actions { width: 100%; }
@@ -429,7 +433,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .big-die:disabled { opacity: 1; }
 .duel-note { font: 700 20px var(--display); margin: 0; text-align: center; }
 .duel-hint { text-align: center; color: #ffe066; min-height: 1.2em; margin: 4px 0 0; }
-.damage-pop { position: absolute; top: 20%; left: 50%; translate: -50% 0; font: 800 26px var(--num); color: #ff6a5a; text-shadow: 0 2px 0 #000; pointer-events: none; white-space: nowrap; }
+.damage-pop { display: flex; flex-direction: column; align-items: center; position: absolute; top: 20%; left: 50%; translate: -50% 0; font: 800 26px var(--num); color: #ff6a5a; text-shadow: 0 2px 0 #000; pointer-events: none; white-space: nowrap; }
 .damage-pop small { font-size: 12px; color: #ffd0c8; }
 .hand.compact { min-height: 96px; }
 .hand.compact .card-face { width: 64px; height: 90px; }
@@ -450,6 +454,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 /* Heroes */
 .panel.wide { max-width: 1100px; }
 .hero-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+.hero-card.hero-new { justify-content: center; flex-direction: column; gap: 4px; min-height: 96px; border: 1.5px dashed rgba(255, 255, 255, 0.6); color: #fff; font: inherit; cursor: pointer; transition: background-color 0.3s, color 0.3s, box-shadow 0.3s; }
+.hero-new span { font-size: 28px; line-height: 1; }
+.hero-card.hero-new:hover, .hero-card.hero-new:focus-visible { background: var(--tile); color: #0a0814; border-style: solid; box-shadow: 0 0 28px rgba(255, 255, 255, 0.35); outline: none; }
 .hero-card { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); position: relative; }
 .hero-card.pickable { cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
 .hero-card.pickable:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.4); }
@@ -744,3 +751,42 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .kit-note { display: block; font-size: 11px; }
 .frag.aim { outline: 2px solid #b080ff; box-shadow: 0 0 14px rgba(176, 128, 255, 0.7); }
 .aim-note { color: #c9b8ff; }
+
+/* The body map of armour: six spots of the hit-location k6, tinted weak (red) to strong (steel blue) */
+.armour-body { display: block; overflow: visible; }
+.armour-body .zone path { stroke-width: 1.6; transition: fill 0.2s, stroke 0.2s, filter 0.2s; }
+.armour-body .zone.bare path, .armour-legend i.bare { fill: rgba(255, 107, 107, 0.22); stroke: #ff6b6b; }
+.armour-body .zone.light path, .armour-legend i.light { fill: rgba(255, 211, 77, 0.28); stroke: #ffd34d; }
+.armour-body .zone.mid path, .armour-legend i.mid { fill: rgba(201, 209, 220, 0.35); stroke: #dfe6f0; }
+.armour-body .zone.heavy path, .armour-legend i.heavy { fill: rgba(143, 211, 255, 0.45); stroke: #8fd3ff; }
+.armour-body text { text-anchor: middle; dominant-baseline: middle; pointer-events: none; font-family: var(--body, inherit); }
+.armour-body .zone-armour { font-size: 12px; font-weight: 700; fill: #fff; }
+.armour-body .zone-roll { font-size: 7px; fill: rgba(255, 255, 255, 0.6); }
+.armour-body.pickable .zone { cursor: pointer; }
+.armour-body.pickable .zone:hover path, .armour-body.pickable .zone:focus-visible path { stroke: #fff; filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.7)); outline: none; }
+.armour-body .zone:focus { outline: none; }
+.armour-body .zone.aim path { stroke: #fff; stroke-width: 2.6; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
+.armour-body .zone.hit path { fill: #fff; stroke: #fff; animation: zone-hit 0.9s ease-out; }
+.armour-body .zone.hit text { fill: #0a0814; }
+@keyframes zone-hit { 0% { filter: drop-shadow(0 0 0 #fff); } 30% { filter: drop-shadow(0 0 10px #fff); } 100% { filter: drop-shadow(0 0 3px #fff); } }
+.armour-legend { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.armour-legend i { display: inline-block; width: 10px; height: 10px; border: 1px solid; margin-left: 6px; }
+.armour-legend i:first-child { margin-left: 0; }
+.doll-figure { gap: 6px; }
+.doll-figure .doll-pair { display: flex; align-items: center; gap: 10px; }
+
+/* In a fight: each side's armour by its portrait, and the aim picker before an attack */
+.duel-body { display: flex; align-items: center; gap: 6px; }
+.aim-pick { display: grid; justify-items: center; gap: 4px; margin-top: 4px; }
+.aim-pick small { color: var(--muted); font-size: 11px; max-width: 200px; text-align: center; }
+.aim-pick b { font-size: 12px; }
+.spot-step { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.spot-step .spot-line { font-size: 15px; font-weight: 700; }
+.spot-step small { color: var(--muted); font-size: 12px; }
+.damage-sum { display: block; font-size: 11px; font-weight: 500; color: #fff; opacity: 0.85; white-space: nowrap; }
+.big-aim { font-size: 40px; line-height: 1; color: #fff; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
+.armour-legend i.bare { background: rgba(255, 107, 107, 0.35); border-color: #ff6b6b; }
+.armour-legend i.light { background: rgba(255, 211, 77, 0.4); border-color: #ffd34d; }
+.armour-legend i.mid { background: rgba(201, 209, 220, 0.45); border-color: #dfe6f0; }
+.armour-legend i.heavy { background: rgba(143, 211, 255, 0.55); border-color: #8fd3ff; }
+@media (max-width: 560px) { .doll-figure svg.armour-body { width: auto; height: 130px; } }

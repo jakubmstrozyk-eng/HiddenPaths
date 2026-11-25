@@ -39,17 +39,24 @@ function countsOf(state: GameState, entry: LogEntry): Record<string, number> {
     case 'revealed':
       return BUILDINGS.has(state.map.cells[entry.cell]?.terrain ?? '') ? { scout: 1, discoverer: 0 } : { discoverer: 0 };
     case 'test': {
-      if (entry.action === 'hunt') return { hunter: 0 };
+      // A hunt counts for the Hunter (from its own counter) and its food for the Gatherer.
+      const hunt: Record<string, number> = entry.action === 'hunt' ? { hunter: 0 } : {};
       let n = 0;
       for (const g of entry.gained) {
         const [kind, amount] = g.split(':');
         if (kind === 'food') n += Number(amount) || 1;
         else if (kind === 'material' || kind === 'herb') n += 1;
       }
-      return n ? { gatherer: n } : {};
+      return n ? { ...hunt, gatherer: n } : hunt;
     }
-    case 'change':
-      return entry.change.what === 'item' ? { collector: 1 } : entry.change.what === 'rune' ? { master: 1 } : {};
+    case 'change': {
+      const c = entry.change;
+      // Only gains count: drinking a potion or putting gear on is not finding an item.
+      if (c.what === 'item') return c.amount > 0 ? { collector: 1 } : {};
+      // Food and herbs found on the way (event cards) are gathered too.
+      if ((c.what === 'food' || c.what === 'herbs') && c.amount > 0) return { gatherer: c.amount };
+      return c.what === 'rune' ? { master: 1 } : {};
+    }
     case 'check':
       return entry.attribute === 'cha' && entry.result.success ? { orator: 1 } : {};
     case 'card':

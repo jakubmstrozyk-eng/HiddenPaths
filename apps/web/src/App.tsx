@@ -188,7 +188,6 @@ export function App() {
                 onMulti={() => go({ name: 'multi' })}
                 onAccount={() => go({ name: 'account' })}
                 onHeroes={() => go({ name: 'heroes' })}
-                onCreateHero={() => go({ name: 'createHero' })}
               />
             )}
             {screen.name === 'signin' && (
@@ -223,7 +222,7 @@ export function App() {
               </Opened>
             )}
             {screen.name === 'createHero' && (
-              <Opened key="createHero" tile={screen.then ? undefined : 'createHero'}>
+              <Opened key="createHero">
                 <CreateHeroScreen
                   store={heroStore}
                   mode={screen.mode}
@@ -331,7 +330,7 @@ function Opened({ tile, children }: { tile?: UiKey; children: React.ReactNode })
   );
 }
 
-function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, onHeroes, onCreateHero }: {
+function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, onHeroes }: {
   online: boolean | null;
   me: Me | null;
   hasSave: boolean;
@@ -340,7 +339,6 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, 
   onMulti: () => void;
   onAccount: () => void;
   onHeroes: () => void;
-  onCreateHero: () => void;
 }) {
   const { t } = useT();
   const checking = online === null;
@@ -350,7 +348,6 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, 
         { key: 'continue', onClick: onContinue, note: t('yourGames') },
         { key: 'multiplayer', onClick: onMulti },
         { key: 'heroes', onClick: onHeroes },
-        { key: 'createHero', onClick: onCreateHero },
         { key: 'settings', onClick: onAccount, note: me ? me.display_name : t('signIn') },
       ]
     : [
@@ -358,7 +355,6 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, 
         { key: 'continue', onClick: hasSave && !checking ? onContinue : undefined, note: hasSave ? undefined : t('noGames') },
         { key: 'multiplayer', note: checking ? t('loading') : t('needsServer') },
         { key: 'heroes', onClick: checking ? undefined : onHeroes },
-        { key: 'createHero', onClick: checking ? undefined : onCreateHero },
         { key: 'settings', note: t('soon') },
       ];
   return (
