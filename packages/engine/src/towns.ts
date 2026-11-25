@@ -1,4 +1,4 @@
-import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, TERRAINS, type HerbId, type MaterialId } from '@hp/content';
+import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, TERRAINS, type ArmourSlot, type HerbId, type MaterialId } from '@hp/content';
 import { EngineError } from './errors';
 import { giveItem, runOutcomes } from './events';
 import { log, worldView } from './progress';
@@ -104,6 +104,7 @@ export function shopStock(state: GameState, player: PlayerState): string[] {
     .filter((i) => (i.kind === 'weapon' || i.kind === 'armour' || i.kind === 'shield' || i.kind === 'potion'))
     .filter((i) => place === 'city' || (!i.rare && !i.cityOnly))
     .filter((i) => i.kind !== 'weapon' || !i.rare)
+    .filter((i) => i.kind !== 'potion' || !i.crafted)
     .map((i) => i.id)
     .filter((id) => !['reinforcedBoots', 'chainmail', 'healingElixir'].includes(id));
 }
@@ -213,4 +214,34 @@ export function smelt(state: GameState, player: PlayerState, rng: Rng, into: 'or
     log(state, { type: 'smelted', player: player.id, items, into: item });
   }
   log(state, { type: 'card', player: player.id, card: 'runemaster-smelt', ok: true });
+}
+
+/** Reinforcement: basic materials the Runemaster works into armour (wood and the common ores). */
+export const BASIC_MATERIALS: MaterialId[] = ['iron', 'tin', 'copper', 'wood'];
+export const REINFORCE_COST = 3;
+export const MAX_ARMOUR = 5;
+
+/** The parts of the body the Runemaster can reinforce here and now. */
+export function reinforceSlots(state: GameState, player: PlayerState, armour: Record<ArmourSlot, number>): ArmourSlot[] {
+  if (!player.character.cards.includes('runemaster-reinforce')) return [];
+  const place = placeOf(state, player);
+  if (place !== 'village' && place !== 'city') return [];
+  const have = BASIC_MATERIALS.reduce((n, m) => n + (player.inventory.materials[m] ?? 0), 0);
+  if (have < REINFORCE_COST) return [];
+  return (['head', 'arms', 'torso', 'legs'] as ArmourSlot[]).filter((s) => !player.counters[`reinforced:${s}`] && armour[s] < MAX_ARMOUR);
+}
+
+/** +1 armour on one part of the body for 3 basic materials, the most plentiful first. Ends the round (the caller does). */
+export function reinforce(state: GameState, player: PlayerState, slot: ArmourSlot, armour: Record<ArmourSlot, number>) {
+  if (!reinforceSlots(state, player, armour).includes(slot)) throw new EngineError('reinforce.notNow', 'You cannot reinforce that here.');
+  const used: string[] = [];
+  const bag = player.inventory.materials;
+  for (let i = 0; i < REINFORCE_COST; i++) {
+    const m = [...BASIC_MATERIALS].sort((a, b) => (bag[b] ?? 0) - (bag[a] ?? 0))[0]!;
+    bag[m] = (bag[m] ?? 0) - 1;
+    if (!bag[m]) delete bag[m];
+    used.push(m);
+  }
+  player.counters[`reinforced:${slot}`] = 1;
+  log(state, { type: 'reinforced', player: player.id, slot, materials: used });
 }

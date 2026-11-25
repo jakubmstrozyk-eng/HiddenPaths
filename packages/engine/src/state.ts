@@ -1,4 +1,4 @@
-import type { Attribute, Attributes, TerrainAction } from '@hp/content';
+import type { ArmourSlot, Attribute, Attributes, TerrainAction } from '@hp/content';
 import type { Character } from './character';
 import type { CombatEvent, CombatMove, CombatResult, CombatState } from './combat';
 import type { GameConfig } from './config';
@@ -78,7 +78,7 @@ export type LogEntry =
   | { type: 'hungry'; player: string; rounds: number; vitalityLost: number }
   | { type: 'died'; player: string }
   | { type: 'respawned'; player: string; cell: number }
-  | { type: 'levelUp'; player: string; level: number }
+  | { type: 'levelUp'; player: string; level: number; cards?: string[] }
   | { type: 'service'; player: string; service: string; cost: number }
   | { type: 'traded'; player: string; item: string; gold: number; bought: boolean }
   | { type: 'stoneTaken'; player: string; cell: number }
@@ -96,6 +96,12 @@ export type LogEntry =
   | { type: 'scroll'; player: string; item: string; amount?: number; to?: number }
   /** Smelting: 3 pieces of gear melted into iron ore or a new common item. */
   | { type: 'smelted'; player: string; items: string[]; into: string }
+  /** A skill card made an item: Tannery (a leather piece) or the Elder's Potion of Might. */
+  | { type: 'crafted'; player: string; card: string; item: string }
+  /** Reinforcement: +1 armour on a part of the body, for these materials. */
+  | { type: 'reinforced'; player: string; slot: ArmourSlot; materials: string[] }
+  /** The player kept these 5 skill cards; `dropped` are gone. */
+  | { type: 'cardsKept'; player: string; cards: string[]; dropped: string[] }
   /** A game mission was reached and paid its XP. */
   | { type: 'mission'; player: string; mission: string; xp: number }
   | ({ player: string } & TerrainOutcome);
@@ -137,8 +143,12 @@ export type Action =
   | { type: 'enter'; side: Side }
   /** `research`: the Mystic's Researcher card, 1 more Stamina for a permanent +1 Intelligence. */
   | { type: 'camp'; research?: boolean }
-  /** Play a skill card outside a fight. */
-  | { type: 'card'; card: string }
+  /** Play a skill card outside a fight; `target` picks the companion for Teacher. */
+  | { type: 'card'; card: string; target?: string }
+  /** Choose the 5 skill cards to keep when a new level brought more (the rest are gone). */
+  | { type: 'keepCards'; cards: string[] }
+  /** Runemaster's Reinforcement in a city or village: 3 basic materials for +1 armour on a part of the body. */
+  | { type: 'reinforce'; slot: ArmourSlot }
   | { type: 'terrain'; action: TerrainAction }
   | { type: 'event'; option: number }
   | { type: 'combat'; move: CombatMove }

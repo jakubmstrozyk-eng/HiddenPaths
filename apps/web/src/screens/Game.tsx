@@ -17,7 +17,7 @@ import { BagSheet, HeroSheet, TownSheet } from './Sheets';
 import { SaveDialog } from './Saves';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
-import { SkillHand } from '../SkillCards';
+import { KeepCards, SkillHand } from '../SkillCards';
 import { CardCastHost } from '../CardArt';
 
 /** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
@@ -442,6 +442,19 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 <small className="act-reward">{tx({ pl: '3 sztuki broni lub zbroi → nowy zwykły przedmiot', en: '3 weapons or armour pieces → a new common item' })}</small>
               </button>
             )}
+            {myTurn && quiet && actions.some((a) => a.type === 'reinforce') && (
+              <div className="cook-box">
+                <span className="act-btn">
+                  <span className="act-title"><Icon name="shield" size={14} />{cardName('runemaster-reinforce', locale)}</span>
+                  <small className="act-reward">{tx({ pl: '3 podstawowe surowce → +1 pancerza · kończy rundę', en: '3 basic materials → +1 armour · ends the round' })}</small>
+                </span>
+                <span className="cook-spices">
+                  {actions.flatMap((a) => (a.type === 'reinforce' ? [a.slot] : [])).map((slot) => (
+                    <button key={slot} className="ghost small" onClick={() => act({ type: 'reinforce', slot })}>{t(slot)}</button>
+                  ))}
+                </span>
+              </div>
+            )}
             <button className="primary end-turn" disabled={!quiet} onClick={() => act({ type: 'endTurn' })}>
               {t('endTurn')}
               <small>{mealNote(mealsToday(game, me), c.food, locale)}</small>
@@ -498,6 +511,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               </div>
             </motion.article>
           </div>
+        )}
+        {myTurn && !onTheWay && !replay && !me.combat && !dice && !!c.newCards?.length && (
+          <KeepCards key="keep" profession={c.profession} held={c.cards} fresh={c.newCards} onKeep={(cards) => act({ type: 'keepCards', cards })} />
         )}
         {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>

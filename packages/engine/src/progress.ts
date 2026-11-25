@@ -29,8 +29,8 @@ export function gainXp(state: GameState, player: PlayerState, xp: number) {
   c.xp += xp;
   const target = levelForXp(c.xp);
   while (c.level < target) {
-    levelUp(c, c.level + 1);
-    log(state, { type: 'levelUp', player: player.id, level: c.level });
+    const cards = levelUp(c, c.level + 1);
+    log(state, { type: 'levelUp', player: player.id, level: c.level, ...(cards.length ? { cards } : {}) });
   }
 }
 

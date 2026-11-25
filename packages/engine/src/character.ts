@@ -39,6 +39,11 @@ export interface Character {
   gold: number;
   food: number;
   cards: string[];
+  /**
+   * Cards a new level brought that do not fit in the hand of 5: the player chooses which 5 of these and the
+   * held cards to keep, and the rest are gone (Jacob, 2026-11-25).
+   */
+  newCards?: string[];
   missions: string[];
   equipment: Equipment;
   skills: Partial<Record<SkillId, number>>;
@@ -130,13 +135,37 @@ export function levelForXp(xp: number): number {
 /** What each new level gives, from the "Doświadczenie" rules. */
 export const LEVEL_UP = { points: 20, vitality: 2, staminaAt: [4, 8] };
 
-/** Applies the rewards of reaching `level` to a character. */
-export function levelUp(c: Character, level: number): void {
+/** A hero holds at most this many skill cards at once (rules, profession sheets). */
+export const MAX_CARDS = 5;
+
+/** Applies the rewards of reaching `level` to a character. Returns the new skill cards it brought. */
+export function levelUp(c: Character, level: number): string[] {
   c.level = level;
   c.unspentPoints += LEVEL_UP.points;
   c.maxVitality += LEVEL_UP.vitality;
   c.vitality += LEVEL_UP.vitality;
   if (LEVEL_UP.staminaAt.includes(level)) c.stamina += 1;
+  // Levels 3, 5, 7 and 9 open new skill cards; while they fit in the hand of 5 they go straight in.
+  const fresh = PROFESSIONS[c.profession].cards.filter((card) => card.level === level).map((card) => card.id);
+  if (!fresh.length) return [];
+  if (!c.newCards?.length && c.cards.length + fresh.length <= MAX_CARDS) c.cards.push(...fresh);
+  else c.newCards = [...(c.newCards ?? []), ...fresh];
+  return fresh;
+}
+
+/** The cards a hero chooses from when a new level brought more than the hand holds. */
+export const cardPool = (c: Pick<Character, 'cards' | 'newCards'>) => [...c.cards, ...(c.newCards ?? [])];
+
+/** Keeps 5 cards out of the held ones and the new ones; the others are gone for good. */
+export function keepCards(c: Character, keep: string[]): void {
+  const pool = cardPool(c);
+  const want = Math.min(MAX_CARDS, pool.length);
+  if (!c.newCards?.length) throw new EngineError('cards.noChoice', 'There are no new cards to choose from.');
+  if (new Set(keep).size !== keep.length || keep.length !== want || !keep.every((id) => pool.includes(id))) {
+    throw new EngineError('cards.keep', `Choose ${want} of your cards to keep.`);
+  }
+  c.cards = [...keep];
+  delete c.newCards;
 }
 
 /** Spends level-up points on base attributes. */

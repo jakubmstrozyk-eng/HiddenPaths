@@ -55,6 +55,10 @@ export interface PotionItem extends BaseItem {
   kind: 'potion';
   heal?: number;
   effect?: { target: Attribute | 'all' | 'speed' | 'stamina'; amount: number; rounds: number };
+  /** More timed effects at once (the Elder's Potion of Might). */
+  effects?: { target: Attribute | 'all' | 'speed' | 'stamina'; amount: number; rounds: number }[];
+  /** Made by a hero, never sold in a shop. */
+  crafted?: boolean;
 }
 
 export interface TrinketItem extends BaseItem {
@@ -126,6 +130,10 @@ const list: Item[] = [
   { id: 'bigLifePotion', kind: 'potion', name: t('Duża mikstura życia', 'Great potion of life'), heal: 10, sell: 6, buy: 3, rare: false },
   { id: 'staminaPotion', kind: 'potion', name: t('Mikstura wytrzymałości', 'Potion of stamina'), effect: { target: 'stamina', amount: 1, rounds: 2 }, sell: 7, buy: 3.5, rare: false },
   { id: 'speedPotion', kind: 'potion', name: t('Mikstura szybkości', 'Potion of speed'), effect: { target: 'speed', amount: 1, rounds: 2 }, sell: 7, buy: 3.5, rare: false },
+  {
+    id: 'elderPotion', kind: 'potion', name: t('Mikstura Mocy Starszego', "Elder's Potion of Might"), heal: 2, crafted: true, sell: 8, buy: 4, rare: true,
+    effects: [{ target: 'dex', amount: 10, rounds: 2 }, { target: 'str', amount: 10, rounds: 2 }, { target: 'com', amount: 10, rounds: 2 }, { target: 'stamina', amount: 1, rounds: 2 }],
+  },
   { id: 'powerPotion', kind: 'potion', name: t('Mikstura mocy', 'Potion of power'), effect: { target: 'all', amount: 5, rounds: 1 }, sell: 5, buy: 2.5, rare: false },
   { id: 'healingElixir', kind: 'potion', name: t('Eliksir zdrowia', 'Elixir of health'), heal: 99, sell: 15, buy: 7.5, rare: true },
   // Trinkets found in events.
@@ -157,8 +165,8 @@ const list: Item[] = [
     effect: t('Usuwa wszystkie negatywne efekty', 'Removes every negative effect'),
   },
   {
-    id: 'scrollLightning', kind: 'scroll', spell: 'lightning', power: 3, name: t('Zwój: Błyskawica', 'Scroll: Lightning'), sell: 10, buy: 5, rare: false, cityOnly: true,
-    effect: t('W walce: test Walki, siła S+3', 'In a fight: Combat test, power S+3'),
+    id: 'scrollLightning', kind: 'scroll', spell: 'lightning', power: 2, name: t('Zwój: Błyskawica', 'Scroll: Lightning'), sell: 10, buy: 5, rare: false, cityOnly: true,
+    effect: t('W walce: test Walki, siła S+2; trafiony testuje Siłę, porażka = ogłuszenie na rundę', 'In a fight: Combat test, power S+2; a foe hit tests Strength or is stunned for a round'),
   },
 ];
 

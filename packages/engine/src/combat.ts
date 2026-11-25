@@ -30,6 +30,16 @@ export interface Foe {
   tamed?: boolean;
   /** Fire bolt: the foe burns; the number is its failed Strength tests so far. */
   burning?: number;
+  /** Filleting or Shark Blade: a deep wound, the number of rounds it has bled; at 3 the foe bleeds out. */
+  wound?: number;
+  /** Black Vines: the foe is bound and tests Strength each turn to tear free. */
+  vined?: boolean;
+  /** Master of Beasts: Charisma tests in a row that hold this beast (it fights for the hero meanwhile). */
+  controlled?: number;
+  /** Master of Beasts: on its next move the held beast strikes another foe instead of the hero. */
+  held?: boolean;
+  /** Blinding Light: −30 Combat and Dexterity until the end of this combat turn. */
+  blindUntil?: number;
 }
 
 export interface CombatState {
@@ -53,6 +63,10 @@ export interface CombatState {
   stanceUsed?: boolean;
   /** The game round the fight broke out in (a fight ends the round), for once-a-round limits such as scrolls. */
   round?: number;
+  /** Strategist: the round of study is spent (once a fight); +10 Combat after it. */
+  studied?: boolean;
+  /** Veil of Mist: the combat turn the mist was let out on; it lasts that turn and the next. */
+  mist?: number;
 }
 
 export type CombatMove =
@@ -91,6 +105,8 @@ export type CombatEvent =
   /** A burning foe: loses 1 Vitality and tests Strength to put the fire out; the 3rd failure kills it. */
   | { type: 'burn'; uid: string; result: TestResult; damage: number; out: boolean; dead: boolean }
   | { type: 'trap'; uid: string; result: TestResult; damage: number }
+  /** Lightning: the foe hit tests Strength; `stunned` when it failed and loses its next attack. */
+  | { type: 'shock'; uid: string; result: TestResult; stunned: boolean }
   /** Guardian's Defensive Stance taken for the round. */
   | { type: 'stance' }
   /** Disarm: the foe's Dexterity roll to keep its weapon; `kept` false means it lost it. */
@@ -102,16 +118,31 @@ export type CombatEvent =
   | { type: 'companionDown'; uid: string }
   | { type: 'barrier'; result: TestResult }
   | { type: 'card'; card: string; amount?: number }
-  | { type: 'flee'; success: boolean; hero: TestResult; foe: TestResult }
+  /** `foe` is missing when no foe rolls against the flight (Smoke Bomb). */
+  | { type: 'flee'; success: boolean; hero: TestResult; foe?: TestResult; card?: string }
   | { type: 'focus' }
   | { type: 'stunned'; who: string }
   | { type: 'drink'; item: string }
   | { type: 'reload' }
   | { type: 'foeDown'; uid: string; enemy: string }
   | { type: 'poisoned'; who: string; condition?: string }
-  | { type: 'bleed'; uid: string; damage: number };
+  | { type: 'bleed'; uid: string; damage: number }
+  /** A deep wound: the foe's Dexterity test to staunch it (its move), or the round's blood loss; `dead` at the 3rd. */
+  | { type: 'wound'; uid: string; result?: TestResult; staunched?: boolean; damage?: number; dead?: boolean }
+  /** Black Vines: the hero's Intelligence test to bind, or the bound foe's Strength test to tear free. */
+  | { type: 'vines'; uid: string; by: 'hero' | 'foe'; result: TestResult; bound: boolean }
+  /** Master of Beasts: the Charisma test of `step` (1–3); `companion` when the third one made the beast stay. */
+  | { type: 'master'; uid: string; result: TestResult; step: number; companion?: boolean }
+  /** Camouflage: the hero's Dexterity test and the foes' Intelligence tests; `hidden` avoids the fight. */
+  | { type: 'hide'; hero: TestResult; foes: { uid: string; result: TestResult }[]; hidden: boolean }
+  /** Blinding Light: each foe's Dexterity test; `blinded` lists those who failed. */
+  | { type: 'blind'; foes: { uid: string; result: TestResult }[] }
+  /** Fangs: the opposed Strength test after a bite; `torn` adds +4 damage. */
+  | { type: 'tear'; uid: string; hero: TestResult; foe: TestResult; torn: boolean }
+  /** A held beast's blow at another foe (Master of Beasts). */
+  | { type: 'held'; uid: string };
 
-export type CombatResult = 'ongoing' | 'won' | 'lost' | 'fled' | 'enthralled';
+export type CombatResult = 'ongoing' | 'won' | 'lost' | 'fled' | 'hidden' | 'enthralled';
 
 export const HERO = 'hero';
 
@@ -144,6 +175,8 @@ export function heroArmour(actor: ActorState): Record<ArmourSlot, number> {
   }
   // Hard Hide: the Guardian's own skin counts 1 on every part of the body, on top of armour.
   if ((actor.character.cards ?? []).includes('guardian-hide')) for (const slot of Object.keys(out) as ArmourSlot[]) out[slot] += 1;
+  // Reinforcement: the Runemaster's +1 on a part of the body (at most 5 in all).
+  for (const slot of Object.keys(out) as ArmourSlot[]) if (actor.counters[`reinforced:${slot}`]) out[slot] = Math.min(5, out[slot] + 1);
   return out;
 }
 
@@ -167,7 +200,7 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   const alive = combat.foes.filter((f) => f.vitality > 0);
   const target = moves.find((m) => m.move === 'attack') as { target: string } | undefined;
   if (target) {
-    for (const card of ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe']) {
+    for (const card of ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'diver-fillet', 'druid-fangs']) {
       if (cards.includes(card)) moves.push({ move: 'card', card, target: target.target });
     }
   }
@@ -185,11 +218,21 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
     if (cards.includes(card) && !isSpent(actor, card)) moves.push({ move: 'card', card });
   }
   if (cards.includes('explorer-bandages')) moves.push({ move: 'card', card: 'explorer-bandages' });
+  // Level 3 cards.
+  const held = alive.find((f) => canMaster(actor, f));
+  if (cards.includes('elder-beast-master') && held) moves.push({ move: 'card', card: 'elder-beast-master', target: held.uid });
+  if (cards.includes('diver-camouflage') && combat.turn === 1) moves.push({ move: 'card', card: 'diver-camouflage' });
+  if (cards.includes('explorer-smoke')) moves.push({ move: 'card', card: 'explorer-smoke' });
+  if (cards.includes('warrior-strategist') && !combat.studied) moves.push({ move: 'card', card: 'warrior-strategist' });
+  const free = alive.find((f) => !f.vined);
+  if (cards.includes('mystic-vines') && free) moves.push({ move: 'card', card: 'mystic-vines', target: free.uid });
+  if (cards.includes('wraith-mist') && !isSpent(actor, 'wraith-mist')) moves.push({ move: 'card', card: 'wraith-mist' });
+  if (cards.includes('cavedelver-blind') && alive.length) moves.push({ move: 'card', card: 'cavedelver-blind' });
   return moves;
 }
 
-/** Disarm only works on foes that fight with a weapon in hand, not on beasts or spirits. */
-export const canDisarm = (foe: Foe) => !foe.disarmed && ['human', 'thug', 'demon'].includes(ENEMIES[foe.enemy]!.kind);
+/** Disarm only works on a foe holding a hand weapon (a blade or an axe), not on claws, teeth, bows or spells (Jacob, 2026-11-25). */
+export const canDisarm = (foe: Foe) => !foe.disarmed && !!ENEMIES[foe.enemy]!.weapon.blade;
 
 /** Most beasts that follow a Druid at once (Companion). */
 export const MAX_COMPANIONS = 2;
@@ -199,6 +242,21 @@ export const canTame = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
   ENEMIES[foe.enemy]!.kind === 'beast' && foe.vitality < TAME_BELOW && (actor.companions ?? []).length < MAX_COMPANIONS;
 /** Charisma tests passed that make a tamed beast stay for good. */
 export const BOND_NEEDED = 3;
+/** Master of Beasts: any beast, while the Elder has room for a companion; the tests get easier: −10, 0, +10. */
+export const canMaster = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
+  ENEMIES[foe.enemy]!.kind === 'beast' && (actor.companions ?? []).length < MAX_COMPANIONS;
+export const MASTER_STEPS = [-10, 0, 10];
+/** A deep wound kills after this many rounds of bleeding. */
+export const WOUND_DEATH = 3;
+/** Veil of Mist: the foes' Combat penalty in its first and second turn, and their Dexterity penalty. */
+export const MIST = { first: -20, second: -10, dex: -10, own: -10 };
+export const BLIND = -30;
+/** Bonus initiative from the Rune of Safety, and from Vigilance. */
+export const SAFETY_INITIATIVE = 20;
+export const VIGILANCE = 10;
+/** Scalp: +1 Combat against each kind of foe the Guardian has beaten. */
+export const scalpBonus = (actor: Pick<ActorState, 'counters' | 'character'>, enemy: string) =>
+  (actor.character.cards ?? []).includes('guardian-scalp') && actor.counters[`scalp:${enemy}`] ? 1 : 0;
 
 /** Margin over the Combat target past which the striker picks where the blow lands ("Walka!", d. Atak). */
 export const AIM_MARGIN = 20;
@@ -240,11 +298,27 @@ export function combatTurn(
   combat.focus = false;
   // A parry or a flight is declared for the whole round, so it also covers foes that strike before the hero.
   const parrying = move.move === 'parry' && !combat.heroStunned;
-  const fleeing = move.move === 'flee' && !combat.heroStunned;
+  const smoke = move.move === 'card' && move.card === 'explorer-smoke';
+  const fleeing = (move.move === 'flee' || smoke) && !combat.heroStunned;
   // Defensive Stance, like a parry, is taken for the whole round.
   const stance = move.move === 'card' && move.card === 'guardian-stance' && !combat.heroStunned;
   let fled = false;
+  let hidden = false;
   let enthralled = false;
+  /** Foes that already acted this turn, so a penalty given now still reaches their next blow. */
+  const acted = new Set<string>();
+  const mistAge = () => (combat.mist === undefined ? -1 : combat.turn - combat.mist);
+  const mistOn = () => mistAge() === 0 || mistAge() === 1;
+  /** Veil of Mist and Blinding Light on a foe's Combat or Dexterity. */
+  const foeMod = (foe: Foe, what: 'com' | 'dex') => {
+    let m = 0;
+    if (mistOn()) m += what === 'dex' ? MIST.dex : mistAge() === 0 ? MIST.first : MIST.second;
+    if ((foe.blindUntil ?? 0) >= combat.turn) m += BLIND;
+    return m;
+  };
+  const vigilance = (actor.character.cards ?? []).includes('guardian-vigilance') ? VIGILANCE : 0;
+  /** The hero's own Combat modifiers against a foe: Scalp, Strategist's study and the mist's −10. */
+  const comMod = (enemy: string) => scalpBonus(actor, enemy) + (combat.studied && !(move.move === 'card' && move.card === 'warrior-strategist') ? 10 : 0) + (mistOn() ? MIST.own : 0);
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
   const weapon = heroWeapon(actor);
   const rune = actor.character.equipment.rune;
@@ -260,9 +334,9 @@ export function combatTurn(
   /** One blow of the hero at a foe, with the skill cards that shape it. */
   const aim = 'aim' in move ? move.aim : undefined;
   if (aim !== undefined && !(['head', 'arms', 'torso', 'legs'] as const).includes(aim)) throw new EngineError('combat.aim', 'Aim at the head, arms, torso or legs.');
-  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string } = {}): boolean => {
+  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string; wound?: boolean; tear?: boolean } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
-    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0);
+    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0) + comMod(target.enemy);
     const result = heroTest(world, actor, 'com', rng, mod, enemy.kind);
     const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}), ...(opts.scroll ? { scroll: opts.scroll } : {}) };
     if (!result.success) {
@@ -271,7 +345,7 @@ export function combatTurn(
     }
     let dodge: TestResult | undefined;
     if (opts.dodge) {
-      dodge = test(rng, enemy.dex);
+      dodge = test(rng, enemy.dex, foeMod(target, 'dex'));
       if (dodge.success) {
         events.push({ ...base, dodge, dodged: true });
         return false;
@@ -280,6 +354,14 @@ export function combatTurn(
     const spot = hitLocation(rng, result.margin, enemy.armour, aim);
     const { location } = spot;
     const armour = enemy.armour[location] ?? 0;
+    // Fangs: after the bite an opposed Strength test; winning it tears the foe open for +4.
+    let tear: CombatEvent | undefined;
+    if (opts.tear) {
+      const hero = heroTest(world, actor, 'str', rng);
+      const foe = test(rng, enemy.str);
+      const torn = hero.success && (!foe.success || hero.roll <= foe.roll);
+      tear = { type: 'tear', uid: target.uid, hero, foe, torn };
+    }
     // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
     const magic = !!opts.scroll;
     const critical = !magic && cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
@@ -291,7 +373,7 @@ export function combatTurn(
       ? strengthStep(attrs.str) + (opts.power ?? 0) + damageRoll - armour
       : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageRoll
         + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
-        + critical + precise + (opts.bonus ?? 0) - armour;
+        + critical + precise + (opts.bonus ?? 0) + (tear?.type === 'tear' && tear.torn ? 4 : 0) - armour;
     // Spirits are hurt in full only by magic or runes.
     if (enemy.traits.includes('ethereal') && !rune && !magic) damage = Math.floor(damage / 2);
     damage = Math.max(0, damage);
@@ -300,8 +382,19 @@ export function combatTurn(
     if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
     if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
     if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
+    // Poisoned Arrow: a hit with a bow poisons. Fangs make the foe bleed the same way.
+    if ((!magic && weapon.ranged && cards.includes('trapper-poison-arrow') && !opts.card) || opts.tear) target.poisoned = true;
+    // Filleting, and every second hit with the Shark Blade, open a deep wound.
+    if (target.wound === undefined && (opts.wound || (!magic && !opts.card && cards.includes('gourmet-shark-blade') && target.hits % 2 === 0))) target.wound = 0;
     events.push({ ...base, ...spot, damage, damageRoll, armour, ...(dodge ? { dodge } : {}) });
+    if (tear) events.push(tear);
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+    // Lightning: a foe that is hit tests Strength; a failure leaves it stunned for a round.
+    else if (opts.scroll && scrollOf(opts.scroll)?.spell === 'lightning') {
+      const shock = test(rng, enemy.str);
+      if (!shock.success) target.stunned = true;
+      events.push({ type: 'shock', uid: target.uid, result: shock, stunned: !shock.success });
+    }
     return true;
   };
   const targetOf = (uid?: string) => alive().find((f) => f.uid === uid) ?? alive()[0];
@@ -345,8 +438,8 @@ export function combatTurn(
       case 'flee': {
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
-        const hero = heroTest(world, actor, 'dex', rng, focus + harried);
-        const foe = test(rng, ENEMIES[fastest.enemy]!.dex);
+        const hero = heroTest(world, actor, 'dex', rng, focus + harried + vigilance);
+        const foe = test(rng, ENEMIES[fastest.enemy]!.dex, foeMod(fastest, 'dex'));
         fled = hero.success && (!foe.success || hero.roll <= foe.roll);
         events.push({ type: 'flee', success: fled, hero, foe });
         break;
@@ -449,6 +542,86 @@ export function combatTurn(
           case 'wraith-leaves':
             events.push({ type: 'card', card: move.card, amount: useLeaves(actor) });
             break;
+          case 'diver-fillet': {
+            // Filleting: one hard blow (−10) that opens a deep wound.
+            const target = targetOf(move.target);
+            if (target) swing(target, { mod: -10, wound: true, card: move.card });
+            break;
+          }
+          case 'druid-fangs': {
+            // Fangs: a very hard bite (−20) of power S−1; it makes the foe bleed and may tear it open.
+            const target = targetOf(move.target);
+            if (target) swing(target, { mod: -20, power: -1, tear: true, card: move.card });
+            break;
+          }
+          case 'elder-beast-master': {
+            const target = targetOf(move.target);
+            if (!target || !canMaster(actor, target)) throw new EngineError('combat.target', 'That beast cannot be mastered.');
+            const step = target.controlled ?? 0;
+            const result = heroTest(world, actor, 'cha', rng, focus + MASTER_STEPS[step]!);
+            if (!result.success) {
+              delete target.controlled;
+              delete target.held;
+              events.push({ type: 'master', uid: target.uid, result, step: step + 1 });
+              break;
+            }
+            target.controlled = step + 1;
+            const companion = target.controlled >= MASTER_STEPS.length;
+            events.push({ type: 'master', uid: target.uid, result, step: step + 1, ...(companion ? { companion } : {}) });
+            if (companion) {
+              const n = (actor.counters.tamed ?? 0) + 1;
+              actor.counters.tamed = n;
+              (actor.companions ??= []).push({
+                uid: `pet-${target.enemy}-${n}`, enemy: target.enemy, vitality: target.vitality, maxVitality: target.maxVitality, bond: BOND_NEEDED, tame: true,
+              });
+              target.tamed = true;
+              target.vitality = 0;
+            } else target.held = true;
+            break;
+          }
+          case 'diver-camouflage': {
+            // Camouflage: the Diver hides; any foe that passes an Intelligence test spots them.
+            const hero = heroTest(world, actor, 'dex', rng, focus);
+            const foes = alive().map((f) => ({ uid: f.uid, result: test(rng, ENEMIES[f.enemy]!.int) }));
+            hidden = hero.success && foes.every((f) => !f.result.success);
+            events.push({ type: 'hide', hero, foes, hidden });
+            break;
+          }
+          case 'explorer-smoke': {
+            // Smoke Bomb: the flight is one plain Dexterity test, no foe rolls against it.
+            const hero = heroTest(world, actor, 'dex', rng, focus + vigilance);
+            fled = hero.success;
+            events.push({ type: 'flee', success: fled, hero, card: move.card });
+            break;
+          }
+          case 'warrior-strategist':
+            combat.studied = true;
+            events.push({ type: 'card', card: move.card, amount: 10 });
+            break;
+          case 'mystic-vines': {
+            const target = targetOf(move.target);
+            if (!target) break;
+            const result = heroTest(world, actor, 'int', rng, focus);
+            if (result.success) target.vined = true;
+            events.push({ type: 'vines', uid: target.uid, by: 'hero', result, bound: result.success });
+            break;
+          }
+          case 'wraith-mist':
+            actor.counters['used:wraith-mist'] = 1;
+            combat.mist = combat.turn;
+            events.push({ type: 'card', card: move.card });
+            break;
+          case 'cavedelver-blind': {
+            // Blinding Light: every foe that fails a Dexterity test is blind until it has struck once more.
+            const foes = alive().map((f) => ({ uid: f.uid, result: test(rng, ENEMIES[f.enemy]!.dex, foeMod(f, 'dex')) }));
+            for (const { uid, result } of foes) {
+              if (result.success) continue;
+              const foe = combat.foes.find((f) => f.uid === uid)!;
+              foe.blindUntil = acted.has(uid) ? combat.turn + 1 : combat.turn;
+            }
+            events.push({ type: 'blind', foes });
+            break;
+          }
         }
         break;
     }
@@ -457,17 +630,40 @@ export function combatTurn(
   const pets = () => (actor.companions ?? []).filter((p) => p.vitality > 0);
 
   const foeTurn = (foe: Foe) => {
-    if (foe.vitality <= 0 || actor.character.vitality <= 0 || enthralled) return;
+    if (foe.vitality <= 0 || actor.character.vitality <= 0 || enthralled || hidden) return;
+    acted.add(foe.uid);
     if (foe.stunned) {
       foe.stunned = false;
       events.push({ type: 'stunned', who: foe.uid });
       return;
     }
     const enemy: Enemy = ENEMIES[foe.enemy]!;
+    // Master of Beasts: a held beast strikes another foe instead of the hero.
+    if (foe.held) {
+      foe.held = false;
+      events.push({ type: 'held', uid: foe.uid });
+      const other = alive().find((f) => f.uid !== foe.uid);
+      if (other) beastStrike(foe.uid, enemy, other);
+      return;
+    }
+    // A deep wound: the foe spends its move on a Dexterity test to staunch it.
+    if (foe.wound !== undefined) {
+      const result = test(rng, enemy.dex, foeMod(foe, 'dex'));
+      if (result.success) delete foe.wound;
+      events.push({ type: 'wound', uid: foe.uid, result, staunched: result.success });
+      return;
+    }
+    // Black Vines: a Strength test to tear free; while bound the foe cannot fight hand to hand.
+    if (foe.vined) {
+      const result = test(rng, enemy.str);
+      if (result.success) foe.vined = false;
+      events.push({ type: 'vines', uid: foe.uid, by: 'foe', result, bound: !result.success });
+      if (!result.success && !enemy.weapon.ranged) return;
+    }
     if (foe.disarmed) {
       // Disarm: the foe spends its turn on an opposed Dexterity test to get its weapon back. Both must pass;
       // then the lower roll wins, and a tie goes to the Explorer.
-      const own = test(rng, enemy.dex);
+      const own = test(rng, enemy.dex, foeMod(foe, 'dex'));
       const hero = heroTest(world, actor, 'dex', rng, focus);
       const success = own.success && (!hero.success || own.roll < hero.roll);
       if (success) foe.disarmed = false;
@@ -482,7 +678,7 @@ export function combatTurn(
     }
     foe.attacks++;
     const sting = enemy.traits.includes('stinger') && foe.attacks % 3 === 0;
-    const result = test(rng, enemy.com, fleeing ? 10 : 0);
+    const result = test(rng, enemy.com, (fleeing ? 10 : 0) + foeMod(foe, 'com'));
     // Riposte: in the defensive stance the Guardian answers every attack with the spear.
     const riposte = () => {
       if (stance && cards.includes('guardian-riposte') && foe.vitality > 0) swing(foe, { mod: -10, power: 1, card: 'guardian-riposte' });
@@ -499,7 +695,7 @@ export function combatTurn(
     }
     if (parrying) {
       const shield = actor.character.equipment.shield ? 15 : 0;
-      const parry = heroTest(world, actor, 'com', rng, focus + shield, enemy.kind);
+      const parry = heroTest(world, actor, 'com', rng, focus + shield + comMod(foe.enemy), enemy.kind);
       if (parry.success && parry.roll <= result.roll) {
         events.push({ type: 'strike', by: foe.uid, target: HERO, result, parry, parried: true });
         return;
@@ -544,7 +740,7 @@ export function combatTurn(
   /** A foe's blow at one of the hero's beasts: no armour, no parry. */
   const strikePet = (foe: Foe, enemy: Enemy, pet: Companion) => {
     foe.attacks++;
-    const result = test(rng, enemy.com);
+    const result = test(rng, enemy.com, foeMod(foe, 'com'));
     if (!result.success) {
       events.push({ type: 'strike', by: foe.uid, target: pet.uid, result });
       return;
@@ -555,25 +751,30 @@ export function combatTurn(
     if (pet.vitality <= 0) events.push({ type: 'companionDown', uid: pet.uid });
   };
 
-  /** Each companion bites the hero's target, or the first foe standing, with its own stats. */
+  /** A beast on the hero's side bites a foe with its own stats (a companion's `bonus` from Teacher adds to them). */
+  const beastStrike = (by: string, beast: Enemy, target: Foe, bonus = 0) => {
+    const foe = ENEMIES[target.enemy]!;
+    const result = test(rng, beast.com + bonus);
+    if (!result.success) {
+      events.push({ type: 'strike', by, target: target.uid, result });
+      return;
+    }
+    const spot = hitLocation(rng, result.margin, foe.armour);
+    const damageRoll = damageDie(rng, false);
+    const armour = foe.armour[spot.location] ?? 0;
+    const damage = Math.max(0, strengthStep(beast.str + bonus) + beast.weapon.power + damageRoll - armour);
+    target.vitality -= damage;
+    events.push({ type: 'strike', by, target: target.uid, result, ...spot, damage, damageRoll, armour });
+    if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+  };
+
+  /** Each companion bites the hero's target, or the first foe standing. */
   const petsTurn = () => {
+    if (hidden) return;
     for (const pet of pets()) {
       const target = targetOf(move.move === 'attack' || move.move === 'card' ? move.target : undefined);
       if (!target) return;
-      const beast = ENEMIES[pet.enemy]!;
-      const foe = ENEMIES[target.enemy]!;
-      const result = test(rng, beast.com);
-      if (!result.success) {
-        events.push({ type: 'strike', by: pet.uid, target: target.uid, result });
-        continue;
-      }
-      const spot = hitLocation(rng, result.margin, foe.armour);
-      const damageRoll = damageDie(rng, false);
-      const armour = foe.armour[spot.location] ?? 0;
-      const damage = Math.max(0, strengthStep(beast.str) + beast.weapon.power + damageRoll - armour);
-      target.vitality -= damage;
-      events.push({ type: 'strike', by: pet.uid, target: target.uid, result, ...spot, damage, damageRoll, armour });
-      if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+      beastStrike(pet.uid, ENEMIES[pet.enemy]!, target, pet.bonus ?? 0);
     }
   };
 
@@ -582,7 +783,8 @@ export function combatTurn(
     events.push(...trapFoes(alive(), rng));
   }
 
-  const heroInitiative = attrs.dex + itemBonus(actor, 'initiative');
+  // Rune of Safety: +20 initiative; Vigilance: +10 in a sudden moment such as this.
+  const heroInitiative = attrs.dex + itemBonus(actor, 'initiative') + (rune === 'safety' ? SAFETY_INITIATIVE : 0) + vigilance;
   const order = [
     { id: HERO, dex: heroInitiative + 0.5 },
     ...alive().map((f) => ({ id: f.uid, dex: ENEMIES[f.enemy]!.dex })),
@@ -609,6 +811,24 @@ export function combatTurn(
     if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
   }
 
+  // A deep wound bleeds 1 a round; the third round of bleeding kills.
+  for (const foe of alive()) {
+    if (foe.wound === undefined) continue;
+    foe.vitality -= 1;
+    foe.wound++;
+    const dead = foe.wound >= WOUND_DEATH;
+    if (dead) foe.vitality = 0;
+    events.push({ type: 'wound', uid: foe.uid, damage: 1, dead });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
+  // Master of Beasts: the hold must be renewed every round, or the beast breaks free.
+  for (const foe of alive()) {
+    if (foe.controlled && !(move.move === 'card' && move.card === 'elder-beast-master' && targetOf(move.target)?.uid === foe.uid)) {
+      delete foe.controlled;
+      delete foe.held;
+    }
+  }
+
   // Venom rune: poisoned foes bleed until they pass a Strength test.
   for (const foe of alive()) {
     if (!foe.poisoned) continue;
@@ -624,6 +844,7 @@ export function combatTurn(
   if (actor.character.vitality <= 0) return { events, result: 'lost' };
   if (enthralled) return { events, result: 'enthralled' };
   if (alive().length === 0) return { events, result: 'won' };
+  if (hidden) return { events, result: 'hidden' };
   if (fled) return { events, result: 'fled' };
   return { events, result: 'ongoing' };
 }
@@ -639,10 +860,10 @@ export function drinkPotion(world: WorldView, actor: ActorState, id: string) {
   if (item?.kind !== 'potion') throw new EngineError('item.notPotion', 'That is not a potion.');
   const c = actor.character;
   if (item.heal) c.vitality = Math.min(c.maxVitality, c.vitality + item.heal);
-  if (item.effect) {
-    actor.effects.push({ id, attribute: item.effect.target, amount: item.effect.amount, untilRound: world.round + item.effect.rounds - 1 });
-    if (item.effect.target === 'stamina') actor.staminaLeft += item.effect.amount;
-    if (item.effect.target === 'speed') actor.speedLeft += item.effect.amount;
+  for (const effect of [...(item.effect ? [item.effect] : []), ...(item.effects ?? [])]) {
+    actor.effects.push({ id, attribute: effect.target, amount: effect.amount, untilRound: world.round + effect.rounds - 1 });
+    if (effect.target === 'stamina') actor.staminaLeft += effect.amount;
+    if (effect.target === 'speed') actor.speedLeft += effect.amount;
   }
   // Clears poison too: the rules end poison "until healed".
   if (item.heal) actor.conditions = actor.conditions.filter((cnd) => cnd.id !== 'poison' && cnd.id !== 'rot' && cnd.id !== 'foulAir');

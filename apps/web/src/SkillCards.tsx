@@ -2,27 +2,31 @@ import { CardArt, castCard } from './CardArt';
 import { useState } from 'react';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { PROFESSIONS, type ActionCard, type ProfessionId } from '@hp/content';
-import { CARDS_PER_GAME, isSpent, usesLeft, type ActorState } from '@hp/engine';
+import { CARDS_PER_GAME, isSpent, MAX_CARDS, usesLeft, type ActorState } from '@hp/engine';
 import { useT, type UiKey } from './i18n';
 import { Icon } from './Icons';
 
 /** Cards the player plays on the map and in a fight. Every other card works on its own. */
-const MAP_PLAY = ['wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew'];
+const MAP_PLAY = [
+  'wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-nature', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew',
+  'trapper-tannery', 'elder-power-potion', 'warrior-way', 'mystic-levitate', 'wraith-lookout', 'druid-teacher', 'runemaster-safety-rune',
+];
 const FIGHT_PLAY = [
   'trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves',
   'explorer-disarm', 'guardian-stance', 'druid-companion', 'elder-herb', 'explorer-bandages', 'runemaster-empower',
+  'elder-beast-master', 'diver-camouflage', 'diver-fillet', 'explorer-smoke', 'warrior-strategist', 'mystic-vines', 'wraith-mist', 'druid-fangs', 'cavedelver-blind',
 ];
 /** Cards used through another button: at camp, when preparing food, in a city, or not yet in the game. */
-const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city'> = {
-  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'elder-nature': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city',
+const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city' | 'town'> = {
+  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city', 'runemaster-reinforce': 'town',
 };
 
 /** A card that is never played: it works by itself whenever its moment comes. */
 export const isPassive = (card: string) => !MAP_PLAY.includes(card) && !FIGHT_PLAY.includes(card) && !ELSEWHERE[card];
 
-type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'cook' | 'city' | 'map' | 'fight' | 'notNow' | 'passive';
+type Status = 'play' | 'usedUp' | 'spent' | 'later' | 'camp' | 'cook' | 'city' | 'town' | 'map' | 'fight' | 'notNow' | 'passive';
 const NOTE: Record<Exclude<Status, 'play'>, UiKey> = {
-  usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp', cook: 'cardAtCook', city: 'cardInCity',
+  usedUp: 'cardUsedUp', spent: 'cardSpent', later: 'cardLater', camp: 'cardAtCamp', cook: 'cardAtCook', city: 'cardInCity', town: 'cardInTown',
   map: 'cardOnMap', fight: 'cardInFight', notNow: 'cardNotNow', passive: 'cardPassive',
 };
 
@@ -146,6 +150,44 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
       {uses && <span className="card-uses">{uses}</span>}
       {large && profession && <small className="card-prof">{tx(PROFESSIONS[profession].name)} · {t('level')} {card.level}</small>}
       {large && <p className="card-text-face">{tx(card.summary)}</p>}
+    </div>
+  );
+}
+
+/**
+ * A new level brought more cards than the hand of 5 holds: the player taps the 5 to keep.
+ * The others are gone for good (Jacob, 2026-11-25), so the button says how many are picked.
+ */
+export function KeepCards({ profession, held, fresh, onKeep }: { profession: ProfessionId; held: string[]; fresh: string[]; onKeep: (cards: string[]) => void }) {
+  const { tx } = useT();
+  const pool = [...held, ...fresh];
+  const want = Math.min(MAX_CARDS, pool.length);
+  const [keep, setKeep] = useState<string[]>(held.slice(0, want));
+  const cards = pool.map((id) => PROFESSIONS[profession].cards.find((c) => c.id === id)).filter((c): c is ActionCard => !!c);
+  const toggle = (id: string) => setKeep((k) => (k.includes(id) ? k.filter((x) => x !== id) : k.length < want ? [...k, id] : k));
+  return (
+    <div className="overlay keep-cards">
+      <motion.article className="card keep-card" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+        <header className="card-head">
+          <small>{tx({ pl: 'Nowy poziom', en: 'New level' })}</small>
+          <h2>{tx({ pl: 'Wybierz karty', en: 'Choose your cards' })}</h2>
+        </header>
+        <p className="card-text">
+          {tx({ pl: `Możesz trzymać najwyżej ${MAX_CARDS} kart. Wybierz te, które zostają. Pozostałe przepadną.`, en: `You can hold at most ${MAX_CARDS} cards. Pick the ones you keep. The others are gone.` })}
+        </p>
+        <div className="keep-grid">
+          {cards.map((card) => (
+            <button key={card.id} className={`keep-pick ${keep.includes(card.id) ? 'on' : ''} ${fresh.includes(card.id) ? 'fresh' : ''}`} onClick={() => toggle(card.id)} aria-pressed={keep.includes(card.id)}>
+              <CardFace card={card} />
+              <small>{tx(card.summary)}</small>
+              {fresh.includes(card.id) && <span className="keep-new">{tx({ pl: 'Nowa', en: 'New' })}</span>}
+            </button>
+          ))}
+        </div>
+        <button className="primary" disabled={keep.length !== want} onClick={() => onKeep(keep)}>
+          {tx({ pl: 'Zatrzymaj', en: 'Keep' })} {keep.length}/{want}
+        </button>
+      </motion.article>
     </div>
   );
 }

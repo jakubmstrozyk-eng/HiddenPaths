@@ -313,7 +313,196 @@ const ART: Record<string, ReactNode> = {
       <path d="M48 46 L58 56" stroke="#ffb347" strokeWidth={4} />
     </>
   ),
+  // Level 3 cards.
+  'trapper-poison-arrow': (
+    <>
+      <path d="M8 56 L50 14" stroke="#c8a060" strokeWidth={3} />
+      <path d="M44 12 L56 8 L52 20 Z" fill="#7ae05a" stroke={O} strokeWidth={1.5} />
+      <path d="M8 56 L4 50 M8 56 L14 60" stroke="#ff8a7a" strokeWidth={2} />
+      {[0, 1, 2].map((i) => <circle key={i} cx={54 - i * 2} cy={26 + i * 7} r={2.5 - i * 0.4} fill="#7ae05a" />)}
+    </>
+  ),
+  'trapper-tannery': (
+    <>
+      <path d="M12 14 Q32 6 52 14 L56 30 Q48 34 50 50 Q32 58 14 50 Q16 34 8 30 Z" fill="#b07a4a" stroke={O} strokeWidth={2} />
+      <path d="M22 22 Q32 18 42 22 M20 36 Q32 32 44 36" fill="none" stroke="#7a4a2a" strokeWidth={2} strokeDasharray="3 2" />
+      <path d="M44 46 L58 58" stroke="#9aa0ac" strokeWidth={3} /><path d="M40 42 L46 48" stroke="#c0c8d4" strokeWidth={5} />
+    </>
+  ),
+  'elder-power-potion': (
+    <>
+      <path d="M26 8 L38 8 L38 22 Q52 30 48 46 Q44 58 32 58 Q20 58 16 46 Q12 30 26 22 Z" fill="#c84a8a" stroke={O} strokeWidth={2} />
+      <rect x={24} y={4} width={16} height={6} fill="#8a5a32" stroke={O} strokeWidth={1.5} />
+      <path d="M20 40 Q32 34 44 40" fill="none" stroke="#ffd0e8" strokeWidth={2} />
+      {[[8, 20], [56, 26], [52, 10]].map(([x, y]) => <path key={x} d={`M${x} ${y! - 4} L${x} ${y! + 4} M${x! - 4} ${y} L${x! + 4} ${y}`} stroke="#ffe066" strokeWidth={2} />)}
+    </>
+  ),
+  'elder-beast-master': (
+    <>
+      <path d="M14 44 Q10 24 22 18 L26 10 L32 18 L38 10 L42 18 Q54 24 50 44 Q42 54 32 54 Q22 54 14 44 Z" fill="#8a6a4a" stroke={O} strokeWidth={2} />
+      <circle cx={25} cy={32} r={3} fill="#ffe066" /><circle cx={39} cy={32} r={3} fill="#ffe066" />
+      <path d="M28 44 L32 48 L36 44" fill="none" stroke={O} strokeWidth={2} />
+      <path d="M6 58 Q32 48 58 58" fill="none" stroke="#c9b8ff" strokeWidth={3} />
+    </>
+  ),
+  'diver-camouflage': (
+    <>
+      <path d="M8 40 Q20 20 32 34 Q44 18 56 38 L56 58 L8 58 Z" fill="#3a7a5a" stroke={O} strokeWidth={2} />
+      {[[16, 46], [30, 50], [44, 46], [24, 40], [40, 40]].map(([x, y]) => <ellipse key={`${x}${y}`} cx={x} cy={y} rx={5} ry={3} fill="#5a9a6a" />)}
+      <circle cx={26} cy={30} r={3} fill="#ffe066" stroke={O} /><circle cx={38} cy={30} r={3} fill="#ffe066" stroke={O} />
+    </>
+  ),
+  'diver-fillet': (
+    <>
+      <path d="M10 50 Q30 40 44 14 L52 18 Q42 44 14 56 Z" fill="#c0c8d4" stroke={O} strokeWidth={2} />
+      {[0, 1, 2, 3].map((i) => <path key={i} d={`M${20 + i * 7} ${48 - i * 8} l-4 -2`} stroke={O} strokeWidth={1.5} />)}
+      <rect x={46} y={6} width={8} height={14} transform="rotate(25 50 13)" fill="#8a5a32" stroke={O} strokeWidth={1.5} />
+      <path d="M16 58 Q12 62 18 62" fill="#c84a3a" /><circle cx={22} cy={60} r={2} fill="#c84a3a" />
+    </>
+  ),
+  'gourmet-fisher': (
+    <>
+      <path d="M8 6 L20 50" stroke="#8a5a32" strokeWidth={3} />
+      <path d="M8 6 Q40 4 44 26" fill="none" stroke="#e8dcc0" strokeWidth={1} />
+      <path d="M30 34 Q42 22 54 34 Q42 46 30 34 Z" fill="#5fb3b3" stroke={O} strokeWidth={2} />
+      <path d="M22 44 Q32 34 42 44 Q32 54 22 44 Z" fill="#7fd3d3" stroke={O} strokeWidth={2} />
+      {[56, 60].map((y) => <path key={y} d={`M4 ${y} q7 -4 14 0 t14 0 t14 0 t14 0`} fill="none" stroke="#7fd3ff" strokeWidth={2} />)}
+    </>
+  ),
+  'gourmet-shark-blade': (
+    <>
+      <path d="M12 52 L46 10 L54 16 L20 58 Z" fill="#c0c8d4" stroke={O} strokeWidth={2} />
+      {[0, 1, 2, 3, 4].map((i) => <path key={i} d={`M${22 + i * 6} ${46 - i * 7} l6 2 l-2 -6`} fill="#6a8a9a" stroke={O} strokeWidth={1} />)}
+      <path d="M44 34 Q52 26 58 34 L50 34 Z" fill="#5a7a8a" stroke={O} strokeWidth={1.5} />
+      <circle cx={14} cy={60} r={2.5} fill="#c84a3a" />
+    </>
+  ),
+  'explorer-direction': (
+    <>
+      <circle cx={32} cy={32} r={24} fill="#e8dcc0" stroke={O} strokeWidth={2} />
+      <path d="M32 10 L38 32 L32 54 L26 32 Z" fill="#c84a3a" stroke={O} strokeWidth={1.5} />
+      <path d="M32 32 L32 54 L26 32 Z" fill="#9aa0ac" />
+      <circle cx={32} cy={32} r={3} fill={O} />
+      <text x={32} y={8} textAnchor="middle" fontSize={7} fontWeight={700} fill="#ffe066">N</text>
+    </>
+  ),
+  'explorer-smoke': (
+    <>
+      {[[22, 40, 14], [38, 36, 16], [30, 24, 12], [46, 22, 9], [16, 26, 8]].map(([x, y, r]) => <circle key={`${x}${y}`} cx={x} cy={y} r={r} fill="#9a98a8" stroke="#5a5868" strokeWidth={1.5} />)}
+      <circle cx={28} cy={52} r={8} fill="#3a3a44" stroke={O} strokeWidth={2} />
+      <path d="M32 46 Q38 40 36 34" fill="none" stroke="#ffb347" strokeWidth={2} />
+    </>
+  ),
+  'warrior-strategist': (
+    <>
+      <rect x={6} y={14} width={52} height={38} fill="#e8dcc0" stroke={O} strokeWidth={2} />
+      <path d="M14 40 Q24 22 34 34 T52 22" fill="none" stroke="#c84a3a" strokeWidth={2.5} strokeDasharray="4 3" />
+      <path d="M48 18 L54 24 M54 18 L48 24" stroke="#3a3a44" strokeWidth={2.5} />
+      <circle cx={14} cy={40} r={4} fill="#3a6a9a" stroke={O} />
+    </>
+  ),
+  'warrior-way': (
+    <>
+      <rect x={28} y={12} width={8} height={44} fill="#8a5a32" stroke={O} strokeWidth={2} />
+      <path d="M20 22 L44 22 M18 34 L46 34" stroke="#c8a060" strokeWidth={4} />
+      <path d="M10 56 L54 56" stroke="#3a3a44" strokeWidth={3} />
+      <path d="M44 8 L56 4 M48 14 L60 12" stroke="#ffe066" strokeWidth={2} />
+    </>
+  ),
+  'mystic-vines': (
+    <>
+      <path d="M8 58 Q20 40 14 26 Q10 14 22 8" fill="none" stroke="#2f2a3a" strokeWidth={5} />
+      <path d="M56 58 Q44 40 50 26 Q54 14 42 8" fill="none" stroke="#2f2a3a" strokeWidth={5} />
+      <path d="M14 40 Q32 30 50 40 M16 26 Q32 18 48 26" fill="none" stroke="#5a2a7a" strokeWidth={3} />
+      {[[20, 34], [44, 34], [32, 22]].map(([x, y]) => <ellipse key={x} cx={x} cy={y} rx={4} ry={2.5} fill="#8f7bff" />)}
+    </>
+  ),
+  'mystic-levitate': (
+    <>
+      <circle cx={32} cy={14} r={7} fill="#e8c89a" stroke={O} strokeWidth={2} />
+      <path d="M20 40 Q32 20 44 40 Z" fill="#6a4a9a" stroke={O} strokeWidth={2} />
+      <ellipse cx={32} cy={56} rx={18} ry={4} fill="#3a2a5a" />
+      {[46, 50].map((y) => <path key={y} d={`M14 ${y} q9 -3 18 0 t18 0`} fill="none" stroke="#c9b8ff" strokeWidth={1.5} />)}
+    </>
+  ),
+  'guardian-scalp': (
+    <>
+      <path d="M32 6 L32 58" stroke="#8a5a32" strokeWidth={4} />
+      <path d="M18 14 Q32 10 46 14 Q48 28 32 30 Q16 28 18 14 Z" fill="#5a4a3a" stroke={O} strokeWidth={2} />
+      {[22, 28, 34, 40].map((x) => <path key={x} d={`M${x} 30 L${x - 2} 42`} stroke="#5a4a3a" strokeWidth={2} />)}
+      <path d="M20 50 L44 50" stroke="#ffe066" strokeWidth={3} /><text x={32} y={62} textAnchor="middle" fontSize={9} fontWeight={800} fill="#ffe066">+1</text>
+    </>
+  ),
+  'guardian-vigilance': (
+    <>
+      <path d="M4 32 Q32 6 60 32 Q32 58 4 32 Z" fill="#f4ecd8" stroke={O} strokeWidth={2} />
+      <circle cx={32} cy={32} r={11} fill="#c88a3a" stroke={O} strokeWidth={2} />
+      <circle cx={32} cy={32} r={5} fill={O} />
+      <circle cx={28} cy={28} r={2} fill="#fff" />
+    </>
+  ),
+  'wraith-mist': (
+    <>
+      <path d="M24 4 L40 4 L40 12 Q48 18 46 30 L18 30 Q16 18 24 12 Z" fill="#a9c4d8" stroke={O} strokeWidth={2} />
+      {[36, 44, 52].map((y, i) => <path key={y} d={`M${6 + i * 2} ${y} q8 -6 16 0 t16 0 t16 0`} fill="none" stroke="#c8d4e0" strokeWidth={4} strokeLinecap="round" />)}
+    </>
+  ),
+  'wraith-lookout': (
+    <>
+      <path d="M32 6 L50 30 L40 30 L54 48 L10 48 L24 30 L14 30 Z" fill="#2f6a3a" stroke={O} strokeWidth={2} />
+      <rect x={28} y={48} width={8} height={12} fill="#6a4a2a" stroke={O} strokeWidth={1.5} />
+      <circle cx={32} cy={10} r={4} fill="#e8c89a" stroke={O} strokeWidth={1.5} />
+      <path d="M4 20 L14 22 M60 20 L50 22" stroke="#ffe066" strokeWidth={2} />
+    </>
+  ),
+  'druid-teacher': (
+    <>
+      <path d="M12 54 Q10 36 20 32 L24 24 L30 32 Q40 34 40 46 Q38 56 26 56 Z" fill="#9a7a5a" stroke={O} strokeWidth={2} />
+      <circle cx={22} cy={40} r={2} fill={O} />
+      <rect x={38} y={8} width={20} height={16} fill="#e8dcc0" stroke={O} strokeWidth={1.5} />
+      <path d="M48 10 L48 22 M42 14 L54 14" stroke="#3a6a9a" strokeWidth={2} />
+      <text x={50} y={40} textAnchor="middle" fontSize={11} fontWeight={800} fill="#7ae05a">+1</text>
+    </>
+  ),
+  'druid-fangs': (
+    <>
+      <path d="M6 14 Q32 4 58 14 L52 24 Q32 18 12 24 Z" fill="#7a2a2a" stroke={O} strokeWidth={2} />
+      <path d="M6 50 Q32 60 58 50 L52 40 Q32 46 12 40 Z" fill="#7a2a2a" stroke={O} strokeWidth={2} />
+      {[16, 26, 38, 48].map((x) => <path key={x} d={`M${x - 4} 22 L${x} 34 L${x + 4} 22`} fill="#f4ecd8" stroke={O} strokeWidth={1} />)}
+      {[20, 32, 44].map((x) => <path key={x} d={`M${x - 4} 42 L${x} 32 L${x + 4} 42`} fill="#f4ecd8" stroke={O} strokeWidth={1} />)}
+    </>
+  ),
+  'runemaster-safety-rune': (
+    <>
+      <path d="M32 4 L56 14 L52 40 Q44 54 32 60 Q20 54 12 40 L8 14 Z" fill="#3a4a6a" stroke={O} strokeWidth={2} />
+      <path d="M32 16 L32 46 M22 24 L32 32 L42 24 M24 42 L40 42" stroke="#7fd3ff" strokeWidth={3} strokeLinecap="round" />
+    </>
+  ),
+  'runemaster-reinforce': (
+    <>
+      <path d="M14 14 L50 14 L54 30 Q50 52 32 58 Q14 52 10 30 Z" fill="#7a808c" stroke={O} strokeWidth={2} />
+      {[[18, 22], [46, 22], [18, 40], [46, 40], [32, 50]].map(([x, y]) => <circle key={`${x}${y}`} cx={x} cy={y} r={2.5} fill="#dfe3ec" stroke={O} />)}
+      <rect x={26} y={24} width={12} height={14} fill="#c87030" stroke={O} strokeWidth={1.5} />
+      <text x={32} y={35} textAnchor="middle" fontSize={9} fontWeight={800} fill="#fff">+1</text>
+    </>
+  ),
+  'cavedelver-caver': (
+    <>
+      <path d="M4 58 L20 26 L28 36 L40 12 L60 58 Z" fill="#6a6470" stroke={O} strokeWidth={2} />
+      <path d="M26 58 Q32 40 38 58 Z" fill={O} />
+      <path d="M36 18 L40 12 L44 20" fill="#f4ecd8" />
+      <circle cx={32} cy={50} r={3} fill="#ffe066" />
+    </>
+  ),
+  'cavedelver-blind': (
+    <>
+      <path d="M32 4 L46 24 L32 60 L18 24 Z" fill="#bfe9ff" stroke={O} strokeWidth={2} />
+      <path d="M18 24 L46 24 M32 4 L32 60" stroke="#7fd3ff" strokeWidth={1.5} />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => <path key={a} d="M32 30 L32 2" transform={`rotate(${a} 32 30)`} stroke="#fff6c0" strokeWidth={1.5} opacity={0.7} />)}
+    </>
+  ),
 };
+
 
 export function CardArt({ card, size }: { card: string; size: number }) {
   return (
@@ -338,6 +527,12 @@ const FX: Record<string, Fx> = {
   'guardian-stance': 'pulse', 'guardian-riposte': 'shot', 'guardian-hide': 'pulse',
   'druid-herbalist': 'rise', 'druid-forest': 'shine', 'druid-companion': 'snap',
   'runemaster-empower': 'shine', 'runemaster-vise': 'snap', 'runemaster-smelt': 'pulse',
+  'trapper-poison-arrow': 'shot', 'trapper-tannery': 'snap', 'elder-power-potion': 'rise', 'elder-beast-master': 'pulse',
+  'diver-camouflage': 'dash', 'diver-fillet': 'swing', 'gourmet-fisher': 'dash', 'gourmet-shark-blade': 'swing',
+  'explorer-direction': 'spin', 'explorer-smoke': 'pulse', 'warrior-strategist': 'shine', 'warrior-way': 'swing',
+  'mystic-vines': 'snap', 'mystic-levitate': 'rise', 'guardian-scalp': 'shine', 'guardian-vigilance': 'shine',
+  'wraith-mist': 'pulse', 'wraith-lookout': 'rise', 'druid-teacher': 'shine', 'druid-fangs': 'snap',
+  'runemaster-safety-rune': 'shine', 'runemaster-reinforce': 'pulse', 'cavedelver-caver': 'rise', 'cavedelver-blind': 'shine',
 };
 const GLOW: Record<Fx, string> = {
   snap: '#c0c8d4', shot: '#ffe066', swing: '#ffd34d', spin: '#ffb347', pulse: '#c9b8ff', rise: '#7ae05a', shine: '#fff1b0', dash: '#7fd3ff',

@@ -1,10 +1,10 @@
-import { ENEMIES, type Attribute } from '@hp/content';
+import { ENEMIES, ITEMS, TERRAINS, type ArmourSlot, type Attribute } from '@hp/content';
 import { test } from './dice';
 import { EngineError } from './errors';
-import { log, worldView } from './progress';
+import { log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, Meal, PlayerState } from './state';
-import { heroTest, type ActorState } from './terrain';
+import { heroTest, NATURE_BONUS, type ActorState } from './terrain';
 import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 
 /**
@@ -16,7 +16,13 @@ import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 /** Cards with a fixed number of uses per game. */
 export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3 };
 /** Cards that turn sideways when used and come back at the next camp. */
-export const CARDS_PER_CAMP = ['wraith-haste', 'elder-wisdom', 'elder-herb', 'runemaster-empower'];
+export const CARDS_PER_CAMP = ['wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower', 'warrior-way', 'mystic-levitate', 'wraith-mist'];
+/** Cards that cost Stamina when played on the map (Jacob, 2026-11-25); in a fight they take the hero's round instead. */
+export const MAP_STAMINA: Record<string, number> = {
+  'elder-nature': 1, 'elder-herb': 1, 'runemaster-empower': 1, 'explorer-bandages': 1,
+  // Level 3 cards, from their sheets.
+  'trapper-tannery': 1, 'elder-power-potion': 1, 'warrior-way': 1, 'mystic-levitate': 1, 'wraith-lookout': 1, 'druid-teacher': 2, 'runemaster-safety-rune': 2,
+};
 
 export const has = (actor: Pick<ActorState, 'character'>, card: string) => actor.character.cards.includes(card);
 
@@ -43,14 +49,47 @@ export function playableCards(state: GameState, player: PlayerState): string[] {
   if (has(player, 'warrior-rations') && usesLeft(player, 'warrior-rations')! > 0) out.push('warrior-rations');
   if (has(player, 'wraith-leaves') && usesLeft(player, 'wraith-leaves')! > 0 && player.staminaLeft >= 1) out.push('wraith-leaves');
   if (has(player, 'trapper-trap') && state.map.cells[player.position]!.terrain !== 'core' && !player.counters[trapKey(player.position)]) out.push('trapper-trap');
-  for (const card of ['elder-herb', 'runemaster-empower']) if (has(player, card) && !isSpent(player, card)) out.push(card);
+  for (const card of ['elder-nature', 'elder-herb', 'runemaster-empower']) {
+    if (has(player, card) && !isSpent(player, card) && player.staminaLeft >= MAP_STAMINA[card]!) out.push(card);
+  }
   if (has(player, 'explorer-bandages') && player.staminaLeft >= BANDAGE_STAMINA) out.push('explorer-bandages');
   if (has(player, 'gourmet-stew') && canStew(state, player)) out.push('gourmet-stew');
+  // Level 3 cards.
+  const affords = (card: string) => has(player, card) && player.staminaLeft >= MAP_STAMINA[card]!;
+  const terrain = state.map.cells[player.position]!.terrain;
+  if (affords('trapper-tannery') && (player.counters.hides ?? 0) > 0) out.push('trapper-tannery');
+  if (affords('elder-power-potion') && canGatherHere(terrain) && !player.counters[`ingredient:${player.position}`]) out.push('elder-power-potion');
+  for (const card of ['warrior-way', 'mystic-levitate']) if (affords(card) && !isSpent(player, card)) out.push(card);
+  if (affords('wraith-lookout') && terrain === 'forest' && state.map.cells.some((cell) => isNear(state, player, cell.index) && !player.revealed.includes(cell.index))) {
+    out.push('wraith-lookout');
+  }
+  if (affords('druid-teacher') && (player.companions ?? []).length && !player.counters[roundKey(state, 'taught')]) out.push('druid-teacher');
+  if (affords('runemaster-safety-rune') && player.character.equipment.rune !== 'safety') out.push('runemaster-safety-rune');
   return out;
 }
 
+const canGatherHere = (terrain: string) => terrain !== 'core' && TERRAINS[terrain as keyof typeof TERRAINS].actions.some((a) => a === 'gather' || a === 'herbalism');
+const isNear = (state: GameState, player: PlayerState, cell: number) => worldView(state).near(player.position).includes(cell);
+
+/** Potion of Might: the ingredients to find, one a fragment, before the Elder brews it. */
+export const POTION_INGREDIENTS = 3;
+
+/** Levitation: the Mystic floats for the rest of the round (hard terrain costs 1 Speed, rivers are no bar). */
+export const levitating = (state: Pick<GameState, 'round'>, player: Pick<PlayerState, 'counters'>) => !!player.counters[`levitate@${state.round}`];
+
+/** Tannery: the leather piece made from a hide, for a part of the body the hero has least armour on. */
+function leatherPiece(player: PlayerState): string {
+  const slots: ArmourSlot[] = ['torso', 'head', 'arms', 'legs'];
+  const owned = (slot: ArmourSlot) => [...player.character.equipment.armour, ...player.inventory.items].some((id) => {
+    const item = ITEMS[id];
+    return item?.kind === 'armour' && item.covers.includes(slot);
+  });
+  const slot = slots.find((s) => !owned(s)) ?? 'torso';
+  return `leather-${slot}`;
+}
+
 /** Bandages cost 1 Stamina on the map; in a fight they take the hero's move instead. */
-export const BANDAGE_STAMINA = 1;
+export const BANDAGE_STAMINA = MAP_STAMINA['explorer-bandages']!;
 /** Healing Stew: the most stews a Gourmet keeps ready. */
 export const MAX_STEWS = 3;
 
@@ -184,7 +223,7 @@ export function useLeaves(actor: ActorState): number {
 }
 
 /** Plays a skill card on the map. */
-export function playCard(state: GameState, player: PlayerState, card: string, rng: Rng) {
+export function playCard(state: GameState, player: PlayerState, card: string, rng: Rng, target?: string) {
   if (!playableCards(state, player).includes(card)) throw new EngineError('card.notNow', 'You cannot play that card now.');
   switch (card) {
     case 'wraith-haste':
@@ -206,7 +245,15 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       player.counters[trapKey(player.position)] = 1;
       log(state, { type: 'card', player: player.id, card, ok: true });
       break;
+    case 'elder-nature':
+      // Close to Nature: renewed at camp; played for 1 Stamina, +10 to the next attribute test.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.counters['used:elder-nature'] = 1;
+      player.counters.nature = 1;
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: NATURE_BONUS });
+      break;
     case 'elder-herb':
+      player.staminaLeft -= MAP_STAMINA[card]!;
       log(state, { type: 'card', player: player.id, card, ok: true, amount: healingHerb(player) });
       break;
     case 'explorer-bandages':
@@ -214,8 +261,86 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       log(state, { type: 'card', player: player.id, card, ok: true, amount: bandage(player) });
       break;
     case 'runemaster-empower':
+      player.staminaLeft -= MAP_STAMINA[card]!;
       empower(state.round, player);
       log(state, { type: 'card', player: player.id, card, ok: true, amount: 2 });
+      break;
+    case 'trapper-tannery': {
+      // Tannery: 1 Stamina and an Intelligence test turn a hide into a leather piece.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      const result = heroTest(worldView(state), player, 'int', rng);
+      log(state, { type: 'check', player: player.id, attribute: 'int', result });
+      if (result.success) {
+        player.counters.hides = (player.counters.hides ?? 1) - 1;
+        const item = leatherPiece(player);
+        player.inventory.items.push(item);
+        log(state, { type: 'crafted', player: player.id, card, item });
+      }
+      break;
+    }
+    case 'elder-power-potion': {
+      // Potion of Might: an easy Intelligence test (+10) finds one ingredient here; the third makes the potion.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      const result = heroTest(worldView(state), player, 'int', rng, 10);
+      log(state, { type: 'check', player: player.id, attribute: 'int', result });
+      if (!result.success) break;
+      player.counters[`ingredient:${player.position}`] = 1;
+      const found = (player.counters.ingredients ?? 0) + 1;
+      if (found < POTION_INGREDIENTS) {
+        player.counters.ingredients = found;
+        log(state, { type: 'card', player: player.id, card, ok: true, amount: found });
+        break;
+      }
+      player.counters.ingredients = 0;
+      player.inventory.items.push('elderPotion');
+      log(state, { type: 'crafted', player: player.id, card, item: 'elderPotion' });
+      break;
+    }
+    case 'warrior-way':
+      // Way of the Warrior: a training session, +1 Combat for good; renews at camp.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.counters['used:warrior-way'] = 1;
+      player.character.attributes.com += 1;
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: 1 });
+      break;
+    case 'mystic-levitate': {
+      // Levitation: 1 Stamina for the meditation; a passed Intelligence test lifts the Mystic until the round ends.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      const result = heroTest(worldView(state), player, 'int', rng);
+      log(state, { type: 'check', player: player.id, attribute: 'int', result });
+      if (result.success) {
+        player.counters['used:mystic-levitate'] = 1;
+        player.counters[`levitate@${state.round}`] = 1;
+        player.crossedRiver = true;
+      }
+      log(state, { type: 'card', player: player.id, card, ok: result.success });
+      break;
+    }
+    case 'wraith-lookout': {
+      // Lookout: from a treetop every fragment around is revealed (with its XP, but no events).
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.counters[`lookout:${player.position}`] = 1;
+      let seen = 0;
+      for (const cell of worldView(state).near(player.position)) if (reveal(state, player, cell)) seen++;
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: seen });
+      break;
+    }
+    case 'druid-teacher': {
+      // Teacher: 2 Stamina and a Willpower test give the companion +1 to all its attributes.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.counters[roundKey(state, 'taught')] = 1;
+      const result = heroTest(worldView(state), player, 'wil', rng);
+      log(state, { type: 'check', player: player.id, attribute: 'wil', result });
+      const pet = (player.companions ?? []).find((p) => p.uid === target) ?? player.companions![0]!;
+      if (result.success) pet.bonus = (pet.bonus ?? 0) + 1;
+      log(state, { type: 'card', player: player.id, card, ok: result.success, amount: pet.bonus ?? 0 });
+      break;
+    }
+    case 'runemaster-safety-rune':
+      // Rune of Safety: +20 initiative while the weapon carries it; a weapon holds one rune.
+      player.staminaLeft -= MAP_STAMINA[card]!;
+      player.character.equipment.rune = 'safety';
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: 20 });
       break;
     case 'gourmet-stew': {
       // Healing Stew: an Intelligence test turns a portion into a stew; one try a round.
