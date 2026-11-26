@@ -1,5 +1,5 @@
 import { DEFAULT_DICE, DEFAULT_LOOK, type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId } from '@hp/content';
-import { MISSIONS_KEPT, validateCharacter, type CharacterInput } from './character';
+import { MISSIONS_KEPT, validateCharacter, type CharacterInput, type HeroGrowth } from './character';
 import { EngineError } from './errors';
 import type { GameCareer } from './missions';
 
@@ -20,9 +20,19 @@ export interface Hero {
   createdAt: string;
   /** Each game's share of the career goals, by game: kept on the hero, never sent when making one. */
   career?: Record<string, GameCareer>;
+  /** What the hero has grown into over its games (Jacob, 2026-11-26): the furthest any game took it. */
+  growth?: HeroGrowth;
 }
 
-export type NewHero = Omit<Hero, 'id' | 'createdAt' | 'career'>;
+export type NewHero = Omit<Hero, 'id' | 'createdAt' | 'career' | 'growth'>;
+
+/**
+ * Keeps the hero's furthest development: a game's latest state replaces the kept one when it has at least as
+ * much XP. A hero can play several games at once; the one that took it furthest is the one it carries on with.
+ */
+export function withGrowth(kept: HeroGrowth | undefined, game: HeroGrowth): HeroGrowth {
+  return !kept || game.xp >= kept.xp ? game : kept;
+}
 
 /** How many games a hero's career remembers; the oldest drop off past this. */
 export const CAREER_GAMES = 200;
@@ -54,9 +64,13 @@ export function validateHero(input: NewHero): NewHero {
 }
 
 /** The character a hero brings into a new game, with the missions chosen for it. */
-export function heroCharacter(hero: Pick<Hero, 'name' | 'race' | 'profession' | 'bonus' | 'look' | 'dice'> & { id?: string }, missions: string[]): CharacterInput {
+export function heroCharacter(hero: Pick<Hero, 'name' | 'race' | 'profession' | 'bonus' | 'look' | 'dice' | 'growth'> & { id?: string }, missions: string[]): CharacterInput {
   if (missions.length !== MISSIONS_KEPT) throw new EngineError('character.missions', `Keep exactly ${MISSIONS_KEPT} missions.`);
-  return { name: hero.name, race: hero.race, profession: hero.profession, bonus: { ...hero.bonus }, missions: [...missions], look: { ...hero.look }, dice: { ...hero.dice }, ...(hero.id ? { heroId: hero.id } : {}) };
+  return {
+    name: hero.name, race: hero.race, profession: hero.profession, bonus: { ...hero.bonus }, missions: [...missions], look: { ...hero.look }, dice: { ...hero.dice },
+    ...(hero.id ? { heroId: hero.id } : {}),
+    ...(hero.growth ? { growth: structuredClone(hero.growth) } : {}),
+  };
 }
 
 /** Whether a hero may play a game: single-player heroes only solo games, multiplayer heroes only multiplayer ones. */

@@ -144,7 +144,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   const player = currentPlayer(state);
   if (player.id !== playerId) return [];
   if (player.combat) return combatMoves(player, player.combat).map((move) => ({ type: 'combat', move }));
-  if (player.pendingEvent && player.character.newCards?.length) {
+  if (player.pendingEvent && (player.character.newCards?.length || player.character.chooseCards)) {
     return [...eventOptions(state, player).filter((o) => o.affordable).map((o): Action => ({ type: 'event', option: o.index })), { type: 'keepCards', cards: [] }];
   }
   if (player.pendingEvent) {
@@ -156,6 +156,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
       if (moveCost(state, entryCell(state.map, side), player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA) actions.push({ type: 'enter', side });
     }
     if (canEat(state, player)) actions.push({ type: 'eat' });
+    if (player.character.newCards?.length || player.character.chooseCards) actions.push({ type: 'keepCards', cards: [] });
     actions.push({ type: 'endTurn' });
     return actions;
   }
@@ -197,7 +198,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   }
   for (const slot of reinforceSlots(state, player, heroArmour(player))) actions.push({ type: 'reinforce', slot });
   if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
-  if (player.character.newCards?.length) actions.push({ type: 'keepCards', cards: [] });
+  if (player.character.newCards?.length || player.character.chooseCards) actions.push({ type: 'keepCards', cards: [] });
   if (canEat(state, player)) actions.push({ type: 'eat' });
   actions.push({ type: 'endTurn' });
   return actions;

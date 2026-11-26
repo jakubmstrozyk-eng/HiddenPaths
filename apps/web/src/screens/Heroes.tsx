@@ -35,7 +35,7 @@ export function HeroCard({ hero, active, onClick, children }: { hero: Hero; acti
       <div className="hero-card-avatar"><PixelHero race={hero.race} profession={hero.profession} look={hero.look} size={72} /></div>
       <div className="hero-card-body">
         <b>{hero.name}</b>
-        <small>{tx(RACES[hero.race].name)} · {tx(PROFESSIONS[hero.profession].name)}</small>
+        <small>{tx(RACES[hero.race].name)} · {tx(PROFESSIONS[hero.profession].name)} · {t('level')} {hero.growth?.level ?? 1}{hero.growth ? ` · ${hero.growth.xp} ${t('xp')}` : ''}</small>
         <span className={`mode-badge ${hero.mode}`}>{hero.mode === 'solo' ? t('heroSolo') : t('heroMulti')}</span>
         <span className="hero-dice">
           {(['d6', 'd10', 'd100'] as const).map((k) => <DieFace key={k} kind={k} value={k === 'd6' ? 6 : 7} style={diceStyle(hero.dice[k])} size={22} />)}

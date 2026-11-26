@@ -23,6 +23,24 @@ export interface CharacterInput {
   dice?: DiceLook;
   /** The kept hero this character was made from, for career goals. */
   heroId?: string;
+  /** What the hero earned in earlier games: they start this one with it (Jacob, 2026-11-26). */
+  growth?: HeroGrowth;
+}
+
+/**
+ * A hero's development, carried from game to game: level, XP, attributes, Vitality, Stamina, skills and
+ * skill cards. Gold, food and gear stay in the game they were found in.
+ */
+export interface HeroGrowth {
+  level: number;
+  xp: number;
+  attributes: Attributes;
+  maxVitality: number;
+  stamina: number;
+  unspentPoints: number;
+  skills: Partial<Record<SkillId, number>>;
+  /** Every skill card the hero owns; the first ones are the hand they last played with. */
+  cards: string[];
 }
 
 export interface Character {
@@ -46,6 +64,8 @@ export interface Character {
   newCards?: string[];
   /** Cards the hero owns but left out of the hand of 5; they can be picked again at the next choice. */
   benched?: string[];
+  /** A hero who owns more than 5 cards picks the 5 to play with before the game starts (Jacob, 2026-11-26). */
+  chooseCards?: boolean;
   missions: string[];
   equipment: Equipment;
   skills: Partial<Record<SkillId, number>>;
@@ -63,6 +83,7 @@ export function drawMissionChoices(rng: Rng): string[] {
 }
 
 export function validateCharacter(input: CharacterInput, offered?: string[]): void {
+  if (input.growth) validateGrowth(input);
   if (!input.name.trim()) throw new EngineError('character.name', 'A character needs a name.');
   const race = RACES[input.race];
   if (!race) throw new EngineError('character.race', `Unknown race ${input.race}.`);
@@ -122,6 +143,7 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     ...(input.look ? { look: { head: input.look.head, torso: input.look.torso, legs: input.look.legs } } : {}),
     ...(input.dice ? { dice: { d6: input.dice.d6, d10: input.dice.d10, d100: input.dice.d100 } } : {}),
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
+    ...(input.growth ? grown(input) : {}),
   };
 }
 
@@ -162,7 +184,7 @@ export const cardPool = (c: Pick<Character, 'cards' | 'newCards' | 'benched'>) =
 export function keepCards(c: Character, keep: string[]): void {
   const pool = cardPool(c);
   const want = Math.min(MAX_CARDS, pool.length);
-  if (!c.newCards?.length) throw new EngineError('cards.noChoice', 'There are no new cards to choose from.');
+  if (!c.newCards?.length && !c.chooseCards) throw new EngineError('cards.noChoice', 'There are no new cards to choose from.');
   if (new Set(keep).size !== keep.length || keep.length !== want || !keep.every((id) => pool.includes(id))) {
     throw new EngineError('cards.keep', `Choose ${want} of your cards to keep.`);
   }
@@ -171,6 +193,7 @@ export function keepCards(c: Character, keep: string[]): void {
   if (benched.length) c.benched = benched;
   else delete c.benched;
   delete c.newCards;
+  delete c.chooseCards;
 }
 
 /** Spends level-up points on base attributes. */
@@ -184,4 +207,46 @@ export function spendPoints(c: Character, bonus: Partial<Attributes>): void {
   if (total === 0 || total > c.unspentPoints) throw new EngineError('character.points', 'Not that many points to spend.');
   for (const a of ATTRIBUTES) c.attributes[a] += bonus[a] ?? 0;
   c.unspentPoints -= total;
+}
+
+/** A hero's development as it stands in a game, to carry into the next one. */
+export function growthOf(c: Character): HeroGrowth {
+  return {
+    level: c.level, xp: c.xp, attributes: { ...c.attributes }, maxVitality: c.maxVitality, stamina: c.stamina,
+    unspentPoints: c.unspentPoints, skills: { ...c.skills }, cards: cardPool(c),
+  };
+}
+
+/** Checks a carried development against the rules, so a bad record cannot make a hero stronger than play could. */
+export function validateGrowth(input: CharacterInput): void {
+  const g = input.growth!;
+  const bad = (why: string) => new EngineError('character.growth', why);
+  if (!Number.isInteger(g.level) || g.level < 1 || g.level > LEVEL_XP.length - 1) throw bad('Unknown level.');
+  if (!(g.xp >= LEVEL_XP[g.level]!) || levelForXp(g.xp) !== g.level) throw bad('The XP does not match the level.');
+  const own = PROFESSIONS[input.profession]?.cards ?? [];
+  if (!Array.isArray(g.cards) || new Set(g.cards).size !== g.cards.length) throw bad('Unknown cards.');
+  for (const id of g.cards) {
+    const card = own.find((c) => c.id === id);
+    if (!card || card.level > g.level) throw bad(`${id} is not a card this hero can own.`);
+  }
+  for (const a of ATTRIBUTES) if (!Number.isFinite(g.attributes?.[a])) throw bad('Unknown attributes.');
+  if (!Number.isInteger(g.maxVitality) || !Number.isInteger(g.stamina) || !Number.isInteger(g.unspentPoints) || g.unspentPoints < 0) throw bad('Bad numbers.');
+}
+
+/** The parts of a new character that come from the hero's earlier games. */
+function grown(input: CharacterInput): Partial<Character> {
+  validateGrowth(input);
+  const g = input.growth!;
+  const all = [...g.cards];
+  // Cards of the levels reached that the record lacks (new ones in the game data) come along too.
+  for (const card of PROFESSIONS[input.profession]?.cards ?? []) if (card.level <= g.level && !all.includes(card.id)) all.push(card.id);
+  const out: Partial<Character> = {
+    level: g.level, xp: g.xp, attributes: { ...g.attributes }, maxVitality: g.maxVitality, vitality: g.maxVitality,
+    stamina: g.stamina, unspentPoints: g.unspentPoints, skills: { ...g.skills }, cards: all.slice(0, MAX_CARDS),
+  };
+  if (all.length > MAX_CARDS) {
+    out.benched = all.slice(MAX_CARDS);
+    out.chooseCards = true;
+  }
+  return out;
 }
