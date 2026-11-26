@@ -18,3 +18,4 @@ export {
   type GameState, type PlayerState, type Action, type LogEntry, type NewPlayer,
 } from './game';
 export * from './missions';
+export * from './dungeon';

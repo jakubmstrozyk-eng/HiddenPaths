@@ -22,6 +22,8 @@ export type Outcome =
   | { do: 'skill'; skill: SkillId; amount: number }
   | { do: 'item'; item: string }
   | { do: 'randomItem'; rare?: boolean }
+  /** Ores for the bag: rare ones (magma, gold, silver, diamond, gem) or common ones. */
+  | { do: 'ores'; amount: number; rare?: boolean }
   | { do: 'rune' }
   | { do: 'fight'; enemies: string[]; onWin?: Outcome[] }
   | { do: 'fightRandom' }

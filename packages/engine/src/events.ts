@@ -1,6 +1,6 @@
 import { springTrap } from './cards';
 import {
-  EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
+  COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
@@ -216,6 +216,15 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       case 'randomItem': {
         const pool = o.rare ? LOOT_RARE : LOOT_COMMON;
         giveItem(state, player, pool[rng.int(pool.length)]!);
+        break;
+      }
+      case 'ores': {
+        const pool = o.rare ? RARE_ORES : COMMON_ORES;
+        for (let i = 0; i < o.amount; i++) {
+          const ore = pool[rng.int(pool.length)]!;
+          player.inventory.materials[ore] = (player.inventory.materials[ore] ?? 0) + 1;
+          log(state, { type: 'change', player: player.id, change: { what: 'item', item: ore, amount: 1 } });
+        }
         break;
       }
       case 'rune': {

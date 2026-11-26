@@ -3,6 +3,7 @@ import type { Character } from './character';
 import type { CombatEvent, CombatMove, CombatResult, CombatState } from './combat';
 import type { GameConfig } from './config';
 import type { TestResult } from './dice';
+import type { Delve, Dungeon } from './dungeon';
 import type { GameMap } from './mapgen';
 import type { Companion, Condition, Effect, Inventory, TerrainOutcome } from './terrain';
 
@@ -46,6 +47,8 @@ export interface PlayerState {
   meals?: Meal[];
   /** Tamed beasts following the hero (missing in older saves). */
   companions?: Companion[];
+  /** Inside the dungeon: the room and the way back. The hero's position stays on the entrance fragment. */
+  delve?: Delve | null;
 }
 
 /** A change to a hero's stats or belongings, for the log and the app's floating numbers. */
@@ -104,6 +107,10 @@ export type LogEntry =
   | { type: 'cardsKept'; player: string; cards: string[]; dropped: string[] }
   /** A game mission was reached and paid its XP. */
   | { type: 'mission'; player: string; mission: string; xp: number }
+  /** Dungeon: went into a room (`card` when it played one), climbed out, or cleared a room. */
+  | { type: 'room'; player: string; room: number; card?: number }
+  | { type: 'roomCleared'; player: string; room: number; vault: boolean }
+  | { type: 'leftDungeon'; player: string }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
@@ -120,6 +127,8 @@ export interface GameState {
   eventDeck: number[];
   /** Set when someone reaches the goal. */
   winner: string | null;
+  /** The map's dungeon (missing in games begun before dungeons). */
+  dungeon?: Dungeon;
   /** Increases with every applied action; the server uses it to reject stale or double submits. */
   version: number;
   /** The most recent log entries (the server keeps the full history). */
@@ -169,6 +178,8 @@ export type Action =
   | { type: 'spend'; bonus: Partial<Attributes> }
   /** Eat this round's meal: the hero has to do it themselves before the turn ends, or go hungry. */
   | { type: 'eat' }
+  /** Inside or into the dungeon: walk to a room (from the entrance, one of its first rooms), or climb out. */
+  | { type: 'dungeon'; to: number | 'exit' }
   | { type: 'endTurn' };
 
 export interface NewPlayer {
