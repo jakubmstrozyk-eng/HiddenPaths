@@ -4,7 +4,7 @@ import { ATTRIBUTES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainA
 import {
   applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
-  landAt,
+  landAt, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
@@ -19,6 +19,11 @@ import { SaveDialog } from './Saves';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { KeepCards, SkillHand } from '../SkillCards';
+
+/** Tannery: the parts of the body, as the card sheet names them (arms and legs are made as a pair here). */
+const TANNERY_LABEL = {
+  head: { pl: 'Głowa', en: 'Head' }, torso: { pl: 'Korpus', en: 'Torso' }, arms: { pl: 'Ręce', en: 'Arms' }, legs: { pl: 'Nogi', en: 'Legs' },
+};
 import { CardCastHost } from '../CardArt';
 import { HurtFlash, hurtSound, munch } from '../Feedback';
 
@@ -91,6 +96,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const actions = useMemo(() => legalActions(game, me.id), [game, me.id]);
   // A Teleport scroll being aimed: its targets take the place of ordinary moves on the board.
   const [aim, setAim] = useState<string | null>(null);
+  /** Tannery played from the hand: the player picks the part of the body for the leather piece. */
+  const [tannery, setTannery] = useState(false);
   const moves = new Map<number, Action>(aim
     ? actions.flatMap((a) => (a.type === 'scroll' && a.item === aim && a.to !== undefined ? [[a.to, a] as const] : []))
     : actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
@@ -496,6 +503,32 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 <small className="act-reward">{tx({ pl: '3 sztuki broni lub zbroi → nowy zwykły przedmiot', en: '3 weapons or armour pieces → a new common item' })}</small>
               </button>
             )}
+            {myTurn && quiet && !!me.counters[`hiddenAt:${me.position}`] && (
+              <small className="act-reward">{tx({ pl: 'Ukrywasz się tutaj (Kamuflaż): możesz tylko odejść z tego fragmentu.', en: 'You are hiding here (Camouflage): you can only move on from this fragment.' })}</small>
+            )}
+            {myTurn && quiet && tannery && actions.some((a) => a.type === 'card' && a.card === 'trapper-tannery') && (
+              <div className="cook-box">
+                <span className="act-btn">
+                  <span className="act-title"><Icon name="cards" size={14} />{cardName('trapper-tannery', locale)}</span>
+                  <small className="act-reward">
+                    {tx({ pl: `Skóry: ${me.counters.hides ?? 0} · wybierz część ciała (ile skór) · test Int · −1 Wt`, en: `Hides: ${me.counters.hides ?? 0} · pick the part of the body (hides needed) · Int test · −1 Stamina` })}
+                  </small>
+                </span>
+                <span className="cook-spices">
+                  {(Object.keys(TANNERY_HIDES) as (keyof typeof TANNERY_HIDES)[]).map((slot) => (
+                    <button key={slot} className="ghost small" disabled={!tannerySlots(me).includes(slot)} onClick={() => { setTannery(false); act({ type: 'card', card: 'trapper-tannery', target: slot }); }}>
+                      {tx(TANNERY_LABEL[slot])} ({TANNERY_HIDES[slot]})
+                    </button>
+                  ))}
+                  <button className="ghost small" onClick={() => setTannery(false)}>{tx({ pl: 'Anuluj', en: 'Cancel' })}</button>
+                </span>
+              </div>
+            )}
+            {myTurn && actions.some((a) => a.type === 'camp' && a.card) && actions.flatMap((a) => (a.type === 'camp' && a.card ? [a.card] : [])).map((card) => (
+              <button key={card} className="ghost with-icon" onClick={() => endWith({ type: 'camp', card, ...(card === 'druid-teacher' && me.companions?.[0] ? { target: me.companions[0].uid } : {}) })}>
+                <Icon name="camp" />{tx({ pl: 'Obóz', en: 'Camp' })} + {cardName(card, locale)} <small className="odds">{card === 'warrior-way' ? tx({ pl: '+1 Walki · −1 Wt', en: '+1 Combat · −1 Stamina' }) : tx({ pl: 'test SW · towarzysz +1 · −2 Wt', en: 'Wil test · companion +1 · −2 Stamina' })}</small>
+              </button>
+            ))}
             {myTurn && quiet && actions.some((a) => a.type === 'reinforce') && (
               <div className="cook-box">
                 <span className="act-btn">
@@ -534,7 +567,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           owned={c.cards}
           actor={me}
           playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
-          onPlay={(card) => act({ type: 'card', card })}
+          onPlay={(card) => (card === 'trapper-tannery' ? setTannery(true) : act({ type: 'card', card }))}
         />
         <div className="dock-actions">
           <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" />{t('heroSheet')}</button>
@@ -572,7 +605,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           </div>
         )}
         {myTurn && !onTheWay && !replay && !me.combat && !dice && !!c.newCards?.length && (
-          <KeepCards key="keep" profession={c.profession} held={c.cards} fresh={c.newCards} onKeep={(cards) => act({ type: 'keepCards', cards })} />
+          <KeepCards key="keep" profession={c.profession} held={[...c.cards, ...(c.benched ?? [])]} fresh={c.newCards} onKeep={(cards) => act({ type: 'keepCards', cards })} />
         )}
         {mealAsk && (
           <MealReminder

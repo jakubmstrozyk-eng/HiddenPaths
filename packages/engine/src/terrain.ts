@@ -246,13 +246,13 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
 
   switch (action) {
     case 'hunt': {
-      const once = () => {
+      const once = (catchOf?: number) => {
         const rerolled = (r: TestResult) => (r.success ? null : rerollCard(actor, 'hunt', terrain));
         const firstThrow = roll('dex');
         const card = rerolled(firstThrow);
         const result = retry(firstThrow, card, 'dex');
         if (result.success) {
-          const food = terrain === 'mountains' || terrain === 'river' ? 1 : 2;
+          const food = catchOf ?? (terrain === 'mountains' || terrain === 'river' ? 1 : 2);
           actor.character.food += food;
           gained.push(`food:${food}`);
           add(actor.counters, 'hunts');
@@ -261,12 +261,13 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
         }
         return { result, rerolled: card };
       };
-      let { result, rerolled } = once();
-      // Fisher: on a lake or river the Gourmet hunts twice in one go.
+      // Fisher: on a lake or river the Gourmet gets a second try if the first fails; only one hunt can succeed,
+      // and it brings 2 food (Jacob, 2026-11-26).
       const fisher = WATER.has(terrain) && (actor.character.cards ?? []).includes('gourmet-fisher');
-      if (fisher) {
-        const second = once();
-        if (second.result.success && !result.success) result = second.result;
+      let { result, rerolled } = once(fisher ? 2 : undefined);
+      if (fisher && !result.success) {
+        const second = once(2);
+        result = second.result;
         rerolled ??= second.rerolled;
       }
       return { type: 'test', action, attribute: 'dex', result, gained, ...(rerolled ? { rerolled } : {}), ...(fisher ? { card: 'gourmet-fisher' } : {}) };

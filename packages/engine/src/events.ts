@@ -84,12 +84,12 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
     log(state, { type: 'card', player: player.id, card: 'warrior-veteran', ok: true, amount: 1 });
   }
   if (player.inventory.items.includes('luckyCoin')) change(state, player, 'gold', 1);
-  // Scalp: each kind of foe beaten gives the Guardian +1 Combat against it for good.
+  // Scalp: each fight won against a kind of foe adds +1 Combat against that kind for good, however many there were.
   if (player.character.cards.includes('guardian-scalp')) {
     for (const enemy of new Set(combat.foes.filter((f) => !f.tamed).map((f) => f.enemy))) {
-      if (player.counters[`scalp:${enemy}`]) continue;
-      player.counters[`scalp:${enemy}`] = 1;
-      log(state, { type: 'card', player: player.id, card: 'guardian-scalp', ok: true, amount: 1 });
+      const bonus = (player.counters[`scalp:${enemy}`] ?? 0) + 1;
+      player.counters[`scalp:${enemy}`] = bonus;
+      log(state, { type: 'card', player: player.id, card: 'guardian-scalp', ok: true, amount: bonus });
     }
   }
   runOutcomes(state, player, rng, combat.onWin, combat.card);

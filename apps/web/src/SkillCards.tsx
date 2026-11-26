@@ -9,16 +9,16 @@ import { Icon } from './Icons';
 /** Cards the player plays on the map and in a fight. Every other card works on its own. */
 const MAP_PLAY = [
   'wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-nature', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew',
-  'trapper-tannery', 'elder-power-potion', 'warrior-way', 'mystic-levitate', 'wraith-lookout', 'druid-teacher', 'runemaster-safety-rune',
+  'trapper-tannery', 'elder-power-potion', 'mystic-levitate', 'wraith-lookout', 'runemaster-safety-rune',
 ];
 const FIGHT_PLAY = [
   'trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves',
   'explorer-disarm', 'guardian-stance', 'druid-companion', 'elder-herb', 'explorer-bandages', 'runemaster-empower',
-  'elder-beast-master', 'diver-camouflage', 'diver-fillet', 'explorer-smoke', 'warrior-strategist', 'mystic-vines', 'wraith-mist', 'druid-fangs', 'cavedelver-blind',
+  'trapper-poison-arrow', 'elder-beast-master', 'diver-camouflage', 'diver-fillet', 'explorer-smoke', 'warrior-strategist', 'mystic-vines', 'wraith-mist', 'druid-fangs', 'cavedelver-blind',
 ];
 /** Cards used through another button: at camp, when preparing food, in a city, or not yet in the game. */
 const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city' | 'town'> = {
-  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city', 'runemaster-reinforce': 'town',
+  'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'warrior-way': 'camp', 'druid-teacher': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city', 'runemaster-reinforce': 'town',
 };
 
 /** A card that is never played: it works by itself whenever its moment comes. */
@@ -155,8 +155,8 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
 }
 
 /**
- * A new level brought more cards than the hand of 5 holds: the player taps the 5 to keep.
- * The others are gone for good (Jacob, 2026-11-25), so the button says how many are picked.
+ * A new level brought more cards than the hand of 5 holds: the player taps the 5 to play with.
+ * The others wait on the bench and can be picked again at the next choice (Jacob, 2026-11-26).
  */
 export function KeepCards({ profession, held, fresh, onKeep }: { profession: ProfessionId; held: string[]; fresh: string[]; onKeep: (cards: string[]) => void }) {
   const { tx } = useT();
@@ -173,7 +173,7 @@ export function KeepCards({ profession, held, fresh, onKeep }: { profession: Pro
           <h2>{tx({ pl: 'Wybierz karty', en: 'Choose your cards' })}</h2>
         </header>
         <p className="card-text">
-          {tx({ pl: `Możesz trzymać najwyżej ${MAX_CARDS} kart. Wybierz te, które zostają. Pozostałe przepadną.`, en: `You can hold at most ${MAX_CARDS} cards. Pick the ones you keep. The others are gone.` })}
+          {tx({ pl: `W ręce możesz mieć najwyżej ${MAX_CARDS} kart. Wybierz, którymi grasz. Pozostałe czekają i wybierzesz je znowu przy następnym wyborze.`, en: `You can hold at most ${MAX_CARDS} cards. Pick the ones you play with. The others wait for the next choice.` })}
         </p>
         <div className="keep-grid">
           {cards.map((card) => (

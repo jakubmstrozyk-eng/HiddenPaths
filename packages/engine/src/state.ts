@@ -100,7 +100,7 @@ export type LogEntry =
   | { type: 'crafted'; player: string; card: string; item: string }
   /** Reinforcement: +1 armour on a part of the body, for these materials. */
   | { type: 'reinforced'; player: string; slot: ArmourSlot; materials: string[] }
-  /** The player kept these 5 skill cards; `dropped` are gone. */
+  /** The player picked these 5 skill cards to play with; `dropped` wait on the bench. */
   | { type: 'cardsKept'; player: string; cards: string[]; dropped: string[] }
   /** A game mission was reached and paid its XP. */
   | { type: 'mission'; player: string; mission: string; xp: number }
@@ -142,7 +142,7 @@ export type Action =
   /** The first step: from the starting place outside the map onto the middle fragment of a side. */
   | { type: 'enter'; side: Side }
   /** `research`: the Mystic's Researcher card, 1 more Stamina for a permanent +1 Intelligence. */
-  | { type: 'camp'; research?: boolean }
+  | { type: 'camp'; research?: boolean; /** A card used only while camping (Way of the Warrior, Teacher), and its target. */ card?: string; target?: string }
   /** Play a skill card outside a fight; `target` picks the companion for Teacher. */
   | { type: 'card'; card: string; target?: string }
   /** Choose the 5 skill cards to keep when a new level brought more (the rest are gone). */

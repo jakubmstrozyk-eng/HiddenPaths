@@ -40,6 +40,8 @@ export interface Foe {
   held?: boolean;
   /** Blinding Light: −30 Combat and Dexterity until the end of this combat turn. */
   blindUntil?: number;
+  /** Fangs: the foe bleeds, the number of rounds so far; it stops on a passed Strength test, and the 3rd round kills. */
+  bleed?: number;
 }
 
 export interface CombatState {
@@ -65,6 +67,12 @@ export interface CombatState {
   round?: number;
   /** Strategist: the round of study is spent (once a fight); +10 Combat after it. */
   studied?: boolean;
+  /** Strategist: the kind of foe studied; the +10 counts against every foe of that kind (Jacob, 2026-11-26). */
+  studiedKind?: string;
+  /** Poisoned Arrow: shots taken this fight (2 a fight). */
+  arrows?: number;
+  /** Blinding Light was used in this fight (once a fight). */
+  blindUsed?: boolean;
   /** Veil of Mist: the combat turn the mist was let out on; it lasts that turn and the next. */
   mist?: number;
 }
@@ -126,7 +134,7 @@ export type CombatEvent =
   | { type: 'reload' }
   | { type: 'foeDown'; uid: string; enemy: string }
   | { type: 'poisoned'; who: string; condition?: string }
-  | { type: 'bleed'; uid: string; damage: number }
+  | { type: 'bleed'; uid: string; damage: number; dead?: boolean }
   /** A deep wound: the foe's Dexterity test to staunch it (its move), or the round's blood loss; `dead` at the 3rd. */
   | { type: 'wound'; uid: string; result?: TestResult; staunched?: boolean; damage?: number; dead?: boolean }
   /** Black Vines: the hero's Intelligence test to bind, or the bound foe's Strength test to tear free. */
@@ -165,6 +173,19 @@ export function heroWeapon(actor: ActorState): WeaponItem {
   return item?.kind === 'weapon' ? item : (ITEMS.oneHanded as WeaponItem);
 }
 
+/** The worn piece of armour that guards a part of the body (the strongest one), if any. */
+export function armourPiece(actor: Pick<ActorState, 'character'>, slot: ArmourSlot): string | null {
+  let best: string | null = null;
+  let value = -1;
+  for (const id of actor.character.equipment.armour) {
+    const item = ITEMS[id];
+    if (item?.kind !== 'armour' || !item.covers.includes(slot) || item.value <= value) continue;
+    best = id;
+    value = item.value;
+  }
+  return best;
+}
+
 /** Armour on each slot: the best worn piece counts, pieces do not stack. */
 export function heroArmour(actor: ActorState): Record<ArmourSlot, number> {
   const out: Record<ArmourSlot, number> = { head: 0, arms: 0, torso: 0, legs: 0 };
@@ -175,8 +196,11 @@ export function heroArmour(actor: ActorState): Record<ArmourSlot, number> {
   }
   // Hard Hide: the Guardian's own skin counts 1 on every part of the body, on top of armour.
   if ((actor.character.cards ?? []).includes('guardian-hide')) for (const slot of Object.keys(out) as ArmourSlot[]) out[slot] += 1;
-  // Reinforcement: the Runemaster's +1 on a part of the body (at most 5 in all).
-  for (const slot of Object.keys(out) as ArmourSlot[]) if (actor.counters[`reinforced:${slot}`]) out[slot] = Math.min(5, out[slot] + 1);
+  // Reinforcement: the Runemaster's +1 on a piece of armour (at most 5 in all); a new piece is not reinforced.
+  for (const slot of Object.keys(out) as ArmourSlot[]) {
+    const piece = armourPiece(actor, slot);
+    if (piece && actor.counters[`reinforced:${slot}:${piece}`]) out[slot] = Math.min(5, out[slot] + 1);
+  }
   return out;
 }
 
@@ -203,6 +227,9 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
     for (const card of ['warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'diver-fillet', 'druid-fangs']) {
       if (cards.includes(card)) moves.push({ move: 'card', card, target: target.target });
     }
+    if (cards.includes('trapper-poison-arrow') && heroWeapon(actor).ranged && (combat.arrows ?? 0) < POISON_ARROWS) {
+      moves.push({ move: 'card', card: 'trapper-poison-arrow', target: target.target });
+    }
   }
   const armed = alive.find(canDisarm);
   if (cards.includes('explorer-disarm') && armed) moves.push({ move: 'card', card: 'explorer-disarm', target: armed.uid });
@@ -223,11 +250,11 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   if (cards.includes('elder-beast-master') && held) moves.push({ move: 'card', card: 'elder-beast-master', target: held.uid });
   if (cards.includes('diver-camouflage') && combat.turn === 1) moves.push({ move: 'card', card: 'diver-camouflage' });
   if (cards.includes('explorer-smoke')) moves.push({ move: 'card', card: 'explorer-smoke' });
-  if (cards.includes('warrior-strategist') && !combat.studied) moves.push({ move: 'card', card: 'warrior-strategist' });
+  if (cards.includes('warrior-strategist') && !combat.studied && alive.length) moves.push({ move: 'card', card: 'warrior-strategist', target: alive[0]!.uid });
   const free = alive.find((f) => !f.vined);
   if (cards.includes('mystic-vines') && free) moves.push({ move: 'card', card: 'mystic-vines', target: free.uid });
   if (cards.includes('wraith-mist') && !isSpent(actor, 'wraith-mist')) moves.push({ move: 'card', card: 'wraith-mist' });
-  if (cards.includes('cavedelver-blind') && alive.length) moves.push({ move: 'card', card: 'cavedelver-blind' });
+  if (cards.includes('cavedelver-blind') && !combat.blindUsed && alive.length) moves.push({ move: 'card', card: 'cavedelver-blind' });
   return moves;
 }
 
@@ -242,9 +269,12 @@ export const canTame = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
   ENEMIES[foe.enemy]!.kind === 'beast' && foe.vitality < TAME_BELOW && (actor.companions ?? []).length < MAX_COMPANIONS;
 /** Charisma tests passed that make a tamed beast stay for good. */
 export const BOND_NEEDED = 3;
-/** Master of Beasts: any beast, while the Elder has room for a companion; the tests get easier: −10, 0, +10. */
+/** Master of Beasts: a beast of at most 20 Vitality (Jacob, 2026-11-26), while the Elder has room for a companion; the tests get easier: −10, 0, +10. */
+export const MASTER_MAX_VITALITY = 20;
 export const canMaster = (actor: Pick<ActorState, 'companions'>, foe: Foe) =>
-  ENEMIES[foe.enemy]!.kind === 'beast' && (actor.companions ?? []).length < MAX_COMPANIONS;
+  ENEMIES[foe.enemy]!.kind === 'beast' && foe.vitality <= MASTER_MAX_VITALITY && (actor.companions ?? []).length < MAX_COMPANIONS;
+/** Poisoned Arrow: poisoned shots a Trapper may take in one fight. */
+export const POISON_ARROWS = 2;
 export const MASTER_STEPS = [-10, 0, 10];
 /** A deep wound kills after this many rounds of bleeding. */
 export const WOUND_DEATH = 3;
@@ -254,9 +284,9 @@ export const BLIND = -30;
 /** Bonus initiative from the Rune of Safety, and from Vigilance. */
 export const SAFETY_INITIATIVE = 20;
 export const VIGILANCE = 10;
-/** Scalp: +1 Combat against each kind of foe the Guardian has beaten. */
+/** Scalp: +1 Combat against a kind of foe for every fight the Guardian has won against it (Jacob, 2026-11-26). */
 export const scalpBonus = (actor: Pick<ActorState, 'counters' | 'character'>, enemy: string) =>
-  (actor.character.cards ?? []).includes('guardian-scalp') && actor.counters[`scalp:${enemy}`] ? 1 : 0;
+  (actor.character.cards ?? []).includes('guardian-scalp') ? actor.counters[`scalp:${enemy}`] ?? 0 : 0;
 
 /** Margin over the Combat target past which the striker picks where the blow lands ("Walka!", d. Atak). */
 export const AIM_MARGIN = 20;
@@ -318,7 +348,7 @@ export function combatTurn(
   };
   const vigilance = (actor.character.cards ?? []).includes('guardian-vigilance') ? VIGILANCE : 0;
   /** The hero's own Combat modifiers against a foe: Scalp, Strategist's study and the mist's −10. */
-  const comMod = (enemy: string) => scalpBonus(actor, enemy) + (combat.studied && !(move.move === 'card' && move.card === 'warrior-strategist') ? 10 : 0) + (mistOn() ? MIST.own : 0);
+  const comMod = (enemy: string) => scalpBonus(actor, enemy) + (combat.studiedKind === enemy ? 10 : 0) + (mistOn() ? MIST.own : 0);
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
   const weapon = heroWeapon(actor);
   const rune = actor.character.equipment.rune;
@@ -382,8 +412,8 @@ export function combatTurn(
     if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
     if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
     if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
-    // Poisoned Arrow: a hit with a bow poisons. Fangs make the foe bleed the same way.
-    if ((!magic && weapon.ranged && cards.includes('trapper-poison-arrow') && !opts.card) || opts.tear) target.poisoned = true;
+    // Fangs: the bite makes the foe bleed (Jacob, 2026-11-26: like the venom rune, but the 3rd round kills).
+    if (opts.tear && target.bleed === undefined) target.bleed = 0;
     // Filleting, and every second hit with the Shark Blade, open a deep wound.
     if (target.wound === undefined && (opts.wound || (!magic && !opts.card && cards.includes('gourmet-shark-blade') && target.hits % 2 === 0))) target.wound = 0;
     events.push({ ...base, ...spot, damage, damageRoll, armour, ...(dodge ? { dodge } : {}) });
@@ -406,6 +436,8 @@ export function combatTurn(
   }
 
   const heroTurn = () => {
+    // Everyone may already be down (a trap sprung at the start of the round, a held beast's blow): nothing left to do.
+    if (!alive().length) return;
     if (combat.heroStunned) {
       combat.heroStunned = false;
       events.push({ type: 'stunned', who: HERO });
@@ -469,6 +501,13 @@ export function combatTurn(
               if (!target) break;
               swing(target, { mod: -10, bonus: 4, card: move.card });
             }
+            break;
+          }
+          case 'trapper-poison-arrow': {
+            // Poisoned Arrow: a bow or crossbow shot that poisons on a hit; 2 a fight (Jacob, 2026-11-26).
+            combat.arrows = (combat.arrows ?? 0) + 1;
+            const target = targetOf(move.target);
+            if (target) swing(target, { poison: true, card: move.card });
             break;
           }
           case 'diver-blowpipe': {
@@ -594,10 +633,14 @@ export function combatTurn(
             events.push({ type: 'flee', success: fled, hero, card: move.card });
             break;
           }
-          case 'warrior-strategist':
+          case 'warrior-strategist': {
+            // Strategist: a round spent studying one foe; then +10 Combat against every foe of its kind.
             combat.studied = true;
+            const studied = targetOf(move.target);
+            if (studied) combat.studiedKind = studied.enemy;
             events.push({ type: 'card', card: move.card, amount: 10 });
             break;
+          }
           case 'mystic-vines': {
             const target = targetOf(move.target);
             if (!target) break;
@@ -612,7 +655,8 @@ export function combatTurn(
             events.push({ type: 'card', card: move.card });
             break;
           case 'cavedelver-blind': {
-            // Blinding Light: every foe that fails a Dexterity test is blind until it has struck once more.
+            // Blinding Light: every foe that fails a Dexterity test is blind until it has struck once more. Once a fight.
+            combat.blindUsed = true;
             const foes = alive().map((f) => ({ uid: f.uid, result: test(rng, ENEMIES[f.enemy]!.dex, foeMod(f, 'dex')) }));
             for (const { uid, result } of foes) {
               if (result.success) continue;
@@ -829,6 +873,20 @@ export function combatTurn(
     }
   }
 
+  // Fangs: a bleeding foe loses 1 a round until it passes a Strength test; the 3rd round of bleeding kills.
+  for (const foe of alive()) {
+    if (foe.bleed === undefined) continue;
+    if (test(rng, ENEMIES[foe.enemy]!.str).success) {
+      delete foe.bleed;
+      continue;
+    }
+    foe.vitality -= 1;
+    foe.bleed++;
+    const dead = foe.bleed >= WOUND_DEATH;
+    if (dead) foe.vitality = 0;
+    events.push({ type: 'bleed', uid: foe.uid, damage: 1, ...(dead ? { dead } : {}) });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
   // Venom rune: poisoned foes bleed until they pass a Strength test.
   for (const foe of alive()) {
     if (!foe.poisoned) continue;

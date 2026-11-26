@@ -40,10 +40,12 @@ export interface Character {
   food: number;
   cards: string[];
   /**
-   * Cards a new level brought that do not fit in the hand of 5: the player chooses which 5 of these and the
-   * held cards to keep, and the rest are gone (Jacob, 2026-11-25).
+   * Cards a new level brought that do not fit in the hand of 5: the player chooses which 5 of these, the
+   * held cards and the benched ones to play with (Jacob, 2026-11-26).
    */
   newCards?: string[];
+  /** Cards the hero owns but left out of the hand of 5; they can be picked again at the next choice. */
+  benched?: string[];
   missions: string[];
   equipment: Equipment;
   skills: Partial<Record<SkillId, number>>;
@@ -154,9 +156,9 @@ export function levelUp(c: Character, level: number): string[] {
 }
 
 /** The cards a hero chooses from when a new level brought more than the hand holds. */
-export const cardPool = (c: Pick<Character, 'cards' | 'newCards'>) => [...c.cards, ...(c.newCards ?? [])];
+export const cardPool = (c: Pick<Character, 'cards' | 'newCards' | 'benched'>) => [...c.cards, ...(c.newCards ?? []), ...(c.benched ?? [])];
 
-/** Keeps 5 cards out of the held ones and the new ones; the others are gone for good. */
+/** Picks the 5 cards to play with out of every card the hero owns; the others wait on the bench (Jacob, 2026-11-26). */
 export function keepCards(c: Character, keep: string[]): void {
   const pool = cardPool(c);
   const want = Math.min(MAX_CARDS, pool.length);
@@ -165,6 +167,9 @@ export function keepCards(c: Character, keep: string[]): void {
     throw new EngineError('cards.keep', `Choose ${want} of your cards to keep.`);
   }
   c.cards = [...keep];
+  const benched = pool.filter((id) => !keep.includes(id));
+  if (benched.length) c.benched = benched;
+  else delete c.benched;
   delete c.newCards;
 }
 
