@@ -35,12 +35,14 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'xp': out.push(`${signed(o.amount)} ${pl ? 'PD' : 'XP'}`); break;
       case 'herbs': out.push(`${signed(o.amount)} ${pl ? 'ziół' : 'herbs'}`); break;
       case 'vitality': out.push(`${signed(o.amount)} ${pl ? 'Żyw.' : 'Vit'}`); break;
+      case 'hit': out.push(pl ? `cios za ${o.damage} (k6 na miejsce, pancerz chroni)` : `a ${o.damage}-point blow (d6 for the spot, armour helps)`); break;
       case 'halfVitality': out.push(pl ? 'połowa Żywotności' : 'half your Vitality'); break;
       case 'effect': out.push(`${signed(o.amount)} ${attrName(o.target, locale)}${o.rounds ? ` ${pl ? 'na' : 'for'} ${o.rounds} ${pl ? 'rund' : 'rounds'}` : ` ${pl ? 'do końca gry' : 'for the game'}`}`); break;
       case 'permanent': out.push(`${signed(o.amount)} ${attrName(o.target, locale)} ${pl ? 'na stałe' : 'for good'}`); break;
       case 'skill': out.push(`${signed(o.amount)} ${(SKILL[o.skill] ?? [o.skill, o.skill])[pl ? 0 : 1]}`); break;
       case 'item': out.push(itemName(o.item, locale)); break;
       case 'randomItem': out.push(o.rare ? (pl ? 'rzadki przedmiot' : 'a rare item') : (pl ? 'losowy przedmiot' : 'a random item')); break;
+      case 'ores': out.push(`${o.amount} ${o.rare ? (pl ? 'rzadkie surowce' : 'rare ores') : (pl ? 'surowce' : 'ores')}`); break;
       case 'rune': out.push(pl ? 'runa na broń' : 'a weapon rune'); break;
       case 'fight': out.push(`${pl ? 'walka' : 'fight'}: ${o.enemies.map((e) => ENEMIES[e]?.name[locale] ?? e).join(', ')}`); break;
       case 'fightRandom': out.push(pl ? 'walka z losowym wrogiem' : 'a fight with a random foe'); break;

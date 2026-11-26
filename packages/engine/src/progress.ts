@@ -79,6 +79,7 @@ export function respawn(state: GameState, player: PlayerState) {
   player.cameFrom = null;
   player.combat = null;
   player.pendingEvent = null;
+  player.delve = null;
   player.conditions = [];
   player.hasStone = false;
   player.effects = player.effects.filter((e) => e.untilRound > 100_000);

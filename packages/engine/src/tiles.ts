@@ -68,7 +68,8 @@ export function coverForgotten(state: GameState, rng: Rng): number[] {
     if (occupied.has(cell) || state.round - round <= COVER_AFTER_ROUNDS) continue;
     const c = state.map.cells[cell];
     delete visits[cell];
-    if (!c || !insideMap(c) || !coverable(c.terrain)) continue;
+    // The dungeon's entrance stays where it is, like a town or a monument.
+    if (!c || !insideMap(c) || !coverable(c.terrain) || state.dungeon?.cell === cell) continue;
     c.terrain = newTerrain(state, rng);
     for (const p of state.players) p.revealed = p.revealed.filter((x) => x !== cell);
     for (const k of Object.keys(state.depleted ?? {})) if (k.startsWith(`${cell}:`)) delete state.depleted![k];

@@ -5,6 +5,7 @@ import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } fro
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
+import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, roomMoves, settleRoom, placeDungeon, woundBoss } from './dungeon';
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
@@ -65,7 +66,9 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
     .sort((a, b) => b.dex - a.dex || a.seat - b.seat)
     .map((p) => p.id);
   const eventDeck = rng.shuffle(ALL_EVENT_IDS);
-  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [], logSeq: 0 };
+  // The dungeon has its own rng, so the rest of a seeded game plays out as it did before dungeons.
+  const dungeon = placeDungeon(map, config, new Rng(seedFromString(`${seed}:dungeon`)));
+  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [], logSeq: 0, ...(dungeon ? { dungeon } : {}) };
 }
 
 export function currentPlayer(state: GameState): PlayerState {
@@ -156,6 +159,8 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     actions.push({ type: 'endTurn' });
     return actions;
   }
+  if (player.delve) return delveActions(state, player);
+  if (canDescend(state, player) && canAfford(state, player)) for (const to of state.dungeon!.entry) actions.push({ type: 'dungeon', to });
   for (const n of neighbours(state.map, player.position)) {
     if (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
@@ -198,6 +203,31 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   return actions;
 }
 
+/** What a hero inside the dungeon may do: walk between rooms, climb out, eat, drink, read scrolls and play cards. */
+function delveActions(state: GameState, player: PlayerState): Action[] {
+  const actions: Action[] = [];
+  if (canAfford(state, player)) for (const to of roomMoves(state, player)) actions.push({ type: 'dungeon', to });
+  if (state.dungeon!.rooms[player.delve!.room]!.cleared && player.speedLeft >= EXIT_SPEED) actions.push({ type: 'dungeon', to: 'exit' });
+  if (canEat(state, player)) actions.push({ type: 'eat' });
+  for (const card of playableCards(state, player)) actions.push({ type: 'card', card });
+  for (const item of readableScrolls(player, state.round, false)) {
+    if (scrollOf(item)!.spell === 'teleport') for (const to of teleportTargets(worldView(state), player.position)) actions.push({ type: 'scroll', item, to });
+    else actions.push({ type: 'scroll', item });
+  }
+  for (const id of new Set(player.inventory.items)) {
+    const kind = ITEMS[id]?.kind;
+    if (kind === 'potion') actions.push({ type: 'use', item: id });
+    if (kind === 'weapon' || kind === 'armour' || (kind === 'shield' && !player.character.equipment.shield)) actions.push({ type: 'equip', item: id });
+  }
+  if (player.character.unspentPoints > 0) actions.push({ type: 'spend', bonus: {} });
+  if (player.character.newCards?.length) actions.push({ type: 'keepCards', cards: [] });
+  actions.push({ type: 'endTurn' });
+  return actions;
+}
+
+/** Actions that need the hero on the map itself, not down in the dungeon. */
+const MAP_ONLY = new Set<Action['type']>(['move', 'enter', 'camp', 'terrain', 'service', 'buy', 'sell', 'portal', 'smelt', 'reinforce', 'cook', 'read']);
+
 /** One step onto a fragment: costs Speed and Stamina, reveals it and may draw an event. */
 function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   const cost = moveCost(state, to, player);
@@ -225,6 +255,22 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
     const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
     if (card !== null) startEvent(state, player, card);
   }
+  searchForDungeon(state, player, rng);
+}
+
+/**
+ * The dungeon's entrance is hidden: each time a hero steps onto its fragment they test the better of
+ * Intelligence and Dexterity to notice the way down (Jacob, 2026-11-26).
+ */
+function searchForDungeon(state: GameState, player: PlayerState, rng: Rng) {
+  const d = state.dungeon;
+  if (!d || d.plundered || player.position !== d.cell || d.foundBy.includes(player.id)) return;
+  const a = player.character.attributes;
+  const attribute = a.int >= a.dex ? 'int' : 'dex';
+  const result = heroTest(worldView(state), player, attribute, rng);
+  log(state, { type: 'check', player: player.id, attribute, result });
+  if (result.success) d.foundBy.push(player.id);
+  log(state, { type: 'dungeonSearch', player: player.id, found: result.success });
 }
 
 function busy(player: PlayerState) {
@@ -251,7 +297,12 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     throw new EngineError('hidden.here', 'You are hiding here: move on first.');
   }
 
+  if (player.delve && MAP_ONLY.has(action.type)) throw new EngineError('dungeon.inside', 'Climb out of the dungeon first.');
+
   switch (action.type) {
+    case 'dungeon':
+      walkDungeon(state, player, action.to);
+      break;
     case 'move': {
       if (isOutside(player) || !neighbours(state.map, player.position).includes(action.to)) {
         throw new EngineError('move.notAdjacent', 'You can only move to a neighbouring fragment.');
@@ -307,6 +358,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     }
     case 'event':
       chooseEventOption(state, player, rng, action.option);
+      woundBoss(state, player);
       break;
     case 'combat':
       fight(state, player, rng, action.move);
@@ -382,9 +434,26 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   return state;
 }
 
+/** A step in the dungeon: into a room (its card plays if nobody has cleared it), or out to the entrance. */
+function walkDungeon(state: GameState, player: PlayerState, to: number | 'exit') {
+  if (to === 'exit') {
+    if (!player.delve) throw new EngineError('dungeon.none', 'You are not in the dungeon.');
+    if (!state.dungeon!.rooms[player.delve.room]!.cleared) throw new EngineError('dungeon.room', 'Deal with this room first.');
+    if (player.speedLeft < EXIT_SPEED) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
+    player.speedLeft -= EXIT_SPEED;
+    player.delve = null;
+    log(state, { type: 'leftDungeon', player: player.id });
+    return;
+  }
+  const card = enterRoom(state, player, to);
+  log(state, { type: 'room', player: player.id, room: to, ...(card !== null ? { card } : {}) });
+  if (card !== null) startEvent(state, player, card);
+}
+
 function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove) {
   if (!player.combat) throw new EngineError('combat.none', 'You are not in a fight.');
   const { events, result } = combatTurn(worldView(state), player, player.combat, move, rng);
+  if (result !== 'ongoing' && result !== 'won') rememberBoss(state, player);
   // Jacob's rule (2026-11-23): a fight takes the rest of the round, so the hero is left with no Speed or Stamina.
   if (result !== 'ongoing') {
     player.speedLeft = 0;
@@ -400,19 +469,25 @@ function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove
       player.counters[`hiddenAt:${player.position}`] = 1;
       log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
       player.combat = null;
+      // In the dungeon the foes still hold the room: the hero slips back the way they came.
+      if (player.delve) retreat(player);
       break;
     case 'fled':
-    case 'enthralled':
+    case 'enthralled': {
+      const wasDelving = !!player.delve;
       log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
       player.combat = null;
+      // Fleeing in the dungeon goes back to the room before; the foes keep this one.
+      if (player.delve) retreat(player);
       if (result === 'enthralled') {
         // Under the witch's spell: she takes the hero's gold and the rest of the round.
         runOutcomes(state, player, rng, [{ do: 'gold', amount: -player.character.gold }, { do: 'loseSpeed' }]);
-      } else if (player.cameFrom !== null) {
+      } else if (player.cameFrom !== null && !wasDelving) {
         log(state, { type: 'moved', player: player.id, from: player.position, to: player.cameFrom, cost: 0, pushed: true });
         [player.position, player.cameFrom] = [player.cameFrom, player.position];
       }
       break;
+    }
     case 'lost':
       log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
       break;
@@ -459,6 +534,8 @@ function readScroll(state: GameState, player: PlayerState, rng: Rng, item: strin
     if (to === undefined || !teleportTargets(worldView(state), player.position).includes(to)) throw new EngineError('scroll.target', 'The scroll cannot take you there.');
     spendScroll(player, state.round, item);
     log(state, { type: 'scroll', player: player.id, item, to });
+    // Teleport also carries a hero out of the dungeon.
+    player.delve = null;
     log(state, { type: 'moved', player: player.id, from: player.position, to, cost: 0, pushed: true });
     player.cameFrom = null;
     player.position = to;
@@ -499,6 +576,10 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
 function afterAction(state: GameState, player: PlayerState) {
   trimMeals(player);
   if (player.character.vitality <= 0) respawn(state, player);
+  if (settleRoom(state, player)) {
+    const room = state.dungeon!.rooms[player.delve!.room]!;
+    log(state, { type: 'roomCleared', player: player.id, room: player.delve!.room, vault: room.kind === 'vault' });
+  }
   if (isOutside(player)) return;
   markVisit(state, player.position);
   const cell = state.map.cells[player.position]!;
@@ -596,6 +677,14 @@ export function timeoutTurn(prev: GameState): GameState {
   const state = structuredClone(prev);
   const rng = new Rng(state.rng);
   const player = currentPlayer(state);
+  // In the dungeon an absent hero backs out of an unfinished room, so no room is cleared by the clock.
+  if (player.delve && state.dungeon && !state.dungeon.rooms[player.delve.room]!.cleared) {
+    rememberBoss(state, player);
+    if (player.combat) log(state, { type: 'combatEnded', player: player.id, result: 'fled', xp: 0 });
+    player.combat = null;
+    player.pendingEvent = null;
+    retreat(player);
+  }
   if (player.combat) {
     log(state, { type: 'combatEnded', player: player.id, result: 'fled', xp: 0 });
     player.combat = null;
