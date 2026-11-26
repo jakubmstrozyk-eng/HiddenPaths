@@ -134,6 +134,18 @@ function tone(c: AudioContext, freq: number, ms: number, volume: number, type: O
   osc.stop(t0 + ms / 1000 + 0.05);
 }
 
+/** One note of a mini-game tune: a ghostly sine, a witch's reed or a plucked lute. */
+export function puzzleNote(n: number, theme: 'ghost' | 'witch' | 'lute', ms = 380) {
+  const c = ctx();
+  if (!c) return;
+  const freq = [392, 494, 587, 698, 784][n % 5]!;
+  try {
+    if (theme === 'ghost') { tone(c, freq, ms, 0.16, 'sine'); tone(c, freq * 1.01, ms, 0.08, 'sine'); }
+    if (theme === 'witch') tone(c, freq * 0.75, ms, 0.12, 'sawtooth');
+    if (theme === 'lute') { tone(c, freq, Math.min(ms, 300), 0.2, 'triangle'); tone(c, freq * 2, 120, 0.06, 'square'); }
+  } catch { /* no sound */ }
+}
+
 /** Puzzle feedback: a rising chime for a right move, a low buzz for a wrong one, a tick, an anvil's clang. */
 export function puzzleSound(kind: 'right' | 'wrong' | 'tick' | 'clang' | 'win' | 'boom') {
   const c = ctx();
