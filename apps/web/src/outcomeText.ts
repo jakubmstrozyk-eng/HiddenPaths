@@ -41,6 +41,7 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'skill': out.push(`${signed(o.amount)} ${(SKILL[o.skill] ?? [o.skill, o.skill])[pl ? 0 : 1]}`); break;
       case 'item': out.push(itemName(o.item, locale)); break;
       case 'randomItem': out.push(o.rare ? (pl ? 'rzadki przedmiot' : 'a rare item') : (pl ? 'losowy przedmiot' : 'a random item')); break;
+      case 'ores': out.push(`${o.amount} ${o.rare ? (pl ? 'rzadkie surowce' : 'rare ores') : (pl ? 'surowce' : 'ores')}`); break;
       case 'rune': out.push(pl ? 'runa na broń' : 'a weapon rune'); break;
       case 'fight': out.push(`${pl ? 'walka' : 'fight'}: ${o.enemies.map((e) => ENEMIES[e]?.name[locale] ?? e).join(', ')}`); break;
       case 'fightRandom': out.push(pl ? 'walka z losowym wrogiem' : 'a fight with a random foe'); break;

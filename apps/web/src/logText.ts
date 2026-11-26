@@ -75,6 +75,9 @@ const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(
 export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
   const pl = locale === 'pl';
   switch (e.type) {
+    case 'room': return e.card === undefined ? null : (pl ? 'Wchodzisz do komnaty' : 'You enter a room');
+    case 'roomCleared': return e.vault ? (pl ? 'Skarbiec otwarty! Loch oczyszczony.' : 'The vault is open! The dungeon is cleared.') : null;
+    case 'leftDungeon': return pl ? 'Wychodzisz z lochu' : 'You climb out of the dungeon';
     case 'check':
       return `Test ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}`;
     case 'roll':

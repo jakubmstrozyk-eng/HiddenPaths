@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ATTRIBUTES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
+import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
   applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
@@ -21,6 +21,7 @@ import { Icon, type IconName } from '../Icons';
 import { KeepCards, SkillHand } from '../SkillCards';
 import { CardCastHost } from '../CardArt';
 import { HurtFlash, hurtSound, munch } from '../Feedback';
+import { DungeonBoard } from '../Dungeon';
 
 /** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
 const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W', flintborn: 'N', nomads: 'N', myrmids: 'E' };
@@ -108,6 +109,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const boardWidth = Math.max(160, Math.min(room.w * width / (width + 1.8), room.h * width / (height + 1.8), 720));
   const [gate, setGate] = useState<Side>(HOME_SIDE[c.race]);
   const enterable = new Set(actions.flatMap((a) => (a.type === 'enter' ? [a.side] : [])));
+  // The dungeon: shown instead of the map while the hero is below, or when they look down the entrance.
+  const delving = !!me.delve;
+  const [peekDungeon, setPeekDungeon] = useState(false);
+  const canGoDown = !delving && actions.some((a) => a.type === 'dungeon');
+  const dungeonTheme = game.dungeon ? DUNGEON_THEMES[game.dungeon.theme] : null;
+  const showDungeon = !!game.dungeon && (delving || (peekDungeon && me.position === game.dungeon.cell));
+  const dungeonExit = actions.find((a) => a.type === 'dungeon' && a.to === 'exit');
 
   const [last, setLast] = useState<LogEntry[]>([]);
   const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
@@ -315,7 +323,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
 
       <div className="play-area">
         <div className="board-wrap" ref={wrapRef}>
-          <div className="board" style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
+          {showDungeon && <DungeonBoard game={game} me={me} actions={quiet ? actions : []} act={act} onClose={() => setPeekDungeon(false)} />}
+          <div className="board" hidden={showDungeon} style={{ gridTemplateColumns: `repeat(${width}, 1fr)`, aspectRatio: `${width} / ${height}`, width: boardWidth }}>
             {cells.map((cell) => {
               // A square outside the map's outline: an empty gap in the board.
               if (cell.terrain === 'void') return <span key={cell.index} className="frag-hole" aria-hidden="true" />;
@@ -339,6 +348,11 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                   {seen && <span className="frag-name">{name}</span>}
                   {icons.length > 0 && (
                     <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={16} />)}</span>
+                  )}
+                  {seen && game.dungeon?.cell === cell.index && (
+                    <span className={`frag-dungeon ${game.dungeon.plundered ? 'plundered' : ''}`} title={dungeonTheme ? tx(dungeonTheme.name) : ''}>
+                      ⛬<small>{game.dungeon.plundered ? tx({ pl: 'Oczyszczony', en: 'Cleared' }) : tx({ pl: 'Loch', en: 'Dungeon' })}</small>
+                    </span>
                   )}
                   {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
                   {!seen && (
@@ -411,8 +425,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         </div>
         <aside className="frag-panel" aria-label={tx({ pl: 'Na tym fragmencie', en: 'On this fragment' })}>
           <p className="here">
-            <Icon name="map" size={14} /> <b>{outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
-            {outside ? ` · ${t('pickSide')}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
+            <Icon name="map" size={14} /> <b>{delving && dungeonTheme ? tx(dungeonTheme.name) : outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
+            {outside ? ` · ${t('pickSide')}` : delving ? ` · ${tx({ pl: 'Wybierz korytarz albo wyjdź z lochu', en: 'Pick a corridor or climb out' })}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
           </p>
           {me.conditions.length > 0 && (
             <p className="conditions-note">
@@ -441,6 +455,22 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           )}
           <small className="frag-panel-head">{tx({ pl: 'Co możesz tu zrobić', en: 'What you can do here' })}</small>
           <div className="frag-actions">
+            {canGoDown && quiet && dungeonTheme && !showDungeon && (
+              <button className="ghost act-btn dungeon-btn" onClick={() => setPeekDungeon(true)}>
+                <span className="act-title">⛬ {tx({ pl: 'Zejdź do lochu', en: 'Go down into the dungeon' })}: {tx(dungeonTheme.name)}</span>
+                <small className="act-test">{tx({ pl: 'Komnaty, pułapki i pan lochu; na końcu skarbiec z reliktem', en: 'Rooms, traps and a lord; a vault with a relic at the end' })}</small>
+                <small className="act-reward">
+                  {tx({ pl: 'Każda komnata: −1 Sz., −1 Wt.', en: 'Each room: −1 Speed, −1 Stamina' })}
+                  {c.level < 3 ? ` · ${tx({ pl: 'Uwaga: niebezpieczne przed 3. poziomem', en: 'Careful: dangerous before level 3' })}` : ''}
+                </small>
+              </button>
+            )}
+            {delving && quiet && dungeonExit && (
+              <button className="ghost act-btn" onClick={() => act(dungeonExit)}>
+                <span className="act-title">⇡ {tx({ pl: 'Wyjdź z lochu', en: 'Climb out of the dungeon' })}</span>
+                <small className="act-reward">{tx({ pl: 'Wracasz przez przebyte komnaty · −1 Sz. · oczyszczone komnaty zostają oczyszczone', en: 'Back through the rooms you walked · −1 Speed · cleared rooms stay cleared' })}</small>
+              </button>
+            )}
             {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
               const info = actionInfo(a, here.terrain as Exclude<typeof here.terrain, 'core'>);
               return (
