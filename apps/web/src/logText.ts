@@ -115,7 +115,7 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
     case 'levelUp':
       return `${t('level')} ${e.level}!${e.cards?.length ? ` ${pl ? 'Nowe karty' : 'New cards'}: ${e.cards.map((c) => cardName(c, locale)).join(', ')}` : ''}`;
     case 'cardsKept':
-      return `${pl ? 'Zatrzymane karty' : 'Cards kept'}: ${e.cards.map((c) => cardName(c, locale)).join(', ')}`;
+      return `${pl ? 'Karty w ręce' : 'Cards in hand'}: ${e.cards.map((c) => cardName(c, locale)).join(', ')}`;
     case 'crafted':
       return `${cardName(e.card, locale)}: ${itemName(e.item, locale)}`;
     case 'reinforced':
@@ -125,7 +125,7 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${pl ? 'Cel osiągnięty' : 'Goal reached'}: ${m ? m.name[pl ? 'pl' : 'en'] : e.mission} (+${Math.round(e.xp)} ${t('xp')})`;
     }
     case 'revealed':
-      return `+${fmt(e.xp)} ${t('xp')}`;
+      return e.xp ? `+${fmt(e.xp)} ${t('xp')}` : null;
     case 'moved':
       return e.pushed ? (pl ? 'Zostajesz przeniesiony.' : 'You are carried away.') : null;
     case 'died':
@@ -203,7 +203,7 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'reload': return locale === 'pl' ? 'Ładujesz kuszę' : 'You reload the crossbow';
     case 'foeDown': return `${foeName(ev.uid, locale)} ✕`;
     case 'poisoned': return locale === 'pl' ? 'Trucizna!' : 'Poisoned!';
-    case 'bleed': return `${foeName(ev.uid, locale)} −${ev.damage}`;
+    case 'bleed': return `${foeName(ev.uid, locale)} −${ev.damage}${ev.dead ? (pl ? ' · wykrwawia się' : ' · bleeds out') : ''}`;
     case 'trap': return `${cardName('trapper-trap', locale)}: ${foeName(ev.uid, locale)} ${ev.result.success ? (pl ? 'unika' : 'dodges') : `−${ev.damage}, ${pl ? 'unieruchomiony na rundę' : 'held for a round'}`}`;
     case 'barrier': return `${cardName('mystic-barrier', locale)}: ${ev.result.success ? (pl ? 'stoi' : 'raised') : t('failure')}`;
     case 'card': return cardLine(ev.card, ev, locale);
@@ -243,7 +243,7 @@ function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: numbe
     case 'wraith-mist': return `${name}: ${pl ? 'mgła na 2 rundy' : 'mist for 2 rounds'}`;
     case 'druid-teacher': return `${name}: ${e.ok ? `${pl ? 'towarzysz' : 'companion'} +${e.amount ?? 1}` : (pl ? 'lekcja nie wyszła' : 'the lesson failed')}`;
     case 'runemaster-safety-rune': return `${name}: +20 ${pl ? 'inicjatywy' : 'initiative'}`;
-    case 'guardian-scalp': return `${name}: +1 ${pl ? 'Walki przeciw temu wrogowi' : 'Combat against this foe'}`;
+    case 'guardian-scalp': return `${name}: +${e.amount ?? 1} ${pl ? 'Walki przeciw temu rodzajowi wroga' : 'Combat against this kind of foe'}`;
     default: return name;
   }
 }
