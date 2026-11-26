@@ -111,6 +111,10 @@ export type LogEntry =
   | { type: 'room'; player: string; room: number; card?: number }
   | { type: 'roomCleared'; player: string; room: number; vault: boolean }
   | { type: 'leftDungeon'; player: string }
+  /** A hero on the entrance fragment looked around: `found` when they noticed the way down. */
+  | { type: 'dungeonSearch'; player: string; found: boolean }
+  /** A trap's blow outside a fight: where it landed and what the armour there stopped. */
+  | { type: 'hitSpot'; player: string; slot: import('@hp/content').ArmourSlot; armour: number; damage: number }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {

@@ -16,6 +16,8 @@ export type Outcome =
   /** Heal (positive) or wound (negative). */
   | { do: 'vitality'; amount: number }
   | { do: 'halfVitality' }
+  /** A blow to a spot rolled on the d6 hit location table; armour on that spot takes off its value. */
+  | { do: 'hit'; damage: number }
   /** A timed bonus or penalty. `rounds: 0` lasts for the rest of the game. */
   | { do: 'effect'; target: EffectTarget; amount: number; rounds: number; vs?: EnemyKind }
   | { do: 'permanent'; target: Attribute | 'maxVitality'; amount: number }

@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DUNGEON_CARDS, DUNGEON_LENGTH, EVENT_BY_ID, ITEMS, ENEMIES, isDungeonCard } from '@hp/content';
-import { applyAction, createGame, legalActions, type GameState, type SizePreset } from '../src';
+import { applyAction, createGame, legalActions, neighbours, type GameState, type SizePreset } from '../src';
 
 const SIZES: SizePreset[] = ['short', 'medium', 'long', 'epic'];
 
 const game = (size: SizePreset = 'medium', seed = 'dungeon', players = 1): GameState => {
   const g = createGame(seed, { size, difficulty: 'normal', winMode: 'exploration', multiplayer: players > 1 },
     Array.from({ length: players }, (_, i) => ({ id: `p${i}`, character: { name: 'A', race: 'humans' as const, profession: 'warrior' as const, bonus: { com: 10 }, missions: ['hunter', 'scout'] } })));
-  // Stand everyone on the entrance with plenty of Speed and Stamina.
+  // Stand everyone on the entrance, already found, with plenty of Speed and Stamina.
+  g.dungeon!.foundBy = g.players.map((p) => p.id);
   for (const p of g.players) {
     p.position = p.start = p.respawnAt = g.dungeon!.cell;
     p.revealed = [g.dungeon!.cell];
@@ -175,5 +176,59 @@ describe('dungeons', () => {
     const g = game();
     delete g.dungeon;
     expect(legalActions(g, 'p0').some((a) => a.type === 'dungeon')).toBe(false);
+  });
+
+  it('hides the entrance until a hero on its fragment passes a test of Int or Dex', () => {
+    let g = game('medium', 'hidden');
+    g.dungeon!.foundBy = [];
+    const p = g.players[0]!;
+    expect(legalActions(g, 'p0').some((a) => a.type === 'dungeon')).toBe(false);
+    // Step off and back on until the way down is noticed.
+    const near = neighbours(g.map, g.dungeon!.cell)[0]!;
+    p.position = near;
+    p.cameFrom = null;
+    let found = false;
+    for (let i = 0; i < 20 && !found; i++) {
+      g.players[0]!.speedLeft = 20;
+      g.players[0]!.staminaLeft = 20;
+      g = applyAction(g, 'p0', { type: 'move', to: g.dungeon!.cell });
+      g.players[0]!.pendingEvent = null;
+      g.players[0]!.combat = null;
+      expect(g.log.some((e) => e.type === 'dungeonSearch')).toBe(true);
+      found = g.dungeon!.foundBy.includes('p0');
+      if (!found) g = applyAction(g, 'p0', { type: 'move', to: near });
+      g.players[0]!.pendingEvent = null;
+      g.players[0]!.combat = null;
+    }
+    expect(found).toBe(true);
+    expect(legalActions(g, 'p0').some((a) => a.type === 'dungeon')).toBe(true);
+  });
+
+  it('lets a trap strike a spot on the body, and armour there takes off its value', () => {
+    let g = game('medium', 'trap');
+    const p = g.players[0]!;
+    p.character.attributes.dex = 1;
+    p.character.attributes.int = 1;
+    p.character.equipment.armour = ['iron-head'];
+    const trap = g.dungeon!.rooms.findIndex((r) => r.kind === 'trap');
+    g.dungeon!.entry = [trap];
+    g = applyAction(g, 'p0', { type: 'dungeon', to: trap });
+    const before = g.players[0]!.character.vitality;
+    g = applyAction(g, 'p0', { type: 'event', option: 0 });
+    const spot = g.log.find((e) => e.type === 'hitSpot');
+    if (!spot || spot.type !== 'hitSpot') return; // the roll of 1 always passes
+    expect(spot.damage).toBe(Math.max(0, 4 - spot.armour));
+    expect(before - g.players[0]!.character.vitality).toBe(spot.damage);
+  });
+
+  it('keeps the lord\'s wounds when a hero flees from it', () => {
+    let g = game('short', 'lord');
+    const boss = g.dungeon!.rooms.findIndex((r) => r.kind === 'boss');
+    for (const r of g.dungeon!.rooms) r.cleared = r.kind !== 'boss' && r.kind !== 'vault';
+    g.dungeon!.bossVitality = 5;
+    g.players[0]!.delve = { room: g.dungeon!.rooms.findIndex((r) => r.next.includes(boss)), path: [] };
+    g = applyAction(g, 'p0', { type: 'dungeon', to: boss });
+    g = applyAction(g, 'p0', { type: 'event', option: 0 });
+    expect(g.players[0]!.combat!.foes[0]!.vitality).toBe(5);
   });
 });

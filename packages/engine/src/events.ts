@@ -1,11 +1,11 @@
 import { springTrap } from './cards';
 import {
-  COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
+  COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
 import { EngineError } from './errors';
-import { combatXp, startCombat, VIGILANCE } from './combat';
+import { combatXp, heroArmour, startCombat, VIGILANCE } from './combat';
 import { neighbours } from './mapgen';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
@@ -188,6 +188,15 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       case 'xp':
         gainXp(state, player, o.amount * DIFFICULTIES[state.config.difficulty].xp);
         break;
+      case 'hit': {
+        // Where the blow lands: d6 on the hit location table; the armour there takes off its value.
+        const slot = HIT_LOCATIONS[roll(state, player, rng, 6) - 1]!;
+        const armour = heroArmour(player)[slot];
+        const damage = Math.max(0, o.damage - armour);
+        log(state, { type: 'hitSpot', player: player.id, slot, armour, damage });
+        if (damage > 0) change(state, player, 'vitality', -damage);
+        break;
+      }
       case 'halfVitality':
         change(state, player, 'vitality', -Math.ceil(c.vitality / 2));
         break;

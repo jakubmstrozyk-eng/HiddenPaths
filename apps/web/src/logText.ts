@@ -77,6 +77,8 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
   switch (e.type) {
     case 'room': return e.card === undefined ? null : (pl ? 'Wchodzisz do komnaty' : 'You enter a room');
     case 'roomCleared': return e.vault ? (pl ? 'Skarbiec otwarty! Loch oczyszczony.' : 'The vault is open! The dungeon is cleared.') : null;
+    case 'dungeonSearch': return e.found ? (pl ? 'Odnajdujesz ukryte zejście do lochu!' : 'You find a hidden way down into a dungeon!') : null;
+    case 'hitSpot': return pl ? `Trafienie: ${({ head: 'głowa', arms: 'ręce', torso: 'tułów', legs: 'nogi' })[e.slot]}${e.armour ? `, pancerz −${e.armour}` : ''} → −${e.damage} Żyw.` : `Hit: ${e.slot}${e.armour ? `, armour −${e.armour}` : ''} → −${e.damage} Vit`;
     case 'leftDungeon': return pl ? 'Wychodzisz z lochu' : 'You climb out of the dungeon';
     case 'check':
       return `Test ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}`;

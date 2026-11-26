@@ -136,16 +136,16 @@ function themeCards(theme: DungeonTheme): EventCard[] {
   const trap = TRAPS[theme.id];
   const special = SPECIALS[theme.id];
   const safe: Outcome[] = [{ do: 'xp', amount: 1 }, { do: 'gold', amount: 4 }];
-  const sprung: Outcome[] = [{ do: 'vitality', amount: -3 }];
+  const sprung: Outcome[] = [{ do: 'hit', damage: 4 }];
   const cards: EventCard[] = [
     {
       id: id('trap'), hostile: true, title: trap.title, text: trap.text,
       steps: steps({ options: [
-        opt(t('Przechodzę ostrożnie (Zr.)', 'Step through carefully (Dex)'), [{ do: 'test', attribute: 'dex', fail: [{ do: 'vitality', amount: -3 }] }]),
-        opt(t('Najpierw szukam mechanizmu (Int.)', 'Look for the mechanism first (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'goto', step: 'spotted' }], fail: [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'vitality', amount: -4 }] }] }]),
+        opt(t('Przechodzę ostrożnie (Zr.)', 'Step through carefully (Dex)'), [{ do: 'test', attribute: 'dex', fail: [{ do: 'hit', damage: 4 }] }]),
+        opt(t('Najpierw szukam mechanizmu (Int.)', 'Look for the mechanism first (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'goto', step: 'spotted' }], fail: [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'hit', damage: 5 }] }] }]),
       ] }, {
         spotted: { text: t('Widzisz, jak działa pułapka. Teraz łatwo ją ominąć.', 'You see how the trap works. Now it is easy to avoid.'), options: [
-          opt(t('Omijam pułapkę (Zr. +20)', 'Step around the trap (Dex +20)'), [{ do: 'test', attribute: 'dex', modifier: 20, pass: [{ do: 'xp', amount: 1 }], fail: [{ do: 'vitality', amount: -2 }] }]),
+          opt(t('Omijam pułapkę (Zr. +20)', 'Step around the trap (Dex +20)'), [{ do: 'test', attribute: 'dex', modifier: 20, pass: [{ do: 'xp', amount: 1 }], fail: [{ do: 'hit', damage: 3 }] }]),
         ] },
       }),
     },

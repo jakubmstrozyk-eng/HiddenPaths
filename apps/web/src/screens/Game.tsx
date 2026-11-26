@@ -177,6 +177,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     const drawn = entries.find((e) => e.type === 'eventDrawn');
     if (drawn && drawn.type === 'eventDrawn') return tx(EVENT_BY_ID[drawn.card]!.title);
     if (who.pendingEvent) return tx(EVENT_BY_ID[who.pendingEvent.card]!.title);
+    if (entries.some((e) => e.type === 'dungeonSearch')) return tx({ pl: 'Coś tu jest? · szukasz ukrytego przejścia', en: 'Is something here? · looking for a hidden way' });
     if (a.type === 'terrain') return t(a.action as (typeof TERRAIN_ACTIONS)[number]);
     if (a.type === 'service') return t(a.service);
     if (a.type === 'camp') return a.research ? t('campResearch') : t('camp');
@@ -349,7 +350,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                   {icons.length > 0 && (
                     <span className="frag-icons">{icons.map((i) => <Icon key={i} name={i} size={16} />)}</span>
                   )}
-                  {seen && game.dungeon?.cell === cell.index && (
+                  {seen && game.dungeon?.cell === cell.index && game.dungeon.foundBy.includes(me.id) && (
                     <span className={`frag-dungeon ${game.dungeon.plundered ? 'plundered' : ''}`} title={dungeonTheme ? tx(dungeonTheme.name) : ''}>
                       ⛬<small>{game.dungeon.plundered ? tx({ pl: 'Oczyszczony', en: 'Cleared' }) : tx({ pl: 'Loch', en: 'Dungeon' })}</small>
                     </span>

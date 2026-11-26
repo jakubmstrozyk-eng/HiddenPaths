@@ -33,6 +33,10 @@ export interface Dungeon {
   rooms: DungeonRoom[];
   /** The vault has been opened: nobody can go down any more. */
   plundered: boolean;
+  /** Players who have noticed the way down (Jacob, 2026-11-26: found by a test on the fragment). */
+  foundBy: string[];
+  /** The lord's Vitality after a hero fled or fell: the wounds stay for the next attempt. */
+  bossVitality?: number;
 }
 
 /** Where a hero is inside the dungeon: the room, and the rooms walked through to reach it. */
@@ -70,7 +74,7 @@ export function placeDungeon(map: GameMap, config: GameConfig, rng: Rng): Dungeo
   const cell = candidates[rng.weighted(weights)]!;
   const theme = themeFor(cell.terrain as TerrainId, inner && cell.ring <= 1);
   const tier = Math.max(0, SIZES.indexOf(config.size));
-  return { cell: cell.index, theme, ...layout(theme, tier, rng), plundered: false };
+  return { cell: cell.index, theme, ...layout(theme, tier, rng), plundered: false, foundBy: [] };
 }
 
 function themeFor(terrain: TerrainId, nearCore: boolean): DungeonThemeId {
@@ -125,7 +129,7 @@ export function roomMoves(state: GameState, player: PlayerState): number[] {
 /** True when the hero stands on the entrance and may go down. */
 export function canDescend(state: GameState, player: PlayerState): boolean {
   const d = state.dungeon;
-  return !!d && !d.plundered && !player.delve && player.position === d.cell;
+  return !!d && !d.plundered && !player.delve && player.position === d.cell && d.foundBy.includes(player.id);
 }
 
 export function canAfford(player: PlayerState): boolean {
@@ -178,4 +182,25 @@ export function settleRoom(state: GameState, player: PlayerState): boolean {
 export function dungeonAt(state: GameState, cell: number) {
   const d = state.dungeon;
   return d && d.cell === cell ? d : undefined;
+}
+
+/** True when the hero is fighting in the lord's room. */
+function inBossFight(state: GameState, player: PlayerState): boolean {
+  const d = state.dungeon;
+  return !!d && !!player.delve && !!player.combat && d.rooms[player.delve.room]!.kind === 'boss';
+}
+
+/** A fight with the lord has just begun: it starts with the wounds earlier heroes gave it. */
+export function woundBoss(state: GameState, player: PlayerState) {
+  const d = state.dungeon!;
+  if (!inBossFight(state, player) || d.bossVitality === undefined) return;
+  const lord = player.combat!.foes[0];
+  if (lord && lord.vitality === lord.maxVitality) lord.vitality = Math.max(1, Math.min(lord.maxVitality, d.bossVitality));
+}
+
+/** The hero leaves a fight with the lord unfinished: its wounds are kept. */
+export function rememberBoss(state: GameState, player: PlayerState) {
+  if (!inBossFight(state, player)) return;
+  const lord = player.combat!.foes[0];
+  if (lord && lord.vitality > 0) state.dungeon!.bossVitality = lord.vitality;
 }

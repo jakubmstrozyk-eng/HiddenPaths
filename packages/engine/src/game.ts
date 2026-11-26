@@ -5,7 +5,7 @@ import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } fro
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
 import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
-import { EXIT_SPEED, canAfford, canDescend, enterRoom, retreat, roomMoves, settleRoom, placeDungeon } from './dungeon';
+import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, roomMoves, settleRoom, placeDungeon, woundBoss } from './dungeon';
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
@@ -242,6 +242,22 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
     const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
     if (card !== null) startEvent(state, player, card);
   }
+  searchForDungeon(state, player, rng);
+}
+
+/**
+ * The dungeon's entrance is hidden: each time a hero steps onto its fragment they test the better of
+ * Intelligence and Dexterity to notice the way down (Jacob, 2026-11-26).
+ */
+function searchForDungeon(state: GameState, player: PlayerState, rng: Rng) {
+  const d = state.dungeon;
+  if (!d || d.plundered || player.position !== d.cell || d.foundBy.includes(player.id)) return;
+  const a = player.character.attributes;
+  const attribute = a.int >= a.dex ? 'int' : 'dex';
+  const result = heroTest(worldView(state), player, attribute, rng);
+  log(state, { type: 'check', player: player.id, attribute, result });
+  if (result.success) d.foundBy.push(player.id);
+  log(state, { type: 'dungeonSearch', player: player.id, found: result.success });
 }
 
 function busy(player: PlayerState) {
@@ -316,6 +332,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     }
     case 'event':
       chooseEventOption(state, player, rng, action.option);
+      woundBoss(state, player);
       break;
     case 'combat':
       fight(state, player, rng, action.move);
@@ -410,6 +427,7 @@ function walkDungeon(state: GameState, player: PlayerState, to: number | 'exit')
 function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove) {
   if (!player.combat) throw new EngineError('combat.none', 'You are not in a fight.');
   const { events, result } = combatTurn(worldView(state), player, player.combat, move, rng);
+  if (result !== 'ongoing' && result !== 'won') rememberBoss(state, player);
   // Jacob's rule (2026-11-23): a fight takes the rest of the round, so the hero is left with no Speed or Stamina.
   if (result !== 'ongoing') {
     player.speedLeft = 0;
@@ -630,6 +648,7 @@ export function timeoutTurn(prev: GameState): GameState {
   const player = currentPlayer(state);
   // In the dungeon an absent hero backs out of an unfinished room, so no room is cleared by the clock.
   if (player.delve && state.dungeon && !state.dungeon.rooms[player.delve.room]!.cleared) {
+    rememberBoss(state, player);
     if (player.combat) log(state, { type: 'combatEnded', player: player.id, result: 'fled', xp: 0 });
     player.combat = null;
     player.pendingEvent = null;

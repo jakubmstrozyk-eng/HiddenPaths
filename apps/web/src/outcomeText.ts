@@ -35,6 +35,7 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'xp': out.push(`${signed(o.amount)} ${pl ? 'PD' : 'XP'}`); break;
       case 'herbs': out.push(`${signed(o.amount)} ${pl ? 'ziół' : 'herbs'}`); break;
       case 'vitality': out.push(`${signed(o.amount)} ${pl ? 'Żyw.' : 'Vit'}`); break;
+      case 'hit': out.push(pl ? `cios za ${o.damage} (k6 na miejsce, pancerz chroni)` : `a ${o.damage}-point blow (d6 for the spot, armour helps)`); break;
       case 'halfVitality': out.push(pl ? 'połowa Żywotności' : 'half your Vitality'); break;
       case 'effect': out.push(`${signed(o.amount)} ${attrName(o.target, locale)}${o.rounds ? ` ${pl ? 'na' : 'for'} ${o.rounds} ${pl ? 'rund' : 'rounds'}` : ` ${pl ? 'do końca gry' : 'for the game'}`}`); break;
       case 'permanent': out.push(`${signed(o.amount)} ${attrName(o.target, locale)} ${pl ? 'na stałe' : 'for good'}`); break;
