@@ -1133,3 +1133,48 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .pz-layer { height: 28px; display: grid; place-items: center; font-size: 12px; background: repeating-linear-gradient(135deg, #d8c8a0 0 8px, #c4b088 8px 16px); color: #3a2a1a; border: 1px solid #6b5a3a; }
 .pz-layer.found { background: #2a2040; color: #ffd98a; border-color: #e0b25c; }
 .pz-layer.curse { background: #4a0f14; color: #ff9a8a; border-color: #ff5a3a; }
+
+/* ---------- Event scenes ---------- */
+.ev-art:has(.ev-scene) { height: 150px; }
+.ev-card.dungeon-card .ev-art:has(.ev-scene) { filter: none; }
+.ev-scene { position: absolute; inset: 0; overflow: hidden; }
+.ev-scene svg { width: 100%; height: 100%; display: block; }
+.ev-scene::after { content: ''; position: absolute; inset: auto 0 0 0; height: 46px; background: linear-gradient(180deg, transparent, rgba(10, 6, 20, 0.85)); pointer-events: none; }
+.ev-scene-hero { position: absolute; left: 14%; bottom: 14px; z-index: 1; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.6)); animation: sc-walk-in 0.9s ease-out both; }
+@keyframes sc-walk-in { from { transform: translateX(-60px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ev-scene g[class^='sc-'] { transform-box: fill-box; transform-origin: 50% 100%; }
+.sc-bob { animation: sc-bob 2.4s ease-in-out infinite; }
+.sc-sway { animation: sc-sway 3.2s ease-in-out infinite; }
+.sc-float { animation: sc-float 3s ease-in-out infinite; }
+.sc-pulse { animation: sc-pulse 2.2s ease-in-out infinite; }
+.sc-prowl { animation: sc-prowl 2.6s ease-in-out infinite; }
+.sc-shake { animation: sc-shake 0.9s ease-in-out infinite; }
+.sc-flicker { animation: sc-flicker 0.4s steps(2) infinite; }
+@keyframes sc-bob { 50% { transform: translateY(-2px) scaleY(1.02); } }
+@keyframes sc-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes sc-float { 50% { transform: translateY(-6px); } }
+@keyframes sc-pulse { 50% { filter: brightness(1.35) drop-shadow(0 0 6px #c9b8ff); } }
+@keyframes sc-prowl { 50% { transform: translateX(-6px); } }
+@keyframes sc-shake { 25% { transform: translateX(-1.5px) rotate(-1deg); } 75% { transform: translateX(1.5px) rotate(1deg); } }
+@keyframes sc-flicker { 50% { opacity: 0.6; } }
+.sc-quake svg { animation: sc-quake 0.5s linear infinite; }
+@keyframes sc-quake { 25% { transform: translate(1px, -1px); } 75% { transform: translate(-1px, 1px); } }
+.fx-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: fx-flame 0.5s ease-in-out infinite alternate; }
+@keyframes fx-flame { to { transform: scaleY(1.18) skewX(4deg); } }
+.fx-rain { animation: fx-rain 0.5s linear infinite; }
+@keyframes fx-rain { from { transform: translate(0, -12px); } to { transform: translate(-4px, 12px); } }
+.fx-bolt { animation: fx-bolt 3.4s steps(1) infinite; opacity: 0; }
+@keyframes fx-bolt { 0% { opacity: 0; } 70% { opacity: 1; } 74% { opacity: 0; } 78% { opacity: 0.8; } 80% { opacity: 0; } }
+.fx-wind { animation: fx-wind 2.2s linear infinite; }
+@keyframes fx-wind { from { transform: translateX(-60px); } to { transform: translateX(80px); } }
+.fx-drift { animation: fx-drift 9s ease-in-out infinite alternate; }
+@keyframes fx-drift { to { transform: translateX(40px); } }
+.fx-twinkle { animation: fx-twinkle 1.8s ease-in-out infinite; }
+@keyframes fx-twinkle { 50% { opacity: 0.2; } }
+.fx-rise { animation: fx-rise 3s linear infinite; }
+@keyframes fx-rise { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-110px); opacity: 0; } }
+.fx-water { animation: fx-water 0.6s linear infinite; }
+@keyframes fx-water { 50% { fill: #a8e0ff; } }
+@media (prefers-reduced-motion: reduce) {
+  .ev-scene *, .ev-scene-hero { animation: none !important; }
+}

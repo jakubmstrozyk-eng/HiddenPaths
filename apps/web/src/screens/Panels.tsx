@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
 import { eventOptions, isOutside, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
-import { TerrainArt } from '../TerrainArt';
+import { EventScene } from '../EventScene';
 import { cardSwish } from '../Feedback';
 import { outcomeText, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
 import { PuzzleView } from '../Puzzles';
@@ -93,8 +93,7 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
           <span className="ev-number">{room ? '⛬' : card.id}</span>
           <span className="ev-tag">{room ? (pl ? 'Komnata lochu' : 'Dungeon room') : card.hostile ? (pl ? 'Zagrożenie' : 'Danger') : (pl ? 'Wydarzenie' : 'Event')}</span>
           <div className="ev-art" aria-hidden="true">
-            {here && <TerrainArt terrain={here} seed={me.position} />}
-            <span className="ev-art-shade" />
+            <EventScene card={card.id} step={pending.step} terrain={here} hostile={card.hostile} hero={me.character} />
           </div>
           <header className="ev-head">
             <h2>{tx(card.title)}</h2>
