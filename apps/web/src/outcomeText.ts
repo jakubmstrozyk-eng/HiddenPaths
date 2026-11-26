@@ -1,4 +1,4 @@
-import { ENEMIES, type Attribute, type Locale, type Outcome } from '@hp/content';
+import { ENEMIES, type Attribute, type Locale, type Outcome, type Text } from '@hp/content';
 import { itemName } from './logText';
 
 const ATTR: Record<string, [string, string]> = {
@@ -43,7 +43,7 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'item': out.push(itemName(o.item, locale)); break;
       case 'randomItem': out.push(o.rare ? (pl ? 'rzadki przedmiot' : 'a rare item') : (pl ? 'losowy przedmiot' : 'a random item')); break;
       case 'ores': out.push(`${o.amount} ${o.rare ? (pl ? 'rzadkie surowce' : 'rare ores') : (pl ? 'surowce' : 'ores')}`); break;
-      case 'rune': out.push(pl ? 'runa na broń' : 'a weapon rune'); break;
+      case 'rune': out.push(o.rune ? `${pl ? 'runa' : 'rune'}: ${RUNE_NAME[o.rune][locale]}` : (pl ? 'runa na broń' : 'a weapon rune')); break;
       case 'fight': out.push(`${pl ? 'walka' : 'fight'}: ${o.enemies.map((e) => ENEMIES[e]?.name[locale] ?? e).join(', ')}`); break;
       case 'fightRandom': out.push(pl ? 'walka z losowym wrogiem' : 'a fight with a random foe'); break;
       case 'test': {
@@ -61,6 +61,7 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'peek': out.push(pl ? 'podgląd okolicy' : 'a look around'); break;
       case 'condition': out.push(o.name[locale]); break;
       case 'death': out.push(pl ? 'śmierć' : 'death'); break;
+      case 'puzzle': out.push(`${pl ? 'mini-gra' : 'mini-game'}: ${PUZZLE_NAME[o.puzzle.kind][locale]}`); break;
       case 'ifRace': out.push(outcomeText(o.then, locale)); break;
     }
   }
@@ -68,3 +69,44 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
 }
 
 export type { Attribute };
+
+export const PUZZLE_NAME: Record<Extract<Outcome, { do: 'puzzle' }>['puzzle']['kind'], Text> = {
+  riddle: { pl: 'Zagadka', en: 'Riddle' },
+  quiz: { pl: 'Quiz', en: 'Quiz' },
+  cups: { pl: 'Trzy karty', en: 'Three cards' },
+  forge: { pl: 'Kucie', en: 'Forging' },
+  climb: { pl: 'Wspinaczka', en: 'Climb' },
+  chests: { pl: 'Łamigłówka', en: 'Logic puzzle' },
+  traps: { pl: 'Pamięć', en: 'Memory' },
+  lock: { pl: 'Szyfr run', en: 'Rune code' },
+  higherLower: { pl: 'Wyżej czy niżej', en: 'Higher or lower' },
+  dig: { pl: 'Ryzyko', en: 'Push your luck' },
+};
+
+const RUNE_NAME: Record<'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing', Text> = {
+  venom: { pl: 'zatruta', en: 'venom' }, sharp: { pl: 'ostra', en: 'sharp' }, precise: { pl: 'precyzyjna', en: 'precise' },
+  stunning: { pl: 'porażająca', en: 'stunning' }, piercing: { pl: 'przebijająca', en: 'piercing' },
+};
+
+/** The best a puzzle can bring, for its choice on the card. */
+export function puzzleBest(p: Extract<Outcome, { do: 'puzzle' }>['puzzle']): Outcome[] {
+  switch (p.kind) {
+    case 'riddle': return [...p.win, ...p.fast];
+    case 'cups': case 'lock': return p.win;
+    case 'traps': return p.win;
+    case 'chests': return p.treasure;
+    case 'dig': return p.bottom ?? [{ do: 'randomItem' }];
+    default: return p.byScore[p.byScore.length - 1] ?? [];
+  }
+}
+
+/** What failing a puzzle costs, if anything. */
+export function puzzleWorst(p: Extract<Outcome, { do: 'puzzle' }>['puzzle']): Outcome[] {
+  switch (p.kind) {
+    case 'riddle': case 'cups': case 'lock': return p.lose;
+    case 'traps': return p.hit;
+    case 'chests': return p.blast;
+    case 'dig': return p.bust;
+    default: return p.byScore[0] ?? [];
+  }
+}

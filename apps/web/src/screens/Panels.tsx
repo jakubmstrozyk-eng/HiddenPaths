@@ -4,7 +4,8 @@ import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } fro
 import { eventOptions, isOutside, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { cardSwish } from '../Feedback';
-import { outcomeText, testLabel, testOf } from '../outcomeText';
+import { outcomeText, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
+import { PuzzleView } from '../Puzzles';
 import { useT } from '../i18n';
 
 const rise = {
@@ -29,7 +30,7 @@ const oddsTone = (p: number) => (p >= 60 ? 'good' : p >= 35 ? 'even' : 'bad');
  * then reads like a card of the game: number and kind, a picture of the place, the title, the story,
  * and below it the choices, each with its test, odds and what success or failure brings.
  */
-export function EventPanel({ game, me, lines, act }: { game: GameState; me: PlayerState; lines: string[]; act: (a: Action) => void }) {
+export function EventPanel({ game, me, lines, act, hold = false }: { game: GameState; me: PlayerState; lines: string[]; act: (a: Action) => void; /** Dice are still rolling: the mini-game waits for them. */ hold?: boolean }) {
   const { t, tx, locale } = useT();
   const pl = locale === 'pl';
   const pending = me.pendingEvent!;
@@ -105,11 +106,20 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
               {lines.map((l, i) => <li key={i}>{l}</li>)}
             </ul>
           )}
+          {pending.puzzle ? (
+            <>
+              <div className="ev-rule"><span>{PUZZLE_NAME[pending.puzzle.puzzle.kind][locale]}</span></div>
+              {hold
+                ? <p className="pz-hint">{pl ? 'Najpierw rzut kośćmi…' : 'Roll the dice first…'}</p>
+                : <PuzzleView state={pending.puzzle} me={me} done={(answer) => act({ type: 'puzzle', answer })} />}
+            </>
+          ) : (<>
           <div className="ev-rule"><span>{options.length > 1 ? (pl ? 'Twój wybór' : 'Your choice') : testOf(options[0]?.option.then ?? []) ? (pl ? 'Test' : 'Test') : (pl ? 'Co robisz' : 'What you do')}</span></div>
           <div className="ev-options">
             {options.map(({ option, index, affordable }, n) => {
               // Every choice says which test it needs, the odds, and what it brings.
               const test = testOf(option.then);
+              const puzzle = option.then.find((o) => o.do === 'puzzle');
               const bonus = test?.raceBonus && test.raceBonus.race === me.character.race ? test.raceBonus.amount : 0;
               const odds = test ? Math.round(successChance(me.character.attributes[test.attribute], testModifier(worldView(game), me, test.attribute, (test.modifier ?? 0) + bonus)) * 100) : null;
               const rest = test ? option.then.filter((o) => o !== test) : option.then;
@@ -130,12 +140,19 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
                   transition={{ delay: (pending.step === 'start' && !reduce ? 1.0 : 0.15) + n * 0.08 }}
                 >
                   <span className="ev-choice-label">{tx(option.label)}</span>
-                  {test && odds !== null ? (
+                  {puzzle && puzzle.do === 'puzzle' ? (
+                    <span className="ev-chip puzzle">🧩 {PUZZLE_NAME[puzzle.puzzle.kind][locale]}</span>
+                  ) : test && odds !== null ? (
                     <span className={`ev-chip ${oddsTone(odds)}`}>🎲 {testLabel(test, locale)} · <b>{odds}%</b></span>
                   ) : (
                     <span className="ev-chip free">{pl ? 'Bez testu' : 'No test'}</span>
                   )}
-                  {(win.length > 0 || test) && (
+                  {puzzle && puzzle.do === 'puzzle' ? (
+                    <>
+                      <small className="ev-out pass">{pl ? 'Nagroda: ' : 'Prize: '}{outcomeText(puzzleBest(puzzle.puzzle), locale) || (pl ? 'ciąg dalszy' : 'the story goes on')}</small>
+                      {puzzleWorst(puzzle.puzzle).length > 0 && <small className="ev-out fail">{pl ? 'Ryzyko: ' : 'Risk: '}{outcomeText(puzzleWorst(puzzle.puzzle), locale)}</small>}
+                    </>
+                  ) : (win.length > 0 || test) && (
                     <small className="ev-out pass">{test ? (pl ? 'Sukces: ' : 'Success: ') : ''}{win.length ? outcomeText(win, locale) : (pl ? 'unikasz kłopotów' : 'you avoid the trouble')}</small>
                   )}
                   {test?.fail?.length ? <small className="ev-out fail">{pl ? 'Porażka: ' : 'Failure: '}{outcomeText(test.fail, locale)}</small> : null}
@@ -144,6 +161,7 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
               );
             })}
           </div>
+          </>)}
         </motion.article>
       </motion.div>
     </div>
