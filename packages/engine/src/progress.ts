@@ -40,12 +40,26 @@ export function gainXp(state: GameState, player: PlayerState, xp: number) {
  * Reveals a fragment for one player: +1 XP, more in the danger rings. Returns true if it was new.
  * Drawing the event is up to the caller, since being pushed by an event does not draw another.
  */
-export function reveal(state: GameState, player: PlayerState, cell: number, rng?: Rng): boolean {
-  if (player.revealed.includes(cell)) return false;
-  player.revealed.push(cell);
-  markVisit(state, cell);
+export function reveal(state: GameState, player: PlayerState, cell: number, rng?: Rng, opts: { peek?: boolean } = {}): boolean {
   const settings = DIFFICULTIES[state.config.difficulty];
   const xp = settings.xp * (1 + dangerLevel(state.map.cells[cell]!.ring, state.map.maxRing, settings));
+  // A fragment only seen from afar (Lookout) gives its XP when the hero first steps on it (Jacob, 2026-11-26).
+  const peeked = `peeked:${cell}`;
+  if (player.revealed.includes(cell)) {
+    if (!opts.peek && player.counters[peeked]) {
+      delete player.counters[peeked];
+      gainXp(state, player, xp);
+      log(state, { type: 'revealed', player: player.id, cell, xp });
+    }
+    return false;
+  }
+  player.revealed.push(cell);
+  markVisit(state, cell);
+  if (opts.peek) {
+    player.counters[peeked] = 1;
+    log(state, { type: 'revealed', player: player.id, cell, xp: 0 });
+    return true;
+  }
   gainXp(state, player, xp);
   log(state, { type: 'revealed', player: player.id, cell, xp });
   // Seer: a 1 on a d6 when a new fragment opens foresees what comes, +10 to all base attributes for the round.

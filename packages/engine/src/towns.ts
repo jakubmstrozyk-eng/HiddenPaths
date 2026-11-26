@@ -6,6 +6,7 @@ import { log, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState, Service } from './state';
 import { heroTest } from './terrain';
+import { armourPiece } from './combat';
 
 /** Settlement prices and limits from the "Fragmenty" and "Bohaterowie Niezależni" chapters. */
 export const TOWN = {
@@ -229,7 +230,11 @@ export function reinforceSlots(state: GameState, player: PlayerState, armour: Re
   if (place !== 'village' && place !== 'city') return [];
   const have = BASIC_MATERIALS.reduce((n, m) => n + (player.inventory.materials[m] ?? 0), 0);
   if (have < REINFORCE_COST) return [];
-  return (['head', 'arms', 'torso', 'legs'] as ArmourSlot[]).filter((s) => !player.counters[`reinforced:${s}`] && armour[s] < MAX_ARMOUR);
+  // The +1 belongs to the piece worn there now (Jacob, 2026-11-26): a bare part or a reinforced piece cannot take it.
+  return (['head', 'arms', 'torso', 'legs'] as ArmourSlot[]).filter((s) => {
+    const piece = armourPiece(player, s);
+    return piece && !player.counters[`reinforced:${s}:${piece}`] && armour[s] < MAX_ARMOUR;
+  });
 }
 
 /** +1 armour on one part of the body for 3 basic materials, the most plentiful first. Ends the round (the caller does). */
@@ -243,6 +248,6 @@ export function reinforce(state: GameState, player: PlayerState, slot: ArmourSlo
     if (!bag[m]) delete bag[m];
     used.push(m);
   }
-  player.counters[`reinforced:${slot}`] = 1;
+  player.counters[`reinforced:${slot}:${armourPiece(player, slot)}`] = 1;
   log(state, { type: 'reinforced', player: player.id, slot, materials: used });
 }

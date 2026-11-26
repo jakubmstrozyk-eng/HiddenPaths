@@ -1,6 +1,6 @@
 import { ATTRIBUTES, BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
-import { createCharacter, keepCards, spendPoints } from './character';
-import { bondCompanions, canCook, canSeason, cook, eatMeal, levitating, playCard, playableCards, refreshCards, trimMeals } from './cards';
+import { cardPool, createCharacter, keepCards, spendPoints } from './character';
+import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, cook, eatMeal, levitating, playCard, playableCards, refreshCards, trimMeals } from './cards';
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
@@ -126,6 +126,15 @@ function canResearch(state: GameState, player: PlayerState): boolean {
 
 const readKey = (state: GameState, item: string) => `read:${item}@${state.round}`;
 
+/** A camp card the hero can use at a camp here: its own Stamina on top of the camp's. */
+function canCampWith(state: GameState, player: PlayerState, card: string): boolean {
+  const { ok, cost } = canCamp(state, player);
+  return ok && canCampCard(player, card) && player.staminaLeft >= cost + CAMP_CARDS[card]!;
+}
+
+/** Camouflage: after slipping away unseen the hero may leave, but do nothing else on this fragment (Jacob, 2026-11-26). */
+export const hiddenHere = (player: Pick<PlayerState, 'counters' | 'position'>) => !!player.counters[`hiddenAt:${player.position}`];
+
 /** Everything the player may do right now. The app builds its buttons from this list. */
 export function legalActions(state: GameState, playerId: string): Action[] {
   if (state.winner) return [];
@@ -150,12 +159,14 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   for (const n of neighbours(state.map, player.position)) {
     if (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
-  for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
-  if (canCamp(state, player).ok) {
+  const hidden = hiddenHere(player);
+  if (!hidden) for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
+  if (!hidden && canCamp(state, player).ok) {
     actions.push({ type: 'camp' });
     if (canResearch(state, player)) actions.push({ type: 'camp', research: true });
+    for (const card of Object.keys(CAMP_CARDS)) if (canCampWith(state, player, card)) actions.push({ type: 'camp', card });
   }
-  for (const card of playableCards(state, player)) actions.push({ type: 'card', card });
+  if (!hidden) for (const card of playableCards(state, player)) actions.push({ type: 'card', card });
   if (canCook(player)) {
     actions.push({ type: 'cook' });
     if (canSeason(state, player)) for (const spice of ATTRIBUTES) actions.push({ type: 'cook', spice });
@@ -194,6 +205,7 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
   player.crossedRiver = false;
   log(state, { type: 'moved', player: player.id, from: player.position, to, cost });
+  delete player.counters[`hiddenAt:${player.position}`];
   player.speedLeft -= cost;
   player.staminaLeft -= MOVE_STAMINA;
   player.cameFrom = isOutside(player) ? null : player.position;
@@ -235,6 +247,9 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'eat' && !anytime) {
     throw new EngineError('enter.first', 'Step onto the map first.');
   }
+  if (hiddenHere(player) && ['terrain', 'camp', 'card', 'cook', 'reinforce'].includes(action.type)) {
+    throw new EngineError('hidden.here', 'You are hiding here: move on first.');
+  }
 
   switch (action.type) {
     case 'move': {
@@ -259,7 +274,12 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       const { ok, cost } = canCamp(state, player);
       if (!ok) throw new EngineError('camp.notHere', 'You cannot camp here.');
       if (action.research && !canResearch(state, player)) throw new EngineError('card.notNow', 'You cannot study here.');
+      if (action.card && !(action.card in CAMP_CARDS && canCampWith(state, player, action.card))) throw new EngineError('card.notNow', 'You cannot use that card here.');
       player.staminaLeft -= cost;
+      if (action.card) {
+        player.staminaLeft -= CAMP_CARDS[action.card]!;
+        campCard(state, player, action.card, rng, action.target);
+      }
       if (action.research) {
         player.staminaLeft -= 1;
         player.character.attributes.int += 1;
@@ -296,7 +316,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       break;
     case 'keepCards': {
       if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
-      const before = [...player.character.cards, ...(player.character.newCards ?? [])];
+      const before = cardPool(player.character);
       keepCards(player.character, action.cards);
       log(state, { type: 'cardsKept', player: player.id, cards: action.cards, dropped: before.filter((c) => !action.cards.includes(c)) });
       break;
@@ -376,7 +396,8 @@ function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove
       winCombat(state, player, rng);
       break;
     case 'hidden':
-      // Camouflage: the Diver slips away unseen and stays where they are.
+      // Camouflage: the Diver slips away unseen and stays where they are, but may do nothing more on this fragment.
+      player.counters[`hiddenAt:${player.position}`] = 1;
       log(state, { type: 'combatEnded', player: player.id, result, xp: 0 });
       player.combat = null;
       break;

@@ -238,7 +238,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const moves = combatMoves(me, combat);
   const cardMoves = moves.flatMap((m) => (m.move === 'card' ? [m.card] : []));
   const playCard = (card: string) => {
-    if (INSTANT.includes(card)) act({ type: 'combat', move: { move: 'card', card } });
+    if (INSTANT.includes(card)) act({ type: 'combat', move: { move: 'card', card, ...(card === 'warrior-strategist' ? { target: (chosen ?? alive[0])?.uid } : {}) } });
     else setPrompt({ card });
   };
   const promptCard = typeof prompt === 'object' && prompt && 'card' in prompt ? prompt.card : undefined;
@@ -436,7 +436,9 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                   {!down && !f.tamed && (
                     <span className="foe-states">
                       {f.wound !== undefined && <i className="state wound">{locale === 'pl' ? `Rana ${f.wound}/3` : `Wound ${f.wound}/3`}</i>}
-                      {f.poisoned && <i className="state poison">{locale === 'pl' ? 'Krwawi' : 'Bleeding'}</i>}
+                      {f.poisoned && <i className="state poison">{locale === 'pl' ? 'Zatruty' : 'Poisoned'}</i>}
+                      {f.bleed !== undefined && <i className="state wound">{locale === 'pl' ? `Krwawi ${f.bleed}/3` : `Bleeding ${f.bleed}/3`}</i>}
+                      {combat.studiedKind === f.enemy && <i className="state held">{locale === 'pl' ? 'Przeanalizowany +10' : 'Studied +10'}</i>}
                       {f.burning !== undefined && <i className="state fire">{locale === 'pl' ? 'Płonie' : 'Burning'}</i>}
                       {f.vined && <i className="state vines">{locale === 'pl' ? 'Pnącza' : 'Vines'}</i>}
                       {!!f.controlled && <i className="state held">{locale === 'pl' ? `Ujarzmiony ${f.controlled}/3` : `Mastered ${f.controlled}/3`}</i>}
@@ -495,7 +497,7 @@ function weaponStrike(id: string, locale: string): string {
 }
 
 /** Cards whose blow can be aimed like a plain attack. */
-const AIMED_CARDS = ['warrior-heavy-swing', 'diver-blowpipe', 'explorer-disarm'];
+const AIMED_CARDS = ['warrior-heavy-swing', 'diver-blowpipe', 'explorer-disarm', 'trapper-poison-arrow'];
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 

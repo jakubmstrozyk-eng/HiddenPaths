@@ -17,12 +17,14 @@ import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 /** Cards with a fixed number of uses per game. */
 export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3 };
 /** Cards that turn sideways when used and come back at the next camp. */
-export const CARDS_PER_CAMP = ['wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower', 'warrior-way', 'mystic-levitate', 'wraith-mist'];
+export const CARDS_PER_CAMP = ['wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower', 'mystic-levitate', 'wraith-mist'];
+/** Cards used only while camping (Jacob, 2026-11-26), with their Stamina on top of the camp's. */
+export const CAMP_CARDS: Record<string, number> = { 'warrior-way': 1, 'druid-teacher': 2 };
 /** Cards that cost Stamina when played on the map (Jacob, 2026-11-25); in a fight they take the hero's round instead. */
 export const MAP_STAMINA: Record<string, number> = {
   'elder-nature': 1, 'elder-herb': 1, 'runemaster-empower': 1, 'explorer-bandages': 1,
   // Level 3 cards, from their sheets.
-  'trapper-tannery': 1, 'elder-power-potion': 1, 'warrior-way': 1, 'mystic-levitate': 1, 'wraith-lookout': 1, 'druid-teacher': 2, 'runemaster-safety-rune': 2,
+  'trapper-tannery': 1, 'elder-power-potion': 1, 'mystic-levitate': 1, 'wraith-lookout': 1, 'runemaster-safety-rune': 2,
 };
 
 export const has = (actor: Pick<ActorState, 'character'>, card: string) => actor.character.cards.includes(card);
@@ -58,13 +60,12 @@ export function playableCards(state: GameState, player: PlayerState): string[] {
   // Level 3 cards.
   const affords = (card: string) => has(player, card) && player.staminaLeft >= MAP_STAMINA[card]!;
   const terrain = landAt(state.map, player.position);
-  if (affords('trapper-tannery') && (player.counters.hides ?? 0) > 0) out.push('trapper-tannery');
+  if (affords('trapper-tannery') && tannerySlots(player).length) out.push('trapper-tannery');
   if (affords('elder-power-potion') && canGatherHere(terrain) && !player.counters[`ingredient:${player.position}`]) out.push('elder-power-potion');
-  for (const card of ['warrior-way', 'mystic-levitate']) if (affords(card) && !isSpent(player, card)) out.push(card);
+  if (affords('mystic-levitate') && !isSpent(player, 'mystic-levitate')) out.push('mystic-levitate');
   if (affords('wraith-lookout') && terrain === 'forest' && state.map.cells.some((cell) => cell.terrain !== 'void' && isNear(state, player, cell.index) && !player.revealed.includes(cell.index))) {
     out.push('wraith-lookout');
   }
-  if (affords('druid-teacher') && (player.companions ?? []).length && !player.counters[roundKey(state, 'taught')]) out.push('druid-teacher');
   if (affords('runemaster-safety-rune') && player.character.equipment.rune !== 'safety') out.push('runemaster-safety-rune');
   return out;
 }
@@ -78,16 +79,35 @@ export const POTION_INGREDIENTS = 3;
 /** Levitation: the Mystic floats for the rest of the round (hard terrain costs 1 Speed, rivers are no bar). */
 export const levitating = (state: Pick<GameState, 'round'>, player: Pick<PlayerState, 'counters'>) => !!player.counters[`levitate@${state.round}`];
 
-/** Tannery: the leather piece made from a hide, for a part of the body the hero has least armour on. */
-function leatherPiece(player: PlayerState): string {
-  const slots: ArmourSlot[] = ['torso', 'head', 'arms', 'legs'];
-  const owned = (slot: ArmourSlot) => [...player.character.equipment.armour, ...player.inventory.items].some((id) => {
-    const item = ITEMS[id];
-    return item?.kind === 'armour' && item.covers.includes(slot);
-  });
-  const slot = slots.find((s) => !owned(s)) ?? 'torso';
-  return `leather-${slot}`;
+/**
+ * Tannery: hides for each leather piece. The player picks the part of the body (Jacob, 2026-11-26): the torso
+ * takes 2 hides, the head 1, and the arms and legs one hide for each arm or leg, so 2 for the pair the game keeps as one piece.
+ */
+export const TANNERY_HIDES: Record<ArmourSlot, number> = { head: 1, arms: 2, torso: 2, legs: 2 };
+export const tannerySlots = (player: Pick<PlayerState, 'counters'>): ArmourSlot[] =>
+  (Object.keys(TANNERY_HIDES) as ArmourSlot[]).filter((slot) => (player.counters.hides ?? 0) >= TANNERY_HIDES[slot]);
+
+/** Way of the Warrior or Teacher, used while camping: the training or the lesson. */
+export function campCard(state: GameState, player: PlayerState, card: string, rng: Rng, target?: string) {
+  switch (card) {
+    case 'warrior-way':
+      player.character.attributes.com += 1;
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: 1 });
+      break;
+    case 'druid-teacher': {
+      const result = heroTest(worldView(state), player, 'wil', rng);
+      log(state, { type: 'check', player: player.id, attribute: 'wil', result });
+      const pet = (player.companions ?? []).find((p) => p.uid === target) ?? player.companions![0]!;
+      if (result.success) pet.bonus = (pet.bonus ?? 0) + 1;
+      log(state, { type: 'card', player: player.id, card, ok: result.success, amount: pet.bonus ?? 0 });
+      break;
+    }
+  }
 }
+
+/** Whether a camp card can be used at this camp. */
+export const canCampCard = (player: PlayerState, card: string) =>
+  has(player, card) && (card !== 'druid-teacher' || !!(player.companions ?? []).length);
 
 /** Bandages cost 1 Stamina on the map; in a fight they take the hero's move instead. */
 export const BANDAGE_STAMINA = MAP_STAMINA['explorer-bandages']!;
@@ -267,13 +287,15 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       log(state, { type: 'card', player: player.id, card, ok: true, amount: 2 });
       break;
     case 'trapper-tannery': {
-      // Tannery: 1 Stamina and an Intelligence test turn a hide into a leather piece.
+      // Tannery: 1 Stamina and an Intelligence test turn hides into a leather piece for the part of the body picked.
+      const slot = (target ?? tannerySlots(player)[0]) as ArmourSlot;
+      if (!tannerySlots(player).includes(slot)) throw new EngineError('card.notNow', 'Not enough hides for that piece.');
       player.staminaLeft -= MAP_STAMINA[card]!;
       const result = heroTest(worldView(state), player, 'int', rng);
       log(state, { type: 'check', player: player.id, attribute: 'int', result });
       if (result.success) {
-        player.counters.hides = (player.counters.hides ?? 1) - 1;
-        const item = leatherPiece(player);
+        player.counters.hides = (player.counters.hides ?? 0) - TANNERY_HIDES[slot];
+        const item = `leather-${slot}`;
         player.inventory.items.push(item);
         log(state, { type: 'crafted', player: player.id, card, item });
       }
@@ -297,20 +319,14 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       log(state, { type: 'crafted', player: player.id, card, item: 'elderPotion' });
       break;
     }
-    case 'warrior-way':
-      // Way of the Warrior: a training session, +1 Combat for good; renews at camp.
-      player.staminaLeft -= MAP_STAMINA[card]!;
-      player.counters['used:warrior-way'] = 1;
-      player.character.attributes.com += 1;
-      log(state, { type: 'card', player: player.id, card, ok: true, amount: 1 });
-      break;
     case 'mystic-levitate': {
       // Levitation: 1 Stamina for the meditation; a passed Intelligence test lifts the Mystic until the round ends.
       player.staminaLeft -= MAP_STAMINA[card]!;
       const result = heroTest(worldView(state), player, 'int', rng);
       log(state, { type: 'check', player: player.id, attribute: 'int', result });
+      // Even a failed meditation turns the card until the next camp (Jacob, 2026-11-26).
+      player.counters['used:mystic-levitate'] = 1;
       if (result.success) {
-        player.counters['used:mystic-levitate'] = 1;
         player.counters[`levitate@${state.round}`] = 1;
         player.crossedRiver = true;
       }
@@ -318,23 +334,12 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       break;
     }
     case 'wraith-lookout': {
-      // Lookout: from a treetop every fragment around is revealed (with its XP, but no events).
+      // Lookout: from a treetop every fragment around is revealed, with no events and no XP: the XP comes on first entering it.
       player.staminaLeft -= MAP_STAMINA[card]!;
       player.counters[`lookout:${player.position}`] = 1;
       let seen = 0;
-      for (const cell of worldView(state).near(player.position)) if (reveal(state, player, cell)) seen++;
+      for (const cell of worldView(state).near(player.position)) if (reveal(state, player, cell, undefined, { peek: true })) seen++;
       log(state, { type: 'card', player: player.id, card, ok: true, amount: seen });
-      break;
-    }
-    case 'druid-teacher': {
-      // Teacher: 2 Stamina and a Willpower test give the companion +1 to all its attributes.
-      player.staminaLeft -= MAP_STAMINA[card]!;
-      player.counters[roundKey(state, 'taught')] = 1;
-      const result = heroTest(worldView(state), player, 'wil', rng);
-      log(state, { type: 'check', player: player.id, attribute: 'wil', result });
-      const pet = (player.companions ?? []).find((p) => p.uid === target) ?? player.companions![0]!;
-      if (result.success) pet.bonus = (pet.bonus ?? 0) + 1;
-      log(state, { type: 'card', player: player.id, card, ok: result.success, amount: pet.bonus ?? 0 });
       break;
     }
     case 'runemaster-safety-rune':

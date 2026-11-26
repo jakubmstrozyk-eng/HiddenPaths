@@ -40,6 +40,12 @@ describe('new skill cards with the level (Jacob, 2026-11-25)', () => {
     expect(next.players[0]!.character.cards).toEqual(keep);
     expect(next.players[0]!.character.newCards).toBeUndefined();
     expect(next.log.some((e) => e.type === 'cardsKept' && e.dropped.length === 2)).toBe(true);
+    // The cards left out wait on the bench and come back into the next choice (Jacob, 2026-11-26).
+    const c = next.players[0]!.character;
+    expect(c.benched).toHaveLength(2);
+    c.newCards = ['x3'];
+    expect(() => keepCards(c, [...(c.benched ?? []), 'x3', 'x1', 'x2'])).not.toThrow();
+    expect(c.benched).toHaveLength(3);
   });
 
   it('a level that brings cards beyond 5 waits for the choice', () => {
@@ -57,22 +63,27 @@ describe('level 3 cards', () => {
     let g = make('nomads', 'trapper');
     const p = g.players[0]!;
     p.character.equipment.weapon = 'bow';
-    let poisoned = false;
-    for (let seed = 1; seed < 40 && !poisoned; seed++) {
-      const c = startCombat(worldView(g), ['bear']);
-      const a = structuredClone(p);
-      combatTurn(worldView(g), a, c, { move: 'attack', target: 'bear-1' }, new Rng(seed));
-      if (c.foes[0]!.hits > 0) { expect(c.foes[0]!.poisoned || c.foes[0]!.vitality <= 0).toBe(true); poisoned = true; }
-    }
-    expect(poisoned).toBe(true);
+    // Poisoned Arrow: a card shot, twice a fight; a plain shot does not poison.
+    const c = startCombat(worldView(g), ['bear']);
+    const a = structuredClone(p);
+    a.character.attributes.com = 99;
+    a.character.vitality = 99;
+    const arrow = () => combatMoves(a, c).some((m) => m.move === 'card' && m.card === 'trapper-poison-arrow');
+    expect(arrow()).toBe(true);
+    combatTurn(worldView(g), a, c, { move: 'card', card: 'trapper-poison-arrow', target: 'bear-1' }, new Rng(1));
+    expect(c.foes[0]!.poisoned || c.foes[0]!.vitality <= 0).toBe(true);
+    combatTurn(worldView(g), a, c, { move: 'card', card: 'trapper-poison-arrow', target: 'bear-1' }, new Rng(2));
+    expect(arrow()).toBe(false);
     if (at(g, 'forest') === undefined) return;
     p.character.attributes.dex = 99;
     p.character.attributes.int = 99;
     p.staminaLeft = 3;
     runTerrainAction(worldView(g), p, 'hunt', new Rng(1));
     expect(p.counters.hides).toBe(1);
-    g = applyAction(g, 'p', { type: 'card', card: 'trapper-tannery' });
-    expect(g.players[0]!.inventory.items.some((i) => i.startsWith('leather-'))).toBe(true);
+    // One hide makes a helmet; the torso takes 2.
+    expect(() => applyAction(g, 'p', { type: 'card', card: 'trapper-tannery', target: 'torso' })).toThrow();
+    g = applyAction(g, 'p', { type: 'card', card: 'trapper-tannery', target: 'head' });
+    expect(g.players[0]!.inventory.items).toContain('leather-head');
     expect(g.players[0]!.counters.hides).toBe(0);
   });
 
@@ -97,15 +108,18 @@ describe('level 3 cards', () => {
     const g = make('nomads', 'elder');
     const p = g.players[0]!;
     p.character.attributes.cha = 99;
+    // A bear (24 Vitality) is too big; a wolf is not (at most 20, Jacob 2026-11-26).
     const c = startCombat(worldView(g), ['bear', 'wolf']);
+    expect(combatMoves(p, c).some((m) => m.move === 'card' && m.card === 'elder-beast-master' && m.target === 'wolf-2')).toBe(true);
+    expect(() => combatTurn(worldView(g), structuredClone(p), structuredClone(c), { move: 'card', card: 'elder-beast-master', target: 'bear-1' }, new Rng(1))).toThrow();
     for (let i = 0; i < 3; i++) {
       p.character.vitality = 99;
-      const { events } = combatTurn(worldView(g), p, c, { move: 'card', card: 'elder-beast-master', target: 'bear-1' }, new Rng(i + 1));
+      const { events } = combatTurn(worldView(g), p, c, { move: 'card', card: 'elder-beast-master', target: 'wolf-2' }, new Rng(i + 1));
       expect(events.some((e) => e.type === 'master' && e.step === i + 1)).toBe(true);
     }
     expect(p.companions).toHaveLength(1);
     expect(p.companions![0]!.tame).toBe(true);
-    expect(c.foes[0]!.tamed).toBe(true);
+    expect(c.foes[1]!.tamed).toBe(true);
   });
 
   it('Diver · Camouflage avoids the fight on the first turn only; Filleting bleeds a foe out', () => {
@@ -120,6 +134,12 @@ describe('level 3 cards', () => {
       expect(combatMoves(p, c).some((m) => m.move === 'card' && m.card === 'diver-camouflage')).toBe(false);
     }
     expect(hidden).toBe(true);
+    // After hiding the Diver may leave, but do nothing else on this fragment.
+    p.counters[`hiddenAt:${p.position}`] = 1;
+    const here = legalActions(g, 'p');
+    expect(here.some((x) => x.type === 'terrain' || x.type === 'camp' || x.type === 'card')).toBe(false);
+    expect(here.some((x) => x.type === 'move') || p.speedLeft === 0).toBe(true);
+    delete p.counters[`hiddenAt:${p.position}`];
     let bled = false;
     for (let seed = 1; seed < 80 && !bled; seed++) {
       const c = startCombat(worldView(g), ['bear']);
@@ -135,7 +155,7 @@ describe('level 3 cards', () => {
     expect(bled).toBe(true);
   });
 
-  it('Gourmet · Fisher hunts twice on water', () => {
+  it('Gourmet · Fisher: a second try on water, one catch of 2 food', () => {
     const g = make('myrmids', 'gourmet');
     const p = g.players[0]!;
     if (at(g, 'lake') === undefined && at(g, 'river') === undefined) return;
@@ -144,7 +164,8 @@ describe('level 3 cards', () => {
     const food = p.character.food;
     const out = runTerrainAction(worldView(g), p, 'hunt', new Rng(1));
     expect(out.card).toBe('gourmet-fisher');
-    expect(p.character.food - food).toBeGreaterThanOrEqual(2);
+    expect(p.character.food - food).toBe(2);
+    expect(p.counters.hunts).toBe(1);
   });
 
   it('Explorer · Sense of Direction: hard terrain costs 1 Speed; Smoke Bomb flees on one test', () => {
@@ -169,13 +190,20 @@ describe('level 3 cards', () => {
     let g = make('humans', 'warrior');
     const p = g.players[0]!;
     const c = startCombat(worldView(g), ['wolf']);
-    combatTurn(worldView(g), p, c, { move: 'card', card: 'warrior-strategist' }, new Rng(1));
+    combatTurn(worldView(g), p, c, { move: 'card', card: 'warrior-strategist', target: 'wolf-1' }, new Rng(1));
     expect(c.studied).toBe(true);
+    expect(c.studiedKind).toBe('wolf');
     expect(combatMoves(p, c).some((m) => m.move === 'card' && m.card === 'warrior-strategist')).toBe(false);
-    const com = g.players[0]!.character.attributes.com;
-    g = applyAction(g, 'p', { type: 'card', card: 'warrior-way' });
-    expect(g.players[0]!.character.attributes.com).toBe(com + 1);
+    // Way of the Warrior is used only while camping.
     expect(legalActions(g, 'p').some((a) => a.type === 'card' && a.card === 'warrior-way')).toBe(false);
+    const camp = g.map.cells.find((cell) => cell.terrain === 'forest');
+    if (!camp) return;
+    g.players[0]!.position = camp.index;
+    g.players[0]!.staminaLeft = 3;
+    const com = g.players[0]!.character.attributes.com;
+    expect(legalActions(g, 'p').some((a) => a.type === 'camp' && a.card === 'warrior-way')).toBe(true);
+    g = applyAction(g, 'p', { type: 'camp', card: 'warrior-way' });
+    expect(g.players[0]!.character.attributes.com).toBe(com + 1);
   });
 
   it('Mystic · Black Vines keep a bound foe from striking; Levitation lets the Mystic over a river', () => {
@@ -187,17 +215,28 @@ describe('level 3 cards', () => {
     expect(c.foes[0]!.vined).toBe(true);
     g = applyAction(g, 'p', { type: 'card', card: 'mystic-levitate' });
     expect(g.players[0]!.counters[`levitate@${g.round}`]).toBe(1);
+    // A failed try turns the card until camp too.
+    g.players[0]!.character.attributes.int = 0;
+    delete g.players[0]!.counters['used:mystic-levitate'];
+    g.players[0]!.staminaLeft = 3;
+    g = applyAction(g, 'p', { type: 'card', card: 'mystic-levitate' });
+    expect(g.players[0]!.counters['used:mystic-levitate']).toBe(1);
   });
 
-  it('Guardian · Scalp: +1 Combat against a kind of foe once beaten', () => {
-    const g = make('sunborn', 'guardian');
-    const p = g.players[0]!;
-    p.character.attributes.com = 99;
-    p.character.vitality = 99;
-    p.combat = startCombat(worldView(g), ['imp']);
-    p.combat.foes[0]!.vitality = 1;
-    const next = applyAction(g, 'p', { type: 'combat', move: { move: 'attack', target: 'imp-1' } });
-    expect(next.players[0]!.counters['scalp:imp']).toBe(1);
+  it('Guardian · Scalp: +1 Combat against a kind of foe for every fight won against it', () => {
+    let g = make('sunborn', 'guardian');
+    for (let fight = 1; fight <= 2; fight++) {
+      const p = g.players[0]!;
+      p.character.attributes.com = 99;
+      p.character.vitality = 99;
+      p.combat = startCombat(worldView(g), ['imp', 'imp']);
+      for (const f of p.combat.foes) f.vitality = 1;
+      while (g.players[0]!.combat) {
+        const foe = g.players[0]!.combat!.foes.find((f) => f.vitality > 0)!;
+        g = applyAction(g, 'p', { type: 'combat', move: { move: 'attack', target: foe.uid } });
+      }
+      expect(g.players[0]!.counters['scalp:imp']).toBe(fight);
+    }
   });
 
   it('Wraith · Veil of Mist, once until camp; Lookout reveals the fragments around', () => {
@@ -210,8 +249,11 @@ describe('level 3 cards', () => {
     const forest = at(g, 'forest');
     if (forest === undefined) return;
     p.staminaLeft = 3;
+    const xp = p.character.xp;
     g = applyAction(g, 'p', { type: 'card', card: 'wraith-lookout' });
     for (const n of worldView(g).near(forest)) expect(g.players[0]!.revealed).toContain(n);
+    // Seeing from afar gives no XP (Jacob, 2026-11-26); it comes on first stepping there.
+    expect(g.players[0]!.character.xp).toBe(xp);
   });
 
   it('Druid · Teacher gives the companion +1; Fangs make the foe bleed', () => {
@@ -219,14 +261,31 @@ describe('level 3 cards', () => {
     const p = g.players[0]!;
     p.character.attributes.wil = 99;
     p.companions = [{ uid: 'pet-wolf-1', enemy: 'wolf', vitality: 8, maxVitality: 8, bond: 3, tame: true }];
-    g = applyAction(g, 'p', { type: 'card', card: 'druid-teacher' });
-    expect(g.players[0]!.companions![0]!.bonus).toBe(1);
+    // Teacher: only while camping.
+    const camp = g.map.cells.find((cell) => cell.terrain === 'forest');
+    if (camp) {
+      p.position = camp.index;
+      p.staminaLeft = 3;
+      expect(legalActions(g, 'p').some((a) => a.type === 'card' && a.card === 'druid-teacher')).toBe(false);
+      g = applyAction(g, 'p', { type: 'camp', card: 'druid-teacher', target: 'pet-wolf-1' });
+      expect(g.players[0]!.companions![0]!.bonus).toBe(1);
+    }
     const a = g.players[0]!;
     a.character.attributes.com = 99;
     a.character.vitality = 99;
     const c = startCombat(worldView(g), ['bear']);
     const { events } = combatTurn(worldView(g), a, c, { move: 'card', card: 'druid-fangs', target: 'bear-1' }, new Rng(3));
     expect(events.some((e) => e.type === 'tear')).toBe(true);
+    // Bleeding: a weak foe that keeps failing its Strength test dies in the 3rd round of it.
+    let died = false;
+    for (let seed = 1; seed < 60 && !died; seed++) {
+      const w = startCombat(worldView(g), ['bear']);
+      w.foes[0]!.vitality = 99;
+      w.foes[0]!.bleed = 0;
+      for (let i = 0; i < 3 && w.foes[0]!.bleed !== undefined; i++) combatTurn(worldView(g), structuredClone(a), w, { move: 'parry' }, new Rng(seed * 10 + i));
+      if (w.foes[0]!.vitality <= 0) died = true;
+    }
+    expect(died).toBe(true);
   });
 
   it('Runemaster · Rune of Safety for 2 Stamina; Reinforcement +1 armour in a settlement and ends the round', () => {
@@ -243,6 +302,10 @@ describe('level 3 cards', () => {
     expect(heroArmour(g.players[0]!).torso).toBe(torso + 1);
     expect(g.round).toBe(round + 1);
     expect(legalActions(g, 'p').some((a) => a.type === 'reinforce' && a.slot === 'torso')).toBe(false);
+    // The +1 belongs to the piece: a new torso piece is not reinforced (Jacob, 2026-11-26).
+    const q = g.players[0]!;
+    q.character.equipment.armour = q.character.equipment.armour.filter((id) => id !== 'leather-torso').concat('chainmail');
+    expect(heroArmour(q).torso).toBe(heroArmour({ ...q, counters: {} }).torso);
   });
 
   it('Cave Delver · Caver +10 in the mountains; Blinding Light −30 to foes who fail', () => {
@@ -254,5 +317,6 @@ describe('level 3 cards', () => {
     const { events } = combatTurn(worldView(g), p, c, { move: 'card', card: 'cavedelver-blind' }, new Rng(5));
     const blind = events.find((e) => e.type === 'blind');
     expect(blind && blind.type === 'blind' && blind.foes).toHaveLength(2);
+    expect(combatMoves(p, c).some((m) => m.move === 'card' && m.card === 'cavedelver-blind')).toBe(false);
   });
 });
