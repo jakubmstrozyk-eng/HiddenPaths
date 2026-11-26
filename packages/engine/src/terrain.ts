@@ -102,6 +102,8 @@ export interface WorldView {
   maxRing: number;
   /** Fragments next to a cell. */
   near: (cell: number) => number[];
+  /** True while a successful action has used up this resource on the fragment. */
+  depleted?: (cell: number, action: TerrainAction) => boolean;
 }
 
 export type TerrainOutcome =
@@ -215,6 +217,7 @@ export function availableTerrainActions(world: WorldView, actor: ActorState): Te
     if (cost === undefined) return false; // not in the engine yet (towns, building)
     if (a === 'swim' && actor.crossedRiver) return false;
     if (a === 'meditate' && actor.counters[`meditated:${actor.position}`]) return false;
+    if (world.depleted?.(actor.position, a)) return false;
     return actor.staminaLeft >= cost;
   });
 }
