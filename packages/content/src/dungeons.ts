@@ -152,12 +152,13 @@ function themeCards(theme: DungeonTheme): EventCard[] {
     {
       id: id('puzzleRunes'), hostile: false,
       title: t('Płyty z runami', 'Rune plates'),
-      text: t('Podłogę przed Tobą tworzą trzy płyty z runami. Tylko jedna jest bezpieczna, dwie pozostałe uruchamiają pułapkę.', 'Three rune plates make up the floor ahead. Only one is safe; the other two spring a trap.'),
+      text: t('Podłogę przed Tobą tworzą trzy płyty z runami. Tylko jedna jest bezpieczna, dwie pozostałe uruchamiają pułapkę. Runy na ścianie zdradzają kolejność, która otwiera przejście.', 'Three rune plates make up the floor ahead. Only one is safe; the other two spring a trap. The runes on the wall show the order that opens the way.'),
       steps: steps({ options: [
-        opt(t('Odczytuję runy (Int.)', 'Read the runes (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'goto', step: 'read' }], fail: [{ do: 'goto', step: 'guess' }] }]),
+        opt(t('Wciskam runy w dobrej kolejności (zamek, Int: dodatkowa próba)', 'Press the runes in the right order (lock, Int: an extra try)'), [{ do: 'puzzle', puzzle: {
+          kind: 'lock', helper: { attribute: 'int' }, stat: 'int', length: 3, symbols: 5, tries: 4, win: safe, lose: sprung,
+        } }]),
         opt(t('Wybieram w ciemno', 'Pick one blind'), [{ do: 'goto', step: 'guess' }]),
       ] }, {
-        read: { text: t('Runy mówią jasno: bezpieczna jest płyta z symbolem oka. Pod nią ktoś ukrył skrytkę.', 'The runes are plain: the plate with the eye is safe. Someone hid a cache beneath it.'), options: [opt(t('Staję na płycie z okiem', 'Step on the eye plate'), safe)] },
         guess: { text: t('Runy nic Ci nie mówią. Trzeba wybrać.', 'The runes mean nothing to you. You have to choose.'), options:
           [t('Płyta z okiem', 'The eye plate'), t('Płyta z wężem', 'The snake plate'), t('Płyta z koroną', 'The crown plate')].map((label) =>
             opt(label, [{ do: 'roll', die: 3, table: [{ upTo: 1, then: safe }, { upTo: 3, then: sprung }] }])) },
@@ -166,18 +167,14 @@ function themeCards(theme: DungeonTheme): EventCard[] {
     {
       id: id('puzzleRiddle'), hostile: false,
       title: t('Zagadka strażnika', "The guardian's riddle"),
-      text: t('Kamienna twarz w ścianie otwiera oczy: „Im więcej mi zabierasz, tym większa się staję. Czym jestem?”', 'A stone face in the wall opens its eyes: "The more you take from me, the bigger I grow. What am I?"'),
+      text: t('Kamienna twarz w ścianie otwiera oczy i zadaje zagadkę. Zła odpowiedź budzi strażnika.', 'A stone face in the wall opens its eyes and asks a riddle. A wrong answer wakes the guard.'),
       steps: steps({ options: [
-        opt(t('Dziura', 'A hole'), safe),
-        opt(t('Cień', 'A shadow'), guardFight(theme.guards.slice(0, 1), 2)),
-        opt(t('Głód', 'Hunger'), guardFight(theme.guards.slice(0, 1), 2)),
-        opt(t('Proszę o podpowiedź (Char.)', 'Ask for a hint (Cha)'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'goto', step: 'hint' }], fail: [{ do: 'goto', step: 'noHint' }] }]),
-      ] }, {
-        hint: { text: t('Twarz się uśmiecha: „Kopiesz mnie łopatą”.', 'The face smiles: "You dig me with a spade."'), options: [opt(t('Dziura', 'A hole'), safe), opt(t('Głód', 'Hunger'), guardFight(theme.guards.slice(0, 1), 2))] },
-        noHint: { text: t('Twarz milczy i czeka na odpowiedź.', 'The face is silent and waits for an answer.'), options: [
-          opt(t('Dziura', 'A hole'), safe), opt(t('Cień', 'A shadow'), guardFight(theme.guards.slice(0, 1), 2)), opt(t('Głód', 'Hunger'), guardFight(theme.guards.slice(0, 1), 2)),
-        ] },
-      }),
+        opt(t('Odpowiadam (Int: mniej fałszywych liter)', 'Answer (Int: fewer false letters)'), [{ do: 'puzzle', puzzle: {
+          kind: 'riddle', helper: { attribute: 'cha' }, stat: 'int', seconds: 45, fastSeconds: 20,
+          win: safe, fast: [{ do: 'xp', amount: 1 }], lose: guardFight(theme.guards.slice(0, 1), 2),
+        } }]),
+        opt(t('Wolę walczyć ze strażnikiem', 'I would rather fight the guard'), guardFight(theme.guards.slice(0, 1), 2)),
+      ] }),
     },
     {
       id: id('guard'), hostile: true,

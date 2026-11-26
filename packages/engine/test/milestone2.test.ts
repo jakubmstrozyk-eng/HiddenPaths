@@ -42,7 +42,7 @@ describe('event cards', () => {
           if (Array.isArray(o.table)) for (const row of o.table as { then: unknown[] }[]) visit(row.then);
           if (o.do === 'puzzle') {
             const pz = o.puzzle as Record<string, unknown>;
-            for (const key of ['win', 'fast', 'lose', 'treasure', 'empty', 'blast', 'hit', 'bust', 'bottom']) if (Array.isArray(pz[key])) visit(pz[key] as unknown[]);
+            for (const key of ['win', 'fast', 'lose', 'treasure', 'empty', 'blast', 'hit', 'bust', 'bottom', 'loot', 'burn']) if (Array.isArray(pz[key])) visit(pz[key] as unknown[]);
             if (Array.isArray(pz.byScore)) for (const row of pz.byScore as unknown[][]) visit(row);
           }
         }
@@ -86,7 +86,7 @@ describe('event cards', () => {
     const state = withCard(game(), 2);
     currentPlayer(state).character.gold = 0;
     currentPlayer(state).character.food = 0;
-    expect(legalActions(state, 'p1')).toEqual([{ type: 'event', option: 2 }]);
+    expect(legalActions(state, 'p1')).toEqual([{ type: 'event', option: 2 }, { type: 'event', option: 3 }]);
     expect(() => applyAction(state, 'p1', { type: 'event', option: 0 })).toThrow();
   });
 
@@ -118,7 +118,7 @@ describe('event cards', () => {
     const { width } = state.map;
     p.position = 2 * width + 2;
     p.cameFrom = 2 * width + 1; // entered from the west, so forward is east
-    state = applyAction(withCard(state, 9), 'p1', { type: 'event', option: 0 });
+    state = applyAction(withCard(state, 9), 'p1', { type: 'event', option: 1 });
     const after = currentPlayer(state);
     expect(Math.floor(after.position / width)).toBe(2);
     expect(after.position % width).toBeGreaterThan(2);

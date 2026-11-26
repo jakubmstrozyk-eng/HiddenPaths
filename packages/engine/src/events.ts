@@ -1,6 +1,6 @@
 import { springTrap } from './cards';
 import {
-  COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
+  BOOK_READINGS, COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
@@ -11,7 +11,7 @@ import { makePuzzle, scorePuzzle, type PuzzleAnswer } from './puzzles';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
-import { FOREVER, heroTest, type Rune } from './terrain';
+import { FOREVER, heroTest, testModifier, type Rune } from './terrain';
 
 /** The whole deck in card order, shuffled into `state.eventDeck` at the start and whenever it runs out. */
 export const ALL_EVENT_IDS = EVENTS.map((e) => e.id);
@@ -332,10 +332,39 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
           log(state, { type: 'check', player: player.id, attribute: o.puzzle.helper.attribute, result });
           helped = result.success;
         }
-        player.pendingEvent = { card, step: player.pendingEvent?.step ?? 'start', puzzle: makePuzzle(o.puzzle, rng, helped) };
+        // The stat shapes the game directly, without a throw: its value with every modifier.
+        const statValue = o.puzzle.stat ? c.attributes[o.puzzle.stat] + testModifier(world, player, o.puzzle.stat) : undefined;
+        const ctx = { items: player.inventory.items, race: c.race, ...(statValue !== undefined ? { statValue } : {}) };
+        player.pendingEvent = { card, step: player.pendingEvent?.step ?? 'start', puzzle: makePuzzle(o.puzzle, rng, helped, ctx) };
         return;
       }
+      case 'loseItem': {
+        const at = player.inventory.items.indexOf(o.item);
+        if (at >= 0) {
+          player.inventory.items.splice(at, 1);
+          log(state, { type: 'change', player: player.id, change: { what: 'item', item: o.item, amount: -1 } });
+        }
+        break;
+      }
+      case 'bookRead':
+        bookRead(state, player, rng, o.item);
+        break;
     }
+  }
+}
+
+/** One good reading of a book: the third one teaches its lesson and the book is used up. */
+function bookRead(state: GameState, player: PlayerState, rng: Rng, id: string) {
+  const item = ITEMS[id];
+  if (item?.kind !== 'book') return;
+  const count = (player.counters[`book:${id}`] ?? 0) + 1;
+  player.counters[`book:${id}`] = count;
+  if (count < BOOK_READINGS) return;
+  const at = player.inventory.items.indexOf(id);
+  if (at >= 0) player.inventory.items.splice(at, 1);
+  for (const lesson of item.teaches) {
+    if (lesson.target === 'mine') runOutcomes(state, player, rng, [{ do: 'skill', skill: 'mine', amount: lesson.amount }]);
+    else runOutcomes(state, player, rng, [{ do: 'permanent', target: lesson.target, amount: lesson.amount }]);
   }
 }
 
