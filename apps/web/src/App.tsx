@@ -10,7 +10,7 @@ import { CreateHeroScreen, HeroPickScreen, HeroesScreen } from './screens/Heroes
 import { deviceHeroes, recordDeviceCareer, serverHeroes } from './heroStore';
 import { GameScreen } from './screens/Game';
 import { SavesScreen } from './screens/Saves';
-import { autosave, listSaves } from './saves';
+import { autosave, heroGamesInPlay, HERO_GAMES, listSaves } from './saves';
 import { AccountScreen, GamesScreen, MultiplayerScreen, OnlineGame, SignInScreen } from './screens/Online';
 
 type Screen =
@@ -147,7 +147,14 @@ export function App() {
   const heroStore = online && me ? serverHeroes : deviceHeroes;
 
   const startGame = async (config: GameConfig, maxPlayers: number, joinCode: string | undefined, hero: Hero, missions: string[], seed: string) => {
-    if (!online) return play(createGame(seed, config, [{ id: 'you', character: heroCharacter(hero, missions) }]));
+    if (!online) {
+      // A hero plays at most 3 games at once (Jacob, 2026-11-26).
+      if (heroGamesInPlay(hero.id) >= HERO_GAMES) {
+        setNotice(locale === 'pl' ? `${hero.name} gra już w ${HERO_GAMES} grach. Dokończ lub usuń jedną z nich.` : `${hero.name} is already in ${HERO_GAMES} games. Finish or delete one first.`);
+        return;
+      }
+      return play(createGame(seed, config, [{ id: 'you', character: heroCharacter(hero, missions) }]));
+    }
     const { id } = joinCode ? await api.joinWithHero(joinCode, hero.id, missions) : await api.createWithHero(config, hero.id, missions, maxPlayers, seed);
     setScreen({ name: 'online', id });
   };
@@ -238,7 +245,7 @@ export function App() {
                   game={screen.game}
                   onChange={(g) => {
                     autosave(g);
-                    for (const p of g.players) if (p.character.heroId) recordDeviceCareer(p.character.heroId, g.seed, careerOf(p), growthOf(p.character));
+                    for (const p of g.players) if (p.character.heroId) recordDeviceCareer(p.character.heroId, g.seed, careerOf(p), growthOf(p.character, p.inventory));
                     setScreen({ name: 'game', game: g });
                   }}
                   canSave

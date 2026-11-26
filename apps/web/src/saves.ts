@@ -85,3 +85,16 @@ export function saveAs(game: GameState, name: string, overwrite?: string): SaveS
 export function removeSave(id: string) {
   write(read().filter((s) => s.id !== id));
 }
+
+/** A hero plays at most this many games at once (Jacob, 2026-11-26). */
+export const HERO_GAMES = 3;
+
+/** Games on this device the hero is still playing (not won), counted once each however many saves they have. */
+export function heroGamesInPlay(heroId: string): number {
+  const seeds = new Set<string>();
+  for (const slot of read()) {
+    if (slot.game.winner) continue;
+    if (slot.game.players.some((p) => p.character.heroId === heroId)) seeds.add(slot.game.seed);
+  }
+  return seeds.size;
+}

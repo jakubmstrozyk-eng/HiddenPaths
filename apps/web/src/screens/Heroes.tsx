@@ -7,6 +7,7 @@ import {
 import {
   BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
 } from '@hp/engine';
+import { heroGamesInPlay, HERO_GAMES } from '../saves';
 import { DieFace, diceStyle } from '../DiceFace';
 import type { HeroStore } from '../heroStore';
 import { useT } from '../i18n';
@@ -36,6 +37,7 @@ export function HeroCard({ hero, active, onClick, children }: { hero: Hero; acti
       <div className="hero-card-body">
         <b>{hero.name}</b>
         <small>{tx(RACES[hero.race].name)} · {tx(PROFESSIONS[hero.profession].name)} · {t('level')} {hero.growth?.level ?? 1}{hero.growth ? ` · ${hero.growth.xp} ${t('xp')}` : ''}</small>
+        {heroGamesInPlay(hero.id) > 0 && <small>{tx({ pl: 'Gry w toku', en: 'Games in play' })}: {heroGamesInPlay(hero.id)}/{HERO_GAMES}</small>}
         <span className={`mode-badge ${hero.mode}`}>{hero.mode === 'solo' ? t('heroSolo') : t('heroMulti')}</span>
         <span className="hero-dice">
           {(['d6', 'd10', 'd100'] as const).map((k) => <DieFace key={k} kind={k} value={k === 'd6' ? 6 : 7} style={diceStyle(hero.dice[k])} size={22} />)}
