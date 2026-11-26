@@ -965,3 +965,22 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .ev-continue { padding: 12px; background: #fff3d6; color: #15101f; border: 2px solid var(--edge); font-weight: 800; }
 .ev-continue:hover { background: var(--edge); }
 .act-btn.depleted { opacity: .5; cursor: not-allowed; filter: grayscale(.6); }
+
+/* New game: the terrain and building pickers, folded away by default */
+.terrain-accordion { margin-top: 28px; border: 1px solid var(--line); background: var(--panel); }
+.terrain-accordion > summary {
+  list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 14px 44px 14px 14px; position: relative;
+}
+.terrain-accordion > summary::-webkit-details-marker { display: none; }
+.terrain-accordion > summary::after {
+  content: '▾'; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--muted); transition: transform 0.2s;
+}
+.terrain-accordion[open] > summary::after { transform: translateY(-50%) rotate(180deg); }
+.terrain-accordion > summary:hover { background: rgba(255, 255, 255, 0.04); }
+.terrain-accordion > summary:focus-visible { outline: 2px solid var(--glow); outline-offset: -2px; }
+.terrain-accordion .acc-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 700; }
+.terrain-accordion .mix-badge { margin-left: 0; }
+.terrain-accordion .acc-hint { flex-basis: 100%; font-size: 12px; }
+.terrain-accordion[open] .acc-hint { display: none; }
+.terrain-accordion > .terrain-hint { margin: 0 14px 12px; }
+.terrain-accordion > .terrain-editor { padding: 0 14px 14px; }
