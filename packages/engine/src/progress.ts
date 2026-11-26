@@ -5,6 +5,7 @@ import { trackMissions } from './missions';
 import type { Rng } from './rng';
 import type { GameState, LogEntry, PlayerState } from './state';
 import type { WorldView } from './terrain';
+import { depletedUntil, markVisit } from './tiles';
 
 export function log(state: GameState, entry: LogEntry) {
   state.log.push(entry);
@@ -20,6 +21,7 @@ export function worldView(state: GameState): WorldView {
     ringAt: (cell) => state.map.cells[cell]!.ring,
     maxRing: state.map.maxRing,
     near: (cell) => neighbours(state.map, cell),
+    depleted: (cell, action) => depletedUntil(state, cell, action) !== null,
   };
 }
 
@@ -41,6 +43,7 @@ export function gainXp(state: GameState, player: PlayerState, xp: number) {
 export function reveal(state: GameState, player: PlayerState, cell: number, rng?: Rng): boolean {
   if (player.revealed.includes(cell)) return false;
   player.revealed.push(cell);
+  markVisit(state, cell);
   const settings = DIFFICULTIES[state.config.difficulty];
   const xp = settings.xp * (1 + dangerLevel(state.map.cells[cell]!.ring, state.map.maxRing, settings));
   gainXp(state, player, xp);
