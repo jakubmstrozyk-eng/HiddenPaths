@@ -18,7 +18,11 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
     const p = first.players[0]!;
     gainXp(first, p, 35);
     p.character.attributes.str += 5;
-    const growth = growthOf(p.character);
+    p.character.gold = 23;
+    p.character.equipment.weapon = 'longBow';
+    p.inventory.items.push('lifePotion');
+    p.inventory.materials.iron = 2;
+    const growth = growthOf(p.character, p.inventory);
     expect(growth.level).toBe(3);
     const next = start({ ...hero, growth }, 'g2').players[0]!.character;
     expect(next.level).toBe(3);
@@ -27,8 +31,12 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
     expect(next.maxVitality).toBe(p.character.maxVitality);
     expect(next.vitality).toBe(next.maxVitality);
     expect(next.cards).toEqual(p.character.cards);
-    // Gold, food and gear start fresh.
-    expect(next.gold).toBe(5);
+    // Gold, gear and belongings come along too (Jacob, 2026-11-26); only food starts fresh.
+    const again = start({ ...hero, growth }, 'g3').players[0]!;
+    expect(next.gold).toBe(23);
+    expect(next.equipment.weapon).toBe('longBow');
+    expect(again.inventory.items).toContain('lifePotion');
+    expect(again.inventory.materials.iron).toBe(2);
     expect(next.chooseCards).toBeUndefined();
   });
 
@@ -64,5 +72,7 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
     const g = growthOf(start(hero).players[0]!.character);
     expect(() => start({ ...hero, growth: { ...g, level: 5 } })).toThrow(/XP/);
     expect(() => start({ ...hero, growth: { ...g, cards: ['warrior-strategist'] } })).toThrow();
+    expect(() => start({ ...hero, growth: { ...g, gold: -1 } })).toThrow(/gold/);
+    expect(() => start({ ...hero, growth: { ...g, inventory: { items: ['excalibur'], materials: {}, herbs: {} } } })).toThrow(/items/);
   });
 });

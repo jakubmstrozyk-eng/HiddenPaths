@@ -240,7 +240,7 @@ export class Games {
           [me.character.heroId, user.id, gameId, JSON.stringify(careerOf(me))],
         );
         // The hero's development: kept when this game took it at least as far as any other (Jacob, 2026-11-26).
-        const growth = growthOf(me.character);
+        const growth = growthOf(me.character, me.inventory);
         await tx.query(
           `update heroes set data = data || jsonb_build_object('growth', $3::jsonb)
             where id::text = $1 and user_id = $2 and coalesce((data->'growth'->>'xp')::numeric, -1) <= $4`,

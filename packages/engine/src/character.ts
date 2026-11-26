@@ -1,10 +1,10 @@
 import {
-  ATTRIBUTES, DICE_STYLE_IDS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  ATTRIBUTES, DICE_STYLE_IDS, ITEMS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
   type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
 import type { Rng } from './rng';
-import type { Equipment } from './terrain';
+import type { Equipment, Inventory } from './terrain';
 
 export const BONUS_POINTS = 20;
 export const MISSIONS_DRAWN = 4;
@@ -28,8 +28,8 @@ export interface CharacterInput {
 }
 
 /**
- * A hero's development, carried from game to game: level, XP, attributes, Vitality, Stamina, skills and
- * skill cards. Gold, food and gear stay in the game they were found in.
+ * A hero's development, carried from game to game (Jacob, 2026-11-26): level, XP, attributes, Vitality, Stamina,
+ * skills and skill cards, and also the gold, gear and belongings gathered. Only food starts fresh each game.
  */
 export interface HeroGrowth {
   level: number;
@@ -41,6 +41,10 @@ export interface HeroGrowth {
   skills: Partial<Record<SkillId, number>>;
   /** Every skill card the hero owns; the first ones are the hand they last played with. */
   cards: string[];
+  /** Gold, worn gear and the bag; absent in records from before they were carried. */
+  gold?: number;
+  equipment?: Equipment;
+  inventory?: Inventory;
 }
 
 export interface Character {
@@ -210,10 +214,12 @@ export function spendPoints(c: Character, bonus: Partial<Attributes>): void {
 }
 
 /** A hero's development as it stands in a game, to carry into the next one. */
-export function growthOf(c: Character): HeroGrowth {
+export function growthOf(c: Character, inventory?: Inventory): HeroGrowth {
   return {
     level: c.level, xp: c.xp, attributes: { ...c.attributes }, maxVitality: c.maxVitality, stamina: c.stamina,
     unspentPoints: c.unspentPoints, skills: { ...c.skills }, cards: cardPool(c),
+    gold: c.gold, equipment: structuredClone(c.equipment),
+    ...(inventory ? { inventory: structuredClone(inventory) } : {}),
   };
 }
 
@@ -231,6 +237,19 @@ export function validateGrowth(input: CharacterInput): void {
   }
   for (const a of ATTRIBUTES) if (!Number.isFinite(g.attributes?.[a])) throw bad('Unknown attributes.');
   if (!Number.isInteger(g.maxVitality) || !Number.isInteger(g.stamina) || !Number.isInteger(g.unspentPoints) || g.unspentPoints < 0) throw bad('Bad numbers.');
+  if (g.gold !== undefined && !(Number.isFinite(g.gold) && g.gold >= 0)) throw bad('Bad gold.');
+  const known = (id: string) => typeof id === 'string' && !!ITEMS[id];
+  if (g.equipment) {
+    const e = g.equipment;
+    if (!known(e.weapon) || !Array.isArray(e.armour) || !e.armour.every(known)) throw bad('Unknown gear.');
+  }
+  if (g.inventory) {
+    const inv = g.inventory;
+    if (!Array.isArray(inv.items) || !inv.items.every(known)) throw bad('Unknown items.');
+    for (const bag of [inv.materials, inv.herbs]) {
+      if (!bag || typeof bag !== 'object' || !Object.values(bag).every((n) => Number.isInteger(n) && n! >= 0)) throw bad('Bad belongings.');
+    }
+  }
 }
 
 /** The parts of a new character that come from the hero's earlier games. */
@@ -243,6 +262,8 @@ function grown(input: CharacterInput): Partial<Character> {
   const out: Partial<Character> = {
     level: g.level, xp: g.xp, attributes: { ...g.attributes }, maxVitality: g.maxVitality, vitality: g.maxVitality,
     stamina: g.stamina, unspentPoints: g.unspentPoints, skills: { ...g.skills }, cards: all.slice(0, MAX_CARDS),
+    ...(g.gold !== undefined ? { gold: g.gold } : {}),
+    ...(g.equipment ? { equipment: structuredClone(g.equipment) } : {}),
   };
   if (all.length > MAX_CARDS) {
     out.benched = all.slice(MAX_CARDS);

@@ -50,7 +50,8 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
       cameFrom: null,
       roundsWithoutFood: 0,
       actionsSinceCamp: 0,
-      inventory: { materials: {}, herbs: {}, items: [] },
+      // A hero from earlier games brings its bag along (Jacob, 2026-11-26).
+      inventory: p.character.growth?.inventory ? structuredClone(p.character.growth.inventory) : { materials: {}, herbs: {}, items: [] },
       effects: [],
       conditions: [],
       counters: {},
