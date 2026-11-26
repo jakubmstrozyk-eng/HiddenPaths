@@ -127,10 +127,13 @@ export function MapSetupPanel({ value, onChange }: { value: MapChoice; onChange:
         ))}
       </div>
 
-      <h3>
-        {tx({ pl: 'Tereny', en: 'Terrain' })}{' '}
+      {/* Jacob (2026-11-26): the terrain and building pickers stay folded away until the player opens them. */}
+      <details className="terrain-accordion">
+      <summary>
+        <span className="acc-title">{tx({ pl: 'Tereny i budynki', en: 'Terrain and buildings' })}</span>
         <span className={`mix-badge ${value.pool ? 'own' : 'rec'}`}>{value.pool ? tx({ pl: 'własny układ', en: 'your own mix' }) : tx({ pl: 'zalecane przez grę', en: 'recommended by the game' })}</span>
-      </h3>
+        <small className="acc-hint muted">{tx({ pl: 'rozwiń, by dobrać lasy, góry, wioski…', en: 'open to pick forests, mountains, villages…' })}</small>
+      </summary>
       <p className="muted terrain-hint">
         {tx({
           pl: `Dodany fragment gra zabiera z najliczniejszego krajobrazu, a zabrany zamienia w las. Budynków najwyżej ${buildingCap(slots)}, lasu i pól razem co najmniej ${openGroundMin(slots)}.`,
@@ -160,6 +163,7 @@ export function MapSetupPanel({ value, onChange }: { value: MapChoice; onChange:
           <figcaption className="muted">{tx({ pl: 'Przykładowe rozłożenie. W grze mapa losuje się na nowo i jest zakryta.', en: 'A sample spread. In the game the map is drawn anew and hidden.' })}</figcaption>
         </figure>
       </div>
+      </details>
     </div>
   );
 }
