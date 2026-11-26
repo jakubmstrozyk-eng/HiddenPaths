@@ -618,8 +618,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             </motion.article>
           </div>
         )}
-        {myTurn && !onTheWay && !replay && !me.combat && !dice && !!c.newCards?.length && (
-          <KeepCards key="keep" profession={c.profession} held={[...c.cards, ...(c.benched ?? [])]} fresh={c.newCards} onKeep={(cards) => act({ type: 'keepCards', cards })} />
+        {myTurn && !onTheWay && !replay && !me.combat && !dice && (!!c.newCards?.length || !!c.chooseCards) && (
+          <KeepCards key="keep" profession={c.profession} held={[...c.cards, ...(c.benched ?? [])]} fresh={c.newCards ?? []} start={!!c.chooseCards && !c.newCards?.length} onKeep={(cards) => act({ type: 'keepCards', cards })} />
         )}
         {mealAsk && (
           <MealReminder

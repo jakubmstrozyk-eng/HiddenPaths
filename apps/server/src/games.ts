@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
-  applyAction, careerOf, createGame, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
+  applyAction, careerOf, createGame, growthOf, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
   type Action, type CharacterInput, type GameConfig, type GameState, type LogEntry,
   sizeForTiles, validateMapSetup,
 } from '@hp/engine';
@@ -238,6 +238,13 @@ export class Games {
           `update heroes set data = data || jsonb_build_object('career', coalesce(data->'career', '{}'::jsonb) || jsonb_build_object($3::text, $4::jsonb))
             where id::text = $1 and user_id = $2`,
           [me.character.heroId, user.id, gameId, JSON.stringify(careerOf(me))],
+        );
+        // The hero's development: kept when this game took it at least as far as any other (Jacob, 2026-11-26).
+        const growth = growthOf(me.character);
+        await tx.query(
+          `update heroes set data = data || jsonb_build_object('growth', $3::jsonb)
+            where id::text = $1 and user_id = $2 and coalesce((data->'growth'->>'xp')::numeric, -1) <= $4`,
+          [me.character.heroId, user.id, JSON.stringify(growth), growth.xp],
         );
       }
       return { state: next, entries, nextPlayer: turnPassed && game.mode === 'multi' ? currentPlayer(next).id : null };

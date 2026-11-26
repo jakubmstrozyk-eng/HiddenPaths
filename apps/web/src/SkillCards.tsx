@@ -158,7 +158,7 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
  * A new level brought more cards than the hand of 5 holds: the player taps the 5 to play with.
  * The others wait on the bench and can be picked again at the next choice (Jacob, 2026-11-26).
  */
-export function KeepCards({ profession, held, fresh, onKeep }: { profession: ProfessionId; held: string[]; fresh: string[]; onKeep: (cards: string[]) => void }) {
+export function KeepCards({ profession, held, fresh, start = false, onKeep }: { profession: ProfessionId; held: string[]; fresh: string[]; /** Before the game: the hero brings more than 5 cards from earlier games. */ start?: boolean; onKeep: (cards: string[]) => void }) {
   const { tx } = useT();
   const pool = [...held, ...fresh];
   const want = Math.min(MAX_CARDS, pool.length);
@@ -169,7 +169,7 @@ export function KeepCards({ profession, held, fresh, onKeep }: { profession: Pro
     <div className="overlay keep-cards">
       <motion.article className="card keep-card" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
         <header className="card-head">
-          <small>{tx({ pl: 'Nowy poziom', en: 'New level' })}</small>
+          <small>{start ? tx({ pl: 'Przed wyprawą', en: 'Before the journey' }) : tx({ pl: 'Nowy poziom', en: 'New level' })}</small>
           <h2>{tx({ pl: 'Wybierz karty', en: 'Choose your cards' })}</h2>
         </header>
         <p className="card-text">
