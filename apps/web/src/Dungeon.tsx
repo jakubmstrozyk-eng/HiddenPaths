@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { DUNGEON_THEMES, EVENT_BY_ID, type RoomKind, type Text } from '@hp/content';
-import type { Action, Dungeon, GameState, PlayerState } from '@hp/engine';
+import { roomSpeed, type Action, type Dungeon, type GameState, type PlayerState } from '@hp/engine';
 import { PixelHero } from './PixelHero';
 import { useT } from './i18n';
 
@@ -100,7 +100,7 @@ export function DungeonBoard({ game, me, actions, act, onClose }: {
         <small>
           {d.plundered
             ? (pl ? 'Skarbiec jest pusty. Ten loch został oczyszczony.' : 'The vault is empty. This dungeon has been cleared.')
-            : (pl ? 'Każda komnata: 1 Sz. i 1 Wt. Wyjście: 1 Sz. Odpoczynek tylko w kapliczce.' : 'Each room: 1 Speed and 1 Stamina. Way out: 1 Speed. Rest only at the shrine.')}
+            : (pl ? `Każda komnata: ${roomSpeed(game)} Sz. i 1 Wt. Wyjście: 1 Sz. Odpoczynek tylko w kapliczce.` : `Each room: ${roomSpeed(game)} Speed and 1 Stamina. Way out: 1 Speed. Rest only at the shrine.`)}
         </small>
         {!me.delve && <button className="ghost small" onClick={onClose}>{pl ? 'Wróć na mapę' : 'Back to the map'}</button>}
       </footer>

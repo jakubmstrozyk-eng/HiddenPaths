@@ -132,15 +132,20 @@ export function canDescend(state: GameState, player: PlayerState): boolean {
   return !!d && !d.plundered && !player.delve && player.position === d.cell && d.foundBy.includes(player.id);
 }
 
-export function canAfford(player: PlayerState): boolean {
-  return player.speedLeft >= ROOM_SPEED && player.staminaLeft >= ROOM_STAMINA;
+/** Speed to walk into a room: the Drowned Crypt's flooded rooms are hard going, like hard terrain. */
+export function roomSpeed(state: GameState): number {
+  return state.dungeon?.theme === 'crypt' ? 2 : ROOM_SPEED;
+}
+
+export function canAfford(state: GameState, player: PlayerState): boolean {
+  return player.speedLeft >= roomSpeed(state) && player.staminaLeft >= ROOM_STAMINA;
 }
 
 /** Steps into a room: costs Speed and Stamina, and an uncleared room plays its card. Returns the card to start, if any. */
 export function enterRoom(state: GameState, player: PlayerState, to: number): number | null {
   const d = state.dungeon;
   if (!d) throw new EngineError('dungeon.none', 'There is no dungeon on this map.');
-  if (!canAfford(player)) throw new EngineError('move.noSpeed', 'Not enough Speed or Stamina left.');
+  if (!canAfford(state, player)) throw new EngineError('move.noSpeed', 'Not enough Speed or Stamina left.');
   if (player.delve) {
     if (!roomMoves(state, player).includes(to)) throw new EngineError('dungeon.door', 'There is no way from here to that room.');
     const path = player.delve.path;
@@ -152,7 +157,7 @@ export function enterRoom(state: GameState, player: PlayerState, to: number): nu
     if (!d.entry.includes(to)) throw new EngineError('dungeon.door', 'That is not a way in.');
     player.delve = { room: to, path: [] };
   }
-  player.speedLeft -= ROOM_SPEED;
+  player.speedLeft -= roomSpeed(state);
   player.staminaLeft -= ROOM_STAMINA;
   const room = d.rooms[to]!;
   if (!room.seenBy.includes(player.id)) room.seenBy.push(player.id);

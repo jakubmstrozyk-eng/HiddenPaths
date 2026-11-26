@@ -150,7 +150,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
     return actions;
   }
   if (player.delve) return delveActions(state, player);
-  if (canDescend(state, player) && canAfford(player)) for (const to of state.dungeon!.entry) actions.push({ type: 'dungeon', to });
+  if (canDescend(state, player) && canAfford(state, player)) for (const to of state.dungeon!.entry) actions.push({ type: 'dungeon', to });
   for (const n of neighbours(state.map, player.position)) {
     if (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
   }
@@ -194,7 +194,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
 /** What a hero inside the dungeon may do: walk between rooms, climb out, eat, drink, read scrolls and play cards. */
 function delveActions(state: GameState, player: PlayerState): Action[] {
   const actions: Action[] = [];
-  if (canAfford(player)) for (const to of roomMoves(state, player)) actions.push({ type: 'dungeon', to });
+  if (canAfford(state, player)) for (const to of roomMoves(state, player)) actions.push({ type: 'dungeon', to });
   if (state.dungeon!.rooms[player.delve!.room]!.cleared && player.speedLeft >= EXIT_SPEED) actions.push({ type: 'dungeon', to: 'exit' });
   if (canEat(state, player)) actions.push({ type: 'eat' });
   for (const card of playableCards(state, player)) actions.push({ type: 'card', card });

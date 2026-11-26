@@ -95,7 +95,7 @@ describe('dungeons', () => {
     g = applyAction(g, 'p0', { type: 'dungeon', to });
     const me = g.players[0]!;
     expect(me.delve).toEqual({ room: to, path: [] });
-    expect(me.speedLeft).toBe(19);
+    expect(me.speedLeft).toBe(g.dungeon!.theme === 'crypt' ? 18 : 19);
     expect(me.staminaLeft).toBe(19);
     expect(me.pendingEvent?.card).toBe(g.dungeon!.rooms[to]!.card);
     expect(g.dungeon!.rooms[to]!.seenBy).toContain('p0');

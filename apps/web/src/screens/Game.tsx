@@ -4,7 +4,7 @@ import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceI
 import {
   applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
-  landAt,
+  landAt, roomSpeed,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
@@ -461,7 +461,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 <span className="act-title">⛬ {tx({ pl: 'Zejdź do lochu', en: 'Go down into the dungeon' })}: {tx(dungeonTheme.name)}</span>
                 <small className="act-test">{tx({ pl: 'Komnaty, pułapki i pan lochu; na końcu skarbiec z reliktem', en: 'Rooms, traps and a lord; a vault with a relic at the end' })}</small>
                 <small className="act-reward">
-                  {tx({ pl: 'Każda komnata: −1 Sz., −1 Wt.', en: 'Each room: −1 Speed, −1 Stamina' })}
+                  {tx({ pl: `Każda komnata: −${roomSpeed(game)} Sz., −1 Wt.`, en: `Each room: −${roomSpeed(game)} Speed, −1 Stamina` })}
                   {c.level < 3 ? ` · ${tx({ pl: 'Uwaga: niebezpieczne przed 3. poziomem', en: 'Careful: dangerous before level 3' })}` : ''}
                 </small>
               </button>
