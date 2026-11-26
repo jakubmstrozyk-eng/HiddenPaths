@@ -52,10 +52,12 @@ export const EVENTS: EventCard[] = [
   {
     id: 5, hostile: false,
     title: t('Zagadka satyra', "The satyr's riddle"),
-    text: t('Sędziwy satyr proponuje grę: odpowiedz na zagadkę, a otrzymasz błogosławieństwo szczęścia. „Jakie 5 rzeczy potrzebuje każdy wędrowiec?”', 'An ancient satyr offers a game: answer his riddle and earn a blessing of luck. "What 5 things does every wanderer need?"'),
+    text: t('Sędziwy satyr przeciąga się na kamieniu i proponuje grę: odgadnij jego zagadkę, zanim przesypie się klepsydra, a otrzymasz błogosławieństwo szczęścia. Pomyłka kosztuje 1 zł.', 'An ancient satyr stretches on a rock and offers a game: solve his riddle before the hourglass runs out and earn a blessing of luck. A wrong answer costs 1 gold.'),
     steps: { start: { options: [
-      opt(t('Jedzenie, woda, ogień, ostrze i płaszcz', 'Food, water, fire, a blade and a cloak'), [{ do: 'effect', target: 'com', amount: 10, rounds: 5 }]),
-      opt(t('Złoto, złoto, złoto, koń i korona', 'Gold, gold, gold, a horse and a crown'), []),
+      opt(t('Przyjmuję wyzwanie', 'Take the challenge'), [{ do: 'puzzle', puzzle: {
+        kind: 'riddle', helper: { attribute: 'int' }, seconds: 45, fastSeconds: 20,
+        win: [{ do: 'effect', target: 'com', amount: 10, rounds: 5 }], fast: [{ do: 'xp', amount: 2 }], lose: [{ do: 'gold', amount: -1 }],
+      } }]),
       leave,
     ] } },
   },
@@ -156,10 +158,14 @@ export const EVENTS: EventCard[] = [
     steps: {
       start: { options: [
         opt(t('Dzielę się prowiantem (3)', 'Share 3 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 3 }),
-        opt(t('Targuję się (Ch -10)', 'Haggle (Cha -10)'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'goto', step: 'cheap' }], fail: [{ do: 'goto', step: 'full' }] }]),
+        opt(t('Gram z nim w kości o cenę', 'Dice with him over the price'), [{ do: 'puzzle', puzzle: {
+          kind: 'higherLower', helper: { attribute: 'cha', modifier: -10 }, rounds: 4,
+          byScore: [[{ do: 'goto', step: 'full' }], [{ do: 'goto', step: 'full' }], [{ do: 'goto', step: 'cheap' }], [{ do: 'goto', step: 'cheap' }], [{ do: 'goto', step: 'gift' }]],
+        } }]),
         leave,
       ] },
       cheap: { text: t('Kupiec zgadza się na 2 porcje.', 'The merchant agrees to 2 food.'), options: [opt(t('Daję 2 pożywienia', 'Give 2 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 2 }), leave] },
+      gift: { text: t('Kupiec śmieje się do łez. „Masz szczęście jak sam Opiekun! Bierz je za jedną porcję.”', 'The merchant laughs till he cries. "You have the luck of a Keeper! Take them for one portion."'), options: [opt(t('Daję 1 pożywienie', 'Give 1 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 1 }), leave] },
       full: { text: t('Kupiec nie ustępuje.', 'The merchant will not budge.'), options: [opt(t('Daję 3 pożywienia', 'Give 3 food'), [{ do: 'item', item: 'reinforcedBoots' }], { food: 3 }), leave] },
     },
   },
@@ -169,11 +175,14 @@ export const EVENTS: EventCard[] = [
     text: t('Na szczycie stromego wzniesienia rośnie olbrzymie drzewo o złotych liściach i szkarłatnych owocach.', 'On top of a steep rise grows a huge tree with golden leaves and crimson fruit.'),
     steps: {
       start: { options: [
-        opt(t('Wspinam się (Zr -20)', 'Climb (Dex -20)'), [{
-          do: 'test', attribute: 'dex', modifier: -20,
-          pass: [{ do: 'permanent', target: 'maxVitality', amount: 2 }, { do: 'vitality', amount: 2 }, { do: 'move', direction: 'random', distance: 1 }],
-          fail: [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'dex', amount: -10, rounds: 1 }, { do: 'effect', target: 'str', amount: -10, rounds: 1 }, { do: 'effect', target: 'com', amount: -10, rounds: 1 }, { do: 'goto', step: 'again' }],
-        }]),
+        opt(t('Wspinam się chwyt po chwycie', 'Climb hold by hold'), [{ do: 'puzzle', puzzle: {
+          kind: 'climb', helper: { attribute: 'dex', modifier: -10 }, strikes: 4,
+          byScore: [
+            ...[0, 1, 2].map((): Outcome[] => [{ do: 'vitality', amount: -4 }, { do: 'effect', target: 'dex', amount: -10, rounds: 1 }, { do: 'effect', target: 'str', amount: -10, rounds: 1 }, { do: 'effect', target: 'com', amount: -10, rounds: 1 }, { do: 'goto', step: 'again' }]),
+            [{ do: 'vitality', amount: -2 }, { do: 'permanent', target: 'maxVitality', amount: 2 }, { do: 'vitality', amount: 2 }, { do: 'move', direction: 'random', distance: 1 }],
+            [{ do: 'permanent', target: 'maxVitality', amount: 2 }, { do: 'vitality', amount: 2 }, { do: 'move', direction: 'random', distance: 1 }],
+          ],
+        } }]),
         leave,
       ] },
       again: { text: t('Spadasz. Spróbujesz jeszcze raz?', 'You fall. Try again?'), options: [
@@ -189,11 +198,12 @@ export const EVENTS: EventCard[] = [
   {
     id: 17, hostile: false,
     title: t('Posąg spragniony wiedzy', 'The statue hungry for knowledge'),
-    text: t('Przy drodze stoi posąg zamyślonego starca. Napis głosi: „wiedza jest moim pokarmem”. Co mu powiesz?', 'By the road stands a statue of a thoughtful old man. The plaque says: "knowledge is my food". What will you tell him?'),
+    text: t('Przy drodze stoi posąg zamyślonego starca. Napis głosi: „wiedza jest moim pokarmem”. Gdy podchodzisz, kamienne oczy otwierają się i zadają Ci trzy pytania o ten świat.', 'By the road stands a statue of a thoughtful old man. The plaque says: "knowledge is my food". As you come closer, its stone eyes open and ask you three questions about this world.'),
     steps: { start: { options: [
-      opt(t('Rzeki zatrzymują wędrowca, póki ich nie przepłynie', 'Rivers stop a wanderer until they swim across'), [{ do: 'permanent', target: 'int', amount: 5 }]),
-      opt(t('Na pustyni nie trzeba jeść', 'In the desert you need no food'), []),
-      opt(t('Bliżej środka świata jest bezpieczniej', 'It is safer near the centre of the world'), []),
+      opt(t('Odpowiadam posągowi', 'Answer the statue'), [{ do: 'puzzle', puzzle: {
+        kind: 'quiz', helper: { attribute: 'int' }, questions: 3, seconds: 15,
+        byScore: [[], [], [{ do: 'permanent', target: 'int', amount: 5 }], [{ do: 'permanent', target: 'int', amount: 5 }, { do: 'xp', amount: 3 }]],
+      } }]),
       leave,
     ] } },
   },
@@ -201,16 +211,19 @@ export const EVENTS: EventCard[] = [
     id: 18, hostile: false,
     title: t('Sarkofag', 'Sarcophagus'),
     text: t('Potykasz się o coś twardego wystającego z ziemi. To wieko sarkofagu.', 'You trip over something hard sticking out of the ground. It is the lid of a sarcophagus.'),
-    steps: { start: { options: [
+    steps: {
+      open: {
+        text: t('Wieko zsuwa się z hukiem. W środku warstwy bandaży, a pod nimi coś połyskuje. Im głębiej sięgniesz, tym więcej znajdziesz, ale gdzieś czai się klątwa. Jeśli ją obudzisz, stracisz łup, a mumia wstanie.', 'The lid slides off with a crash. Inside are layers of wrappings, and something glints below. The deeper you reach the more you find, but a curse lurks somewhere. Wake it and you lose the loot as the mummy rises.'),
+        options: [opt(t('Sięgam do środka', 'Reach inside'), [{ do: 'puzzle', puzzle: {
+          kind: 'dig', helper: { attribute: 'str' }, layers: 5, curses: 1,
+          bottom: [{ do: 'item', item: 'pharaohAmulet' }],
+          bust: [{ do: 'fight', enemies: ['mummy'], onWin: [{ do: 'randomItem' }] }],
+        } }])],
+      },
+      start: { options: [
       opt(t('Otwieram (S)', 'Open it (Str)'), [{
         do: 'test', attribute: 'str',
-        pass: [{ do: 'roll', die: 10, table: [
-          { upTo: 2, then: [] },
-          { upTo: 4, then: [{ do: 'randomItem' }] },
-          { upTo: 6, then: [{ do: 'item', item: 'pharaohAmulet' }] },
-          { upTo: 8, then: [{ do: 'test', attribute: 'dex', modifier: -10, fail: [{ do: 'condition', id: 'foulAir', name: t('Zatrute powietrze', 'Foul air'), test: 'str', each: [{ do: 'vitality', amount: -2 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] }] }] },
-          { upTo: 10, then: [{ do: 'fight', enemies: ['mummy'], onWin: [{ do: 'randomItem' }] }] },
-        ] }],
+        pass: [{ do: 'goto', step: 'open' }],
       }]),
       leave,
     ] } },
@@ -218,9 +231,16 @@ export const EVENTS: EventCard[] = [
   {
     id: 19, hostile: false,
     title: t('Szczęśliwa moneta', 'The lucky coin'),
-    text: t('Myrmid układający karty proponuje wyzwanie: jeśli zdołasz go oszukać, odda Ci swoją szczęśliwą monetę.', 'A Myrmid laying out cards offers a challenge: fool him and he will give you his lucky coin.'),
+    text: t('Myrmid kładzie na pniu trzy karty i pokazuje Ci Królową. „Znajdź ją po tasowaniu albo spróbuj mnie oszukać, a dostaniesz moją szczęśliwą monetę. Stawka: 1 zł.”', 'A Myrmid lays three cards on a stump and shows you the Queen. "Find her after the shuffle, or try to fool me, and my lucky coin is yours. The stake is 1 gold."'),
     steps: { start: { options: [
-      opt(t('Opowiadam zmyśloną historię (Ch -10)', 'Tell him a made-up tale (Cha -10)'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'item', item: 'luckyCoin' }] }]),
+      opt(t('Gram uczciwie: śledzę Królową', 'Play fair: follow the Queen'), [{ do: 'puzzle', puzzle: {
+        kind: 'cups', helper: { attribute: 'dex' }, win: [{ do: 'item', item: 'luckyCoin' }], lose: [{ do: 'gold', amount: -1 }],
+      } }], { gold: 1 }),
+      opt(t('Podmieniam kartę w rękawie (Zr -10)', 'Swap a card up my sleeve (Dex -10)'), [{
+        do: 'test', attribute: 'dex', modifier: -10,
+        pass: [{ do: 'item', item: 'luckyCoin' }],
+        fail: [{ do: 'gold', amount: -3 }, { do: 'roll', die: 6, table: [{ upTo: 1, then: [{ do: 'fight', enemies: ['bandit'] }] }, { upTo: 6, then: [] }] }],
+      }]),
       leave,
     ] } },
   },
@@ -332,12 +352,40 @@ export const EVENTS: EventCard[] = [
   {
     id: 29, hostile: false,
     title: t('Runiczny kowal', 'The runic smith'),
-    text: t('Skałogrzmot w stroju kowala oferuje nałożenie runy na Twoją broń za 6 zł., jeśli powiesz mu, jaki jest Twój cel w życiu.', 'A Flintborn in a smith\'s apron offers to set a rune on your weapon for 6 gold, if you tell him your purpose in life.'),
-    steps: { start: { options: [
-      opt(t('„Chronić swoich bliskich”', '"To protect the ones I love"'), [{ do: 'rune' }], { gold: 6 }),
-      opt(t('„Zdobyć władzę nad światem”', '"To rule the world"'), []),
-      leave,
-    ] } },
+    text: t('Skałogrzmot w stroju kowala oferuje nałożenie runy na Twoją broń za 6 zł., ale najpierw pyta, jaki jest Twój cel w życiu.', 'A Flintborn in a smith\'s apron offers to set a rune on your weapon for 6 gold, but first he asks about your purpose in life.'),
+    steps: {
+      start: { options: [
+        opt(t('„Chronić swoich bliskich”', '"To protect the ones I love"'), [{ do: 'goto', step: 'forge' }]),
+        opt(t('„Zdobyć władzę nad światem”', '"To rule the world"'), [{ do: 'goto', step: 'refused' }]),
+        leave,
+      ] },
+      refused: { text: t('Kowal odwraca się do paleniska. „Nie kuję dla tyranów.”', 'The smith turns back to his forge. "I do not forge for tyrants."'), options: [leave] },
+      forge: {
+        text: t('Kowal kiwa głową i podaje Ci młot. „Runę wykuwamy razem. Uderzaj, gdy stal rozbłyśnie. Trzy celne ciosy i sam wybierzesz runę.”', 'The smith nods and hands you a hammer. "We forge the rune together. Strike when the steel flares. Three true blows and you choose the rune yourself."'),
+        options: [
+          opt(t('Płacę i kuję', 'Pay and forge'), [{ do: 'puzzle', puzzle: {
+            kind: 'forge', helper: { attribute: 'str' }, strikes: 3,
+            byScore: [
+              [{ do: 'gold', amount: 3 }],
+              [{ do: 'roll', die: 10, table: [{ upTo: 4, then: [{ do: 'gold', amount: 3 }] }, { upTo: 10, then: [{ do: 'rune' }] }] }],
+              [{ do: 'rune' }],
+              [{ do: 'goto', step: 'choose' }],
+            ],
+          } }], { gold: 6 }),
+          leave,
+        ],
+      },
+      choose: {
+        text: t('Stal śpiewa pod młotem. „Mistrzowska robota! Którą runę wykuć?”', 'The steel sings under the hammer. "Masterly work! Which rune shall it be?"'),
+        options: [
+          opt(t('Zatruta: przeciwnik traci 1 Żyw. co rundę', 'Venom: the foe loses 1 Vitality each round'), [{ do: 'rune', rune: 'venom' }]),
+          opt(t('Ostra: +1 obrażeń na pancerz', 'Sharp: +1 damage against armour'), [{ do: 'rune', rune: 'sharp' }]),
+          opt(t('Precyzyjna: +5 do Walki tą bronią', 'Precise: +5 Combat with this weapon'), [{ do: 'rune', rune: 'precise' }]),
+          opt(t('Porażająca: ogłusza przy 3. trafieniu', 'Stunning: stuns on the 3rd hit'), [{ do: 'rune', rune: 'stunning' }]),
+          opt(t('Przebijająca: omija pancerz', 'Piercing: goes through armour'), [{ do: 'rune', rune: 'piercing' }]),
+        ],
+      },
+    },
   },
   {
     id: 30, hostile: true,
@@ -411,10 +459,14 @@ export const EVENTS: EventCard[] = [
   {
     id: 38, hostile: false, terrains: ['cave'],
     title: t('Niedostępna jaskinia', 'The sealed cave'),
-    text: t('Jeden olbrzymi kamień w skalnym masywie wygląda nienaturalnie. Może coś zasłania?', 'One huge boulder in the rock face looks out of place. Is it hiding something?'),
+    text: t('Jeden olbrzymi kamień w skalnym masywie wygląda nienaturalnie. Obok w skale wyryto pięć run, a pod nimi trzy puste wgłębienia. Może coś zasłania?', 'One huge boulder in the rock face looks out of place. Beside it five runes are carved in the rock, with three empty hollows below. Is it hiding something?'),
     steps: {
       start: { options: [
         opt(t('Przesuwam kamień (S -20)', 'Push the boulder (Str -20)'), [{ do: 'test', attribute: 'str', modifier: -20, pass: [{ do: 'goto', step: 'treasure' }], fail: [{ do: 'goto', step: 'again' }] }]),
+        opt(t('Badam runy wyryte w skale', 'Study the runes carved in the rock'), [{ do: 'puzzle', puzzle: {
+          kind: 'lock', helper: { attribute: 'int' }, length: 3, symbols: 5, tries: 5,
+          win: [{ do: 'goto', step: 'treasure' }], lose: [{ do: 'goto', step: 'again' }],
+        } }]),
         leave,
       ] },
       again: { text: t('Kamień ani drgnie.', 'The boulder does not move.'), options: [
@@ -488,13 +540,13 @@ export const EVENTS: EventCard[] = [
   {
     id: 48, hostile: true,
     title: t('Zastawiona pułapka', 'Trapped ground'),
-    text: t('Teren przed Tobą jest usiany pułapkami.', 'The ground ahead is riddled with traps.'),
+    text: t('Teren przed Tobą jest usiany pułapkami. Gdy słońce wychodzi zza chmur, na moment widać błysk ostrzy w trawie.', 'The ground ahead is riddled with traps. When the sun comes out, blades glint in the grass for a moment.'),
     steps: { start: { options: [
-      opt(t('Przedzieram się (Int, Zr, S)', 'Push through (Int, Dex, Str)'), [
-        { do: 'test', attribute: 'int', fail: [{ do: 'effect', target: 'dex', amount: -10, rounds: 1 }, { do: 'effect', target: 'str', amount: -10, rounds: 1 }] },
-        { do: 'test', attribute: 'dex', fail: [{ do: 'vitality', amount: -3 }] },
-        { do: 'test', attribute: 'str', fail: [{ do: 'vitality', amount: -1 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] },
-      ]),
+      opt(t('Wypatruję pułapek i przechodzę', 'Spot the traps and cross'), [{ do: 'puzzle', puzzle: {
+        kind: 'traps', helper: { attribute: 'dex' }, traps: 6,
+        win: [{ do: 'xp', amount: 1 }],
+        hit: [{ do: 'hit', damage: 4 }, { do: 'effect', target: 'stamina', amount: -1, rounds: 1 }],
+      } }]),
       opt(t('Cofam się', 'Step back'), [{ do: 'move', direction: 'back', distance: 1 }]),
       opt(t('Obchodzę w lewo', 'Go around to the left'), [{ do: 'move', direction: 'left', distance: 1 }]),
     ] } },
@@ -508,12 +560,16 @@ export const EVENTS: EventCard[] = [
   {
     id: 50, hostile: false,
     title: t('Ruletka', 'Roulette'),
-    text: t('Przed Tobą 3 skrzynie. Tylko jedna kryje skarb, jedna jest pusta, a jedna wybucha. Otworzysz jedną, reszta zniknie.', 'Three chests stand before you. One holds treasure, one is empty and one explodes. Open one and the rest vanish.'),
-    steps: { start: { options: ([t('Lewa', 'Left'), t('Środkowa', 'Middle'), t('Prawa', 'Right')]).map((label) => opt(label, [{ do: 'roll', die: 3, table: [
-      { upTo: 1, then: [{ do: 'randomItem' }, { do: 'randomItem' }, { do: 'gold', amount: 10 }] },
-      { upTo: 2, then: [] },
-      { upTo: 3, then: [{ do: 'vitality', amount: -10 }, { do: 'stuck', rounds: 1 }] },
-    ] }])).concat([leave]) } },
+    text: t('Przed Tobą 3 skrzynie. Tylko jedna kryje skarb, jedna jest pusta, a jedna wybucha. Na każdej wyryto napis, ale tylko jeden z nich mówi prawdę. Otworzysz jedną, reszta zniknie.', 'Three chests stand before you. One holds treasure, one is empty and one explodes. Each bears an inscription, but only one of them tells the truth. Open one and the rest vanish.'),
+    steps: { start: { options: [
+      opt(t('Czytam napisy', 'Read the inscriptions'), [{ do: 'puzzle', puzzle: {
+        kind: 'chests', helper: { attribute: 'int', modifier: -10 },
+        treasure: [{ do: 'randomItem' }, { do: 'randomItem' }, { do: 'gold', amount: 10 }],
+        empty: [],
+        blast: [{ do: 'vitality', amount: -10 }, { do: 'stuck', rounds: 1 }],
+      } }]),
+      leave,
+    ] } },
   },
 ];
 

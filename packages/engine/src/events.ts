@@ -7,6 +7,7 @@ import { DIFFICULTIES } from './config';
 import { EngineError } from './errors';
 import { combatXp, heroArmour, startCombat, VIGILANCE } from './combat';
 import { neighbours } from './mapgen';
+import { makePuzzle, scorePuzzle, type PuzzleAnswer } from './puzzles';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
@@ -38,7 +39,7 @@ export function drawEvent(state: GameState, rng: Rng, terrain: TerrainId): numbe
 
 /** The step of the player's pending event, with the options they can pay for. */
 export function eventOptions(state: GameState, player: PlayerState): { option: EventOption; index: number; affordable: boolean }[] {
-  if (!player.pendingEvent) return [];
+  if (!player.pendingEvent || player.pendingEvent.puzzle) return [];
   const card = EVENT_BY_ID[player.pendingEvent.card]!;
   const step = card.steps[player.pendingEvent.step]!;
   return step.options.map((option, index) => ({ option, index, affordable: canPay(player, option) }));
@@ -69,6 +70,17 @@ export function chooseEventOption(state: GameState, player: PlayerState, rng: Rn
   log(state, { type: 'eventChoice', player: player.id, card: pending.card, step: pending.step, option: index });
   player.pendingEvent = null;
   runOutcomes(state, player, rng, choice.option.then, pending.card);
+  if (!player.pendingEvent && !player.combat) log(state, { type: 'eventEnded', player: player.id, card: pending.card });
+}
+
+/** Plays the answer to the pending event's mini-game: the engine checks it and runs the card's result. */
+export function answerPuzzle(state: GameState, player: PlayerState, rng: Rng, answer: PuzzleAnswer) {
+  const pending = player.pendingEvent;
+  if (!pending?.puzzle) throw new EngineError('puzzle.none', 'There is no puzzle to answer.');
+  const result = scorePuzzle(pending.puzzle, answer ?? {});
+  log(state, { type: 'puzzle', player: player.id, card: pending.card, kind: pending.puzzle.puzzle.kind, score: result.score, won: result.won, helped: pending.puzzle.helped });
+  player.pendingEvent = null;
+  runOutcomes(state, player, rng, result.then, pending.card);
   if (!player.pendingEvent && !player.combat) log(state, { type: 'eventEnded', player: player.id, card: pending.card });
 }
 
@@ -173,7 +185,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
   const world = worldView(state);
   const c = player.character;
   for (const o of outcomes) {
-    if (player.combat || c.vitality <= 0) return;
+    if (player.combat || player.pendingEvent?.puzzle || c.vitality <= 0) return;
     switch (o.do) {
       case 'gold': case 'food': case 'vitality':
         change(state, player, o.do, o.amount);
@@ -237,7 +249,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         break;
       }
       case 'rune': {
-        const rune = RUNES[roll(state, player, rng, 10) - 1]!;
+        const rune = o.rune ?? RUNES[roll(state, player, rng, 10) - 1]!;
         c.equipment.rune = rune;
         log(state, { type: 'change', player: player.id, change: { what: 'rune', rune } });
         break;
@@ -311,6 +323,18 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       case 'death':
         c.vitality = 0;
         break;
+      case 'puzzle': {
+        if (card === undefined) break;
+        // The helper test comes first: a pass gives the puzzle's cue (a letter, slower hands, a wider zone).
+        let helped: boolean | null = null;
+        if (o.puzzle.helper) {
+          const result = heroTest(world, player, o.puzzle.helper.attribute, rng, o.puzzle.helper.modifier ?? 0);
+          log(state, { type: 'check', player: player.id, attribute: o.puzzle.helper.attribute, result });
+          helped = result.success;
+        }
+        player.pendingEvent = { card, step: player.pendingEvent?.step ?? 'start', puzzle: makePuzzle(o.puzzle, rng, helped) };
+        return;
+      }
     }
   }
 }

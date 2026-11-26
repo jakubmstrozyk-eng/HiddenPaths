@@ -20,3 +20,4 @@ export {
 export * from './missions';
 export * from './dungeon';
 export * from './tiles';
+export * from './puzzles';

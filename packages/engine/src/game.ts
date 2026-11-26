@@ -4,7 +4,7 @@ import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, 
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
-import { ALL_EVENT_IDS, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
+import { ALL_EVENT_IDS, answerPuzzle, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
 import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, roomMoves, settleRoom, placeDungeon, woundBoss } from './dungeon';
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
@@ -147,6 +147,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   if (player.pendingEvent && (player.character.newCards?.length || player.character.chooseCards)) {
     return [...eventOptions(state, player).filter((o) => o.affordable).map((o): Action => ({ type: 'event', option: o.index })), { type: 'keepCards', cards: [] }];
   }
+  if (player.pendingEvent?.puzzle) return [{ type: 'puzzle', answer: {} }];
   if (player.pendingEvent) {
     return eventOptions(state, player).filter((o) => o.affordable).map((o) => ({ type: 'event', option: o.index }));
   }
@@ -290,7 +291,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
   const anytime = action.type === 'spend' || action.type === 'keepCards';
-  if (action.type !== 'combat' && action.type !== 'event' && !anytime) busy(player);
+  if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'puzzle' && !anytime) busy(player);
   if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'eat' && !anytime) {
     throw new EngineError('enter.first', 'Step onto the map first.');
   }
@@ -359,6 +360,10 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     }
     case 'event':
       chooseEventOption(state, player, rng, action.option);
+      woundBoss(state, player);
+      break;
+    case 'puzzle':
+      answerPuzzle(state, player, rng, action.answer);
       woundBoss(state, player);
       break;
     case 'combat':
@@ -690,6 +695,9 @@ export function timeoutTurn(prev: GameState): GameState {
     log(state, { type: 'combatEnded', player: player.id, result: 'fled', xp: 0 });
     player.combat = null;
   }
+  // An unanswered mini-game counts as given up.
+  if (player.pendingEvent?.puzzle) answerPuzzle(state, player, rng, {});
+  player.combat = null;
   if (player.pendingEvent) {
     const free = eventOptions(state, player).filter((o) => !o.option.cost);
     // Prefer a choice that does nothing (walking on); otherwise the last free one.
