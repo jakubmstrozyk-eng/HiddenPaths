@@ -104,6 +104,10 @@ export type LogEntry =
   | { type: 'cardsKept'; player: string; cards: string[]; dropped: string[] }
   /** A game mission was reached and paid its XP. */
   | { type: 'mission'; player: string; mission: string; xp: number }
+  /** A successful action used up the fragment's resource until round `until`. */
+  | { type: 'depleted'; player: string; cell: number; action: TerrainAction; until: number }
+  /** Fragments nobody stood on for 5 rounds went dark again, with new terrain beneath. */
+  | { type: 'covered'; player: string; cells: number[] }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
@@ -118,6 +122,10 @@ export interface GameState {
   round: number;
   /** Event cards not drawn yet. Refilled from the whole deck when empty. */
   eventDeck: number[];
+  /** `cell:action` → the round the resource is back (missing in older saves). */
+  depleted?: Record<string, number>;
+  /** Fragment → the last round a hero stood on it or saw it (missing in older saves). */
+  lastVisit?: Record<number, number>;
   /** Set when someone reaches the goal. */
   winner: string | null;
   /** Increases with every applied action; the server uses it to reject stale or double submits. */

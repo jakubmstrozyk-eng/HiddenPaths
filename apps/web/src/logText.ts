@@ -149,6 +149,14 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return `${pl ? 'Przetopione' : 'Smelted'}: ${e.items.map((i) => itemName(i, locale)).join(', ')} → ${itemName(e.into, locale)}`;
     case 'ate':
       return pl ? `Posiłek zjedzony · zostało ${e.foodLeft} jedzenia` : `Meal eaten · ${e.foodLeft} food left`;
+    case 'depleted': {
+      const what = { hunt: ['Zwierzyna wróci', 'Game returns'], gather: ['Owoce odrosną', 'Fruit grows back'], herbalism: ['Zioła odrosną', 'Herbs grow back'], mine: ['Surowce wrócą', 'Materials return'] }[e.action as 'hunt'] ?? ['Surowiec wróci', 'Resource returns'];
+      return pl ? `${what[0]} w rundzie ${e.until}` : `${what[1]} in round ${e.until}`;
+    }
+    case 'covered':
+      return pl
+        ? `Ciemna materia znów przykrywa ${e.cells.length === 1 ? 'opuszczony fragment' : `opuszczone fragmenty (${e.cells.length})`}`
+        : `Dark matter covers ${e.cells.length === 1 ? 'a forgotten fragment' : `${e.cells.length} forgotten fragments`} again`;
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:

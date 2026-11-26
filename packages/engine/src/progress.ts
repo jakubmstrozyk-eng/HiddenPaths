@@ -5,6 +5,7 @@ import { trackMissions } from './missions';
 import type { Rng } from './rng';
 import type { GameState, LogEntry, PlayerState } from './state';
 import type { WorldView } from './terrain';
+import { depletedUntil, markVisit } from './tiles';
 
 export function log(state: GameState, entry: LogEntry) {
   state.log.push(entry);
@@ -20,6 +21,7 @@ export function worldView(state: GameState): WorldView {
     ringAt: (cell) => state.map.cells[cell]!.ring,
     maxRing: state.map.maxRing,
     near: (cell) => neighbours(state.map, cell),
+    depleted: (cell, action) => depletedUntil(state, cell, action) !== null,
   };
 }
 
@@ -52,6 +54,7 @@ export function reveal(state: GameState, player: PlayerState, cell: number, rng?
     return false;
   }
   player.revealed.push(cell);
+  markVisit(state, cell);
   if (opts.peek) {
     player.counters[peeked] = 1;
     log(state, { type: 'revealed', player: player.id, cell, xp: 0 });

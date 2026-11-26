@@ -11,6 +11,7 @@ import { gainXp, log, respawn, reveal, worldView } from './progress';
 import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
+import { coverForgotten, deplete, DEPLETING_ACTIONS, markVisit } from './tiles';
 import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
 import {
   availableServices, buy, buyPrice, canSmelt, mysticStock, isSettlement, placeOf, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
@@ -297,6 +298,11 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     case 'terrain': {
       const outcome = runTerrainAction(worldView(state), player, action.action, rng);
       log(state, { player: player.id, ...outcome });
+      // The animals, fruit, herbs or ore are gone for a while, for every hero.
+      if (outcome.result.success && DEPLETING_ACTIONS.includes(action.action)) {
+        const until = deplete(state, player.position, action.action);
+        log(state, { type: 'depleted', player: player.id, cell: player.position, action: action.action, until });
+      }
       break;
     }
     case 'event':
@@ -494,6 +500,7 @@ function afterAction(state: GameState, player: PlayerState) {
   trimMeals(player);
   if (player.character.vitality <= 0) respawn(state, player);
   if (isOutside(player)) return;
+  markVisit(state, player.position);
   const cell = state.map.cells[player.position]!;
   if (cell.terrain === 'city') player.respawnAt = player.position;
   if (cell.terrain === 'core' && !state.players.some((p) => p.hasStone)) {
@@ -560,12 +567,15 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   state.turnIndex++;
   if (state.turnIndex >= state.turnOrder.length) {
     state.turnIndex = 0;
+    for (const p of state.players) markVisit(state, p.position);
     state.round++;
     for (const p of state.players) {
       p.effects = p.effects.filter((e) => e.untilRound >= state.round);
       // Per-round limits (market, gossip, reading) are keyed by round; drop the old ones.
       for (const key of Object.keys(p.counters)) if (key.includes('@') && Number(key.split('@')[1]) < state.round) delete p.counters[key];
     }
+    const covered = coverForgotten(state, rng);
+    if (covered.length) log(state, { type: 'covered', player: player.id, cells: covered });
   }
   const next = currentPlayer(state);
   next.speedLeft = Math.max(0, next.character.speed + effectBonus(next, state.round, 'speed'));
