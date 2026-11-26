@@ -19,3 +19,4 @@ export {
 } from './game';
 export * from './missions';
 export * from './dungeon';
+export * from './tiles';

@@ -115,6 +115,10 @@ export type LogEntry =
   | { type: 'dungeonSearch'; player: string; found: boolean }
   /** A trap's blow outside a fight: where it landed and what the armour there stopped. */
   | { type: 'hitSpot'; player: string; slot: import('@hp/content').ArmourSlot; armour: number; damage: number }
+  /** A successful action used up the fragment's resource until round `until`. */
+  | { type: 'depleted'; player: string; cell: number; action: TerrainAction; until: number }
+  /** Fragments nobody stood on for 5 rounds went dark again, with new terrain beneath. */
+  | { type: 'covered'; player: string; cells: number[] }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
@@ -129,6 +133,10 @@ export interface GameState {
   round: number;
   /** Event cards not drawn yet. Refilled from the whole deck when empty. */
   eventDeck: number[];
+  /** `cell:action` → the round the resource is back (missing in older saves). */
+  depleted?: Record<string, number>;
+  /** Fragment → the last round a hero stood on it or saw it (missing in older saves). */
+  lastVisit?: Record<number, number>;
   /** Set when someone reaches the goal. */
   winner: string | null;
   /** The map's dungeon (missing in games begun before dungeons). */

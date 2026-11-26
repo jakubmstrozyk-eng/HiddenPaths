@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, currentPlayer, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  applyAction, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed,
 } from '@hp/engine';
@@ -51,6 +51,13 @@ const TILE_ICONS: Partial<Record<string, IconName>> = {
 const WALK_MS = 750;
 
 const TERRAIN_ACTIONS = ['hunt', 'gather', 'herbalism', 'mine', 'swim', 'meditate'] as const satisfies TerrainAction[];
+/** Why a used-up action is greyed out on this fragment. */
+const DEPLETED_NOTE: Partial<Record<TerrainAction, { pl: string; en: string }>> = {
+  hunt: { pl: 'Brak zwierzyny', en: 'No game left' },
+  gather: { pl: 'Brak owoców', en: 'No fruit left' },
+  herbalism: { pl: 'Brak ziół', en: 'No herbs left' },
+  mine: { pl: 'Złoża wyczerpane', en: 'Nothing left to dig' },
+};
 
 /** Odds shown on each terrain action button, using the same modifiers as the engine. */
 function actionChance(game: GameState, me: PlayerState, action: TerrainAction): number {
@@ -486,6 +493,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 </button>
               );
             })}
+            {here && hereTerrain && depletedActions(game, me.position).filter((d) => hereTerrain.actions.includes(d.action)).map((d) => (
+              <button key={`gone-${d.action}`} className="ghost act-btn depleted" disabled title={tx({ pl: 'Surowiec wyczerpany po udanej akcji', en: 'Used up by a successful action' })}>
+                <span className="act-title"><Icon name={d.action as (typeof TERRAIN_ACTIONS)[number]} size={14} />{t(d.action as (typeof TERRAIN_ACTIONS)[number])}</span>
+                <small className="act-test">{tx(DEPLETED_NOTE[d.action] ?? { pl: 'Wyczerpane', en: 'Used up' })}</small>
+                <small className="act-reward">{tx({ pl: `Wróci w rundzie ${d.until}`, en: `Back in round ${d.until}` })}</small>
+              </button>
+            ))}
             {inTown && quiet && (
               <button className="ghost act-btn town-btn" onClick={() => setSheet('town')}>
                 <span className="act-title"><Icon name="town" size={14} />{tx({ pl: 'Wejdź', en: 'Go in' })}: {hereTerrain ? tx(hereTerrain.name) : t('town')}</span>

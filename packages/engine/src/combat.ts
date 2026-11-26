@@ -436,8 +436,8 @@ export function combatTurn(
         break;
       }
       case 'flee': {
-        // A trap sprung at the start of the turn may have felled the last foe: nobody is left to run from.
-        if (alive().length === 0) break;
+        // A trap sprung at the start of the round may already have felled every foe: nobody is left to chase.
+        if (!alive().length) break;
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
         const hero = heroTest(world, actor, 'dex', rng, focus + harried + vigilance);
