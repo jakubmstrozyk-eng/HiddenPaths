@@ -118,3 +118,32 @@ export function HurtFlash({ amount, cause, fatal = false }: { amount: number; ca
     </div>
   );
 }
+
+/** A short tone, for the mini-games: a tick, a chime, a clang. */
+function tone(c: AudioContext, freq: number, ms: number, volume: number, type: OscillatorType = 'sine', at = 0) {
+  const t0 = c.currentTime + at;
+  const osc = c.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(volume, t0 + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+  osc.connect(g).connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + ms / 1000 + 0.05);
+}
+
+/** Puzzle feedback: a rising chime for a right move, a low buzz for a wrong one, a tick, an anvil's clang. */
+export function puzzleSound(kind: 'right' | 'wrong' | 'tick' | 'clang' | 'win' | 'boom') {
+  const c = ctx();
+  if (!c) return;
+  try {
+    if (kind === 'tick') tone(c, 1800, 40, 0.08, 'square');
+    if (kind === 'right') { tone(c, 660, 140, 0.2); tone(c, 990, 180, 0.18, 'sine', 0.08); }
+    if (kind === 'wrong') { tone(c, 160, 260, 0.25, 'sawtooth'); buzz(60); }
+    if (kind === 'clang') { [1, 2.76, 5.4].forEach((m, i) => tone(c, 420 * m, 500 - i * 120, 0.22 / (i + 1), 'sine')); noise(c, 60, 'highpass', 3000, 2000, 0.3); buzz(30); }
+    if (kind === 'win') [523, 659, 784, 1046].forEach((f, i) => tone(c, f, 260, 0.18, 'triangle', i * 0.09));
+    if (kind === 'boom') { noise(c, 500, 'lowpass', 1200, 80, 0.8); buzz([80, 40, 120]); }
+  } catch { /* no sound */ }
+}

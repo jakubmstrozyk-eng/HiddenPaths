@@ -40,6 +40,11 @@ describe('event cards', () => {
           if (o.do === 'fight') for (const e of o.enemies as string[]) expect(ENEMIES[e], `card ${card.id} foe ${e}`).toBeDefined();
           for (const key of ['pass', 'fail', 'then', 'else', 'onWin', 'each']) if (Array.isArray(o[key])) visit(o[key] as unknown[]);
           if (Array.isArray(o.table)) for (const row of o.table as { then: unknown[] }[]) visit(row.then);
+          if (o.do === 'puzzle') {
+            const pz = o.puzzle as Record<string, unknown>;
+            for (const key of ['win', 'fast', 'lose', 'treasure', 'empty', 'blast', 'hit', 'bust', 'bottom']) if (Array.isArray(pz[key])) visit(pz[key] as unknown[]);
+            if (Array.isArray(pz.byScore)) for (const row of pz.byScore as unknown[][]) visit(row);
+          }
         }
       };
       for (const step of Object.values(card.steps)) {

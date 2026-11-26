@@ -10,3 +10,4 @@ export * from './eventTypes';
 export * from './events';
 export * from './looks';
 export * from './dungeons';
+export * from './riddles';

@@ -5,6 +5,7 @@ import type { GameConfig } from './config';
 import type { TestResult } from './dice';
 import type { Delve, Dungeon } from './dungeon';
 import type { GameMap } from './mapgen';
+import type { PuzzleAnswer, PuzzleState } from './puzzles';
 import type { Companion, Condition, Effect, Inventory, TerrainOutcome } from './terrain';
 
 /**
@@ -39,7 +40,8 @@ export interface PlayerState {
   counters: Record<string, number>;
   crossedRiver: boolean;
   /** An event card waiting for the player's choice. */
-  pendingEvent: { card: number; step: string } | null;
+  /** `puzzle`: the card's mini-game is being played, and the card waits for its answer. */
+  pendingEvent: { card: number; step: string; puzzle?: PuzzleState } | null;
   combat: CombatState | null;
   /** Carries the Stone of Beginnings back to a city. */
   hasStone: boolean;
@@ -69,6 +71,8 @@ export type LogEntry =
   | { type: 'eventStep'; player: string; card: number; step: string }
   | { type: 'eventChoice'; player: string; card: number; step: string; option: number }
   | { type: 'eventEnded'; player: string; card: number }
+  /** A mini-game on an event card was played: `score` is what its result table read. */
+  | { type: 'puzzle'; player: string; card: number; kind: string; score: number; won: boolean; helped: boolean | null }
   | { type: 'check'; player: string; attribute: Attribute; result: TestResult }
   | { type: 'roll'; player: string; die: number; value: number }
   | { type: 'change'; player: string; change: Change }
@@ -172,6 +176,8 @@ export type Action =
   | { type: 'reinforce'; slot: ArmourSlot }
   | { type: 'terrain'; action: TerrainAction }
   | { type: 'event'; option: number }
+  /** The answer to the event's mini-game. */
+  | { type: 'puzzle'; answer: PuzzleAnswer }
   | { type: 'combat'; move: CombatMove }
   | { type: 'use'; item: string }
   | { type: 'equip'; item: string }

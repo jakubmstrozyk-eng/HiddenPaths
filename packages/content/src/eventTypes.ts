@@ -26,7 +26,8 @@ export type Outcome =
   | { do: 'randomItem'; rare?: boolean }
   /** Ores for the bag: rare ones (magma, gold, silver, diamond, gem) or common ones. */
   | { do: 'ores'; amount: number; rare?: boolean }
-  | { do: 'rune' }
+  /** A rune on the weapon: the given one, or one rolled on the d10 table. */
+  | { do: 'rune'; rune?: 'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing' }
   | { do: 'fight'; enemies: string[]; onWin?: Outcome[] }
   | { do: 'fightRandom' }
   | {
@@ -53,7 +54,37 @@ export type Outcome =
    * a pass clears it, a failure applies `each` and makes the next test `worsen` harder.
    */
   | { do: 'condition'; id: string; name: Text; test: Attribute; modifier?: number; worsen?: number; each: Outcome[] }
-  | { do: 'death' };
+  | { do: 'death' }
+  /** An on-screen mini-game (riddle, quiz, shuffle, timing...). The card waits for its result. */
+  | { do: 'puzzle'; puzzle: Puzzle };
+
+/** A cue an attribute test gives before a mini-game starts: a letter, a slower shuffle, a wider zone. */
+export interface PuzzleHelper { attribute: Attribute; modifier?: number }
+
+/**
+ * A mini-game on an event card. The engine draws its secret part from the game's seed
+ * (so an online game sees the same puzzle), the app plays it, and the result picks the outcomes.
+ * `byScore[n]` runs for a score of n (the last entry for anything higher).
+ */
+export type Puzzle =
+  /** Spell the answer to a riddle from scattered letters. Helper: shows the first letter. */
+  | { kind: 'riddle'; helper?: PuzzleHelper; seconds: number; fastSeconds: number; win: Outcome[]; fast: Outcome[]; lose: Outcome[] }
+  /** Questions made from the game's own data. Helper: strikes out one wrong answer per question. */
+  | { kind: 'quiz'; helper?: PuzzleHelper; questions: number; seconds: number; byScore: Outcome[][] }
+  /** Follow the queen while three cards are shuffled. Helper: slower hands. */
+  | { kind: 'cups'; helper?: PuzzleHelper; win: Outcome[]; lose: Outcome[] }
+  /** Strike while the marker crosses the glowing zone. Helper: a wider zone. */
+  | { kind: 'forge' | 'climb'; helper?: PuzzleHelper; strikes: number; byScore: Outcome[][] }
+  /** Three chests with inscriptions, exactly one of them true. Helper: tells which one would blow up. */
+  | { kind: 'chests'; helper?: PuzzleHelper; treasure: Outcome[]; empty: Outcome[]; blast: Outcome[] }
+  /** Traps flash on a grid, then the hero picks a way across. Helper: a longer flash. */
+  | { kind: 'traps'; helper?: PuzzleHelper; traps: number; win: Outcome[]; hit: Outcome[] }
+  /** Guess a code of runes; each try says how many are right and how many are in the wrong place. Helper: one more try. */
+  | { kind: 'lock'; helper?: PuzzleHelper; length: number; symbols: number; tries: number; win: Outcome[]; lose: Outcome[] }
+  /** Higher or lower than the last d10: the score is the run of right calls. Helper: one wrong call forgiven. */
+  | { kind: 'higherLower'; helper?: PuzzleHelper; rounds: number; byScore: Outcome[][] }
+  /** Dig layer after layer and stop when you like; a curse takes it all. Helper: the first curse only wounds. */
+  | { kind: 'dig'; helper?: PuzzleHelper; layers: number; curses: number; bust: Outcome[]; /** What lies on the deepest layer instead of a random treasure. */ bottom?: Outcome[] };
 
 export interface EventOption {
   label: Text;

@@ -621,7 +621,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       </footer>
 
       <AnimatePresence>
-        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} act={act} />}
+        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} act={act} hold={!!dice} />}
         {!onTheWay && (replay || me.combat) && (
           <Duel
             key="combat"
