@@ -1,3 +1,4 @@
+import { DUNGEON_CARDS } from './dungeons';
 import type { EventCard, EventOption, Outcome } from './eventTypes';
 import type { Text } from './types';
 
@@ -516,4 +517,5 @@ export const EVENTS: EventCard[] = [
   },
 ];
 
-export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries(EVENTS.map((e) => [e.id, e]));
+/** Every card by id: the event deck and the dungeon rooms. */
+export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries([...EVENTS, ...DUNGEON_CARDS].map((e) => [e.id, e]));

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { EVENT_BY_ID, TERRAINS } from '@hp/content';
+import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
 import { eventOptions, isOutside, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
 import { cardSwish } from '../Feedback';
@@ -37,6 +37,8 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
   const step = card.steps[pending.step]!;
   const options = eventOptions(game, me);
   const here = isOutside(me) ? null : landAt(game.map, me.position);
+  // A dungeon room plays as a card too, marked with the dungeon's name instead of the deck's number.
+  const room = isDungeonCard(card.id) ? DUNGEON_THEMES[themeOfCard(card.id)!] : null;
   // The deck is shown only for the first step: later steps of the same card just turn over.
   const [deck] = useState(deckSpot);
   const [drawing, setDrawing] = useState(true);
@@ -80,22 +82,22 @@ export function EventPanel({ game, me, lines, act }: { game: GameState; me: Play
       >
         <span className="ev-back ev-back-face" aria-hidden="true"><CardBackArt /></span>
         <motion.article
-          className={`ev-card ${card.hostile ? 'hostile' : ''}`}
+          className={`ev-card ${card.hostile ? 'hostile' : ''} ${room ? 'dungeon-card' : ''}`}
           key={`${pending.card}-${pending.step}`}
           initial={pending.step === 'start' ? false : { rotateY: -90, opacity: 0.4 }}
           animate={{ rotateY: 0, opacity: 1 }}
           transition={{ duration: 0.35 }}
           aria-label={tx(card.title)}
         >
-          <span className="ev-number">{card.id}</span>
-          <span className="ev-tag">{card.hostile ? (pl ? 'Zagrożenie' : 'Danger') : (pl ? 'Wydarzenie' : 'Event')}</span>
+          <span className="ev-number">{room ? '⛬' : card.id}</span>
+          <span className="ev-tag">{room ? (pl ? 'Komnata lochu' : 'Dungeon room') : card.hostile ? (pl ? 'Zagrożenie' : 'Danger') : (pl ? 'Wydarzenie' : 'Event')}</span>
           <div className="ev-art" aria-hidden="true">
             {here && <TerrainArt terrain={here} seed={me.position} />}
             <span className="ev-art-shade" />
           </div>
           <header className="ev-head">
             <h2>{tx(card.title)}</h2>
-            {here && here !== 'core' && <small>{tx(TERRAINS[here].name)}</small>}
+            {room ? <small>{tx(room.name)}</small> : here && here !== 'core' && <small>{tx(TERRAINS[here].name)}</small>}
           </header>
           <p className="ev-text">{tx(step.text ?? card.text)}</p>
           {lines.length > 0 && (

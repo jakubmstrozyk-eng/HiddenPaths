@@ -53,6 +53,12 @@ const list: Enemy[] = [
   { id: 'honeybadger', name: t('Honeybadger', 'Honeybadger'), kind: 'beast', dex: 30, str: 60, wil: 30, int: 10, com: 30, vitality: 24, weapon: { name: t('Łapa', 'Paw'), power: -1 }, armour: {}, xp: 8, traits: [] },
   { id: 'nomadWarrior', name: t('Nomada', 'Nomad'), kind: 'human', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Długi łuk', 'Longbow'), power: 1, ranged: true }, armour: {}, xp: 2, traits: [] },
   { id: 'caravanDriver', name: t('Woźnica', 'Caravan driver'), kind: 'human', dex: 30, str: 40, wil: 30, int: 30, com: 40, vitality: 15, weapon: { name: t('Kusza', 'Crossbow'), power: 1, ranged: true }, armour: {}, xp: 3, traits: [] },
+  // Lords of the dungeons, one for each theme.
+  { id: 'stoneWarden', name: t('Kamienny Strażnik', 'Stone Warden'), kind: 'demon', dex: 20, str: 50, wil: 40, int: 10, com: 40, vitality: 20, weapon: { name: t('Kamienne pięści', 'Stone fists'), power: 1 }, armour: all(3), xp: 10, traits: ['stun'] },
+  { id: 'spiderQueen', name: t('Królowa Pająków', 'Spider Queen'), kind: 'beast', dex: 40, str: 40, wil: 30, int: 20, com: 40, vitality: 20, weapon: { name: t('Żądło', 'Sting'), power: 0 }, armour: all(1), xp: 10, traits: ['poison', 'stinger'] },
+  { id: 'drowned', name: t('Topielica', 'The Drowned One'), kind: 'wraith', dex: 40, str: 30, wil: 50, int: 30, com: 35, vitality: 16, weapon: { name: t('Lodowaty dotyk', 'Icy touch'), power: 0 }, armour: {}, xp: 10, traits: ['drain'] },
+  { id: 'mummyKing', name: t('Król Mumii', 'Mummy King'), kind: 'wraith', dex: 20, str: 40, wil: 40, int: 30, com: 40, vitality: 22, weapon: { name: t('Berło', 'Sceptre'), power: 1 }, armour: { torso: 2, head: 2 }, xp: 11, traits: ['rot'] },
+  { id: 'riftWarden', name: t('Strażnik Szczeliny', 'Rift Warden'), kind: 'demon', dex: 40, str: 40, wil: 40, int: 30, com: 45, vitality: 18, weapon: { name: t('Ostrze pustki', 'Void blade'), power: 1, blade: true }, armour: all(2), xp: 12, traits: ['ethereal'] },
 ];
 
 export const ENEMIES: Record<string, Enemy> = Object.fromEntries(list.map((e) => [e.id, e]));

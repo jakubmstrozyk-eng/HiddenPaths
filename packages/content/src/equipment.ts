@@ -146,6 +146,12 @@ const list: Item[] = [
   { id: 'bookKnight', kind: 'book', name: t('Księga Wiedzy Rycerskiej', 'Book of Knightly Lore'), sell: 10, buy: 5, rare: true, teaches: [{ target: 'com', amount: 5 }] },
   { id: 'bookJuggler', kind: 'book', name: t('Księga Magii Kuglarskiej', "Book of Juggler's Magic"), sell: 10, buy: 5, rare: true, teaches: [{ target: 'wil', amount: 5 }, { target: 'cha', amount: 5 }] },
   { id: 'bookStonemason', kind: 'book', name: t('Księga Kamieniarza', "Stonemason's Book"), sell: 10, buy: 5, rare: true, teaches: [{ target: 'mine', amount: 10 }] },
+  // Relics from the dungeon vaults: one for each theme, never sold in a shop.
+  { id: 'ancestorPick', kind: 'trinket', name: t('Kilof Przodków', "Ancestors' pick"), sell: 25, buy: 12, rare: true, bonuses: [{ target: 'str', amount: 10 }] },
+  { id: 'silkCloak', kind: 'trinket', name: t('Płaszcz z Jedwabiu', 'Silk cloak'), sell: 25, buy: 12, rare: true, bonuses: [{ target: 'dex', amount: 10 }] },
+  { id: 'deepPearl', kind: 'trinket', name: t('Perła Głębin', 'Pearl of the deep'), sell: 25, buy: 12, rare: true, bonuses: [{ target: 'wil', amount: 10 }, { target: 'str', amount: 5 }] },
+  { id: 'kingScepter', kind: 'trinket', name: t('Berło Króla', "King's sceptre"), sell: 25, buy: 12, rare: true, bonuses: [{ target: 'cha', amount: 10 }, { target: 'wil', amount: 5 }] },
+  { id: 'riftShard', kind: 'trinket', name: t('Odłamek Szczeliny', 'Rift shard'), sell: 25, buy: 12, rare: true, bonuses: [{ target: 'all', amount: 3 }] },
   { id: 'beastFur', kind: 'trinket', name: t('Futro bestii', 'Beast fur'), sell: 6, buy: 3, rare: false },
   // The Mystic's scrolls, sold only in a city.
   {
