@@ -1,0 +1,80 @@
+/* Buffs and debuffs in a fight (CombatStatus.tsx). Still pictures: each fades in once and then rests. */
+.status-fig { position: relative; display: inline-block; line-height: 0; }
+.status-fig > * { animation: status-in .35s ease-out both; }
+.status-fig > .armoured { animation: none; }
+@keyframes status-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Barrier: a pale bubble around the whole figure. */
+.fx-barrier {
+  position: absolute; inset: -6px -2px -4px; border-radius: 50% / 46%; pointer-events: none; z-index: 1;
+  border: 1.5px solid rgba(220, 235, 255, .85);
+  background: radial-gradient(ellipse at 50% 45%, rgba(200, 225, 255, 0) 55%, rgba(200, 225, 255, .22) 100%);
+  box-shadow: 0 0 10px rgba(200, 225, 255, .45), inset 0 0 8px rgba(200, 225, 255, .3);
+}
+.fx-barrier::after {
+  content: ''; position: absolute; inset: 4px; border-radius: inherit; border: 1px dashed rgba(220, 235, 255, .45);
+}
+/* Veil of Mist: a grey haze over the lower half. */
+.fx-mist {
+  position: absolute; left: -4px; right: -4px; bottom: -2px; height: 55%; pointer-events: none; z-index: 1;
+  background: linear-gradient(to top, rgba(210, 210, 215, .5), rgba(210, 210, 215, 0));
+}
+/* Set a Trap: steel jaws at the feet. */
+.fx-trap {
+  position: absolute; left: 50%; bottom: -9px; width: 46%; min-width: 30px; height: 14px; transform: translateX(-50%); z-index: 2;
+  fill: none; stroke: #e8e8ea; stroke-width: 2; stroke-linejoin: round; overflow: visible;
+  filter: drop-shadow(0 0 2px #000);
+}
+.fx-trap circle { fill: #e8e8ea; stroke: none; }
+/* Black Vines: dark tendrils winding up the figure. */
+.fx-vines {
+  position: absolute; left: 22%; right: 22%; top: 30%; bottom: 0; width: 56%; height: 70%; z-index: 2; pointer-events: none;
+  fill: none; stroke: #6fae5a; stroke-width: 2.4; stroke-linecap: round; opacity: .85;
+}
+/* Burning: an orange glow at the feet. */
+.fx-fire {
+  position: absolute; left: 15%; right: 15%; bottom: -4px; height: 30%; pointer-events: none; z-index: 1;
+  background: radial-gradient(ellipse at 50% 100%, rgba(255, 120, 40, .7), rgba(255, 120, 40, 0) 70%);
+}
+/* Stunned or held fast: the figure dims. */
+.status-fig.has-stun .armoured-sprite { opacity: .55; }
+.status-fig.has-blind .armoured-sprite { filter: brightness(1.6) contrast(.6); }
+
+/* The badges: one small square per status in the corner of the figure. */
+.status-badges { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; z-index: 3; line-height: 1; }
+.status-badge {
+  display: grid; place-items: center; width: 17px; height: 17px; font: normal 700 11px/1 var(--num, sans-serif);
+  color: #0a0a0c; background: #f2f2f2; border: 1px solid #0a0a0c;
+}
+.status-badge.debuff { background: #ff8a7a; color: #1a0608; }
+.status-badge.more { background: #222; color: #fff; font-size: 9px; }
+
+/* The words: a chip per status under the figure. */
+.status-chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-width: 100%; }
+.status-chip {
+  display: inline-grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 4px; align-items: center; max-width: 100%; padding: 2px 6px 2px 2px; cursor: pointer;
+  font-size: 10.5px; line-height: 1.2; text-align: left; color: #f2f2f2; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .55);
+}
+.status-chip i { grid-row: span 2; font-style: normal; display: grid; place-items: center; flex: none; width: 15px; height: 15px; font-size: 10px; background: #f2f2f2; color: #0a0a0c; }
+.status-chip b { font-weight: 700; white-space: nowrap; }
+.status-chip small { color: var(--muted, #aaa); font-size: 9.5px; line-height: 1.15; }
+.status-chip.debuff { color: #ffd0c8; background: rgba(90, 20, 40, .55); border-color: #ff8a7a; }
+.status-chip.debuff i { background: #ff8a7a; color: #1a0608; }
+.status-chip.open { outline: 2px solid currentColor; outline-offset: 1px; }
+
+/* The opened status in full, under the field. */
+.status-detail {
+  display: flex; flex-direction: column; gap: 4px; margin: 8px 0 2px; padding: 8px 10px; font-size: 13px; line-height: 1.35;
+  border: 1px solid rgba(255, 255, 255, .6); background: rgba(255, 255, 255, .06); animation: status-in .25s ease-out both;
+}
+.status-detail.debuff { border-color: #ff8a7a; background: rgba(90, 20, 40, .4); }
+.status-detail-head { display: flex; align-items: center; gap: 6px; }
+.status-detail-head i { font-style: normal; display: grid; place-items: center; width: 20px; height: 20px; background: #f2f2f2; color: #0a0a0c; }
+.status-detail.debuff .status-detail-head i { background: #ff8a7a; color: #1a0608; }
+.status-detail-head small { color: var(--muted, #aaa); flex: 1; }
+.status-detail-head button { padding: 0 8px; min-height: 0; line-height: 1.4; }
+.status-detail-time em { font-style: normal; color: var(--muted, #aaa); }
+
+@media (prefers-reduced-motion: reduce) {
+  .status-fig > *, .status-detail { animation: none; }
+}
