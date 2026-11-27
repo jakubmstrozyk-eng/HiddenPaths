@@ -1,3 +1,4 @@
+import { BackArrow } from '../BackArrow';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -15,6 +16,16 @@ import { PixelHero } from '../PixelHero';
 import { WorldMap } from '../WorldMap';
 import { Choice } from './Setup';
 import { JournalBook } from '../Journal';
+
+/** Each attribute in a sentence or two, for new players (Jacob, 2026-11-27). */
+const ATTR_HINTS: Record<(typeof ATTRIBUTES)[number], { pl: string; en: string }> = {
+  com: { pl: 'Celność ciosów i obrona w walce. Im wyżej, tym częściej trafiasz i parujesz.', en: 'Landing blows and defending in a fight. The higher, the more often you hit and parry.' },
+  str: { pl: 'Każde 10 punktów to +1 do obrażeń. Pomaga w próbach siły, np. gdy trzeba przepłynąć rwącą wodę.', en: 'Every 10 points adds 1 to damage. Also helps in trials of strength, such as crossing rough water.' },
+  dex: { pl: 'Uniki, polowanie, łowienie ryb, pływanie i kopanie rudy.', en: 'Dodging, hunting, fishing, swimming and mining ore.' },
+  int: { pl: 'Zbieranie owoców i ziół, zagadki i wiedza o świecie.', en: 'Gathering fruit and herbs, puzzles and lore.' },
+  cha: { pl: 'Rozmowy, handel i przekonywanie ludzi. Najbardziej przydaje się w wioskach i gospodach.', en: 'Talking, trading and persuading people. Most useful in villages and inns.' },
+  wil: { pl: 'Opór wobec strachu, ogłuszenia i magii. Pozwala wytrwać, gdy innych by złamało.', en: 'Resisting fear, stuns and magic. Keeps you going when others would break.' },
+};
 
 /* ------------------------------------------------------------------------------------------ */
 /* The list of heroes                                                                          */
@@ -102,7 +113,7 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
         ))}
       </div>
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
       </div>
       <AnimatePresence>
         {reading && (
@@ -198,7 +209,7 @@ export function HeroPickScreen({ store, multiplayer, size, onBack, onCreate, onS
 
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
         <button className="primary" disabled={!hero || missions.length !== MISSIONS_KEPT || busy} onClick={start}>{t('start')}</button>
       </div>
     </div>
@@ -312,7 +323,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
     return (
       <div className="panel wide">
         <Parchment onDone={next} />
-        <div className="actions"><button className="ghost" onClick={onBack}>{t('back')}</button></div>
+        <div className="actions"><BackArrow onClick={onBack} /></div>
       </div>
     );
   }
@@ -411,7 +422,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
           <div className="attrs">
             {ATTRIBUTES.map((a) => (
               <div key={a} className="attr">
-                <span>{t(a)}</span>
+                <span className="attr-name">{t(a)}<small className="attr-hint">{tx(ATTR_HINTS[a])}</small></span>
                 <button aria-label={`- ${t(a)}`} onClick={() => adjust(a, -5)} disabled={bonus[a] === 0}>−</button>
                 <b>{r.attributes[a] + bonus[a]}</b>
                 <button aria-label={`+ ${t(a)}`} onClick={() => adjust(a, 5)} disabled={left < 5}>+</button>
@@ -474,7 +485,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
 
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button className="ghost" onClick={back}>{t('back')}</button>
+        <BackArrow onClick={back} />
         {step === 'world' ? null : step === 'name' ? (
           <button className="primary" disabled={!name.trim() || busy} onClick={save}>{t('saveHero')}</button>
         ) : (

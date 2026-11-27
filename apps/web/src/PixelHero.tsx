@@ -351,14 +351,31 @@ const FOES: Record<EnemyKind, { rows: string[]; body: string; accent: string }> 
   ] },
 };
 
-export function PixelFoe({ kind, size = 48 }: { kind: EnemyKind; size?: number }) {
+/** Where a foe's armour shows: [x, y, w, h] on the 12×12 sprite, per spot. */
+const FOE_PLATES: Record<'biped' | 'beast', Record<'head' | 'arms' | 'torso' | 'legs', [number, number, number, number][]>> = {
+  biped: { head: [[3, 0, 6, 2]], torso: [[3, 5, 6, 2]], arms: [[1, 6, 2, 2], [9, 6, 2, 2]], legs: [[3, 9, 2, 1], [7, 9, 2, 1]] },
+  beast: { head: [[0, 2, 4, 1]], torso: [[4, 3, 7, 2]], arms: [[2, 8, 2, 1]], legs: [[8, 8, 2, 1]] },
+};
+
+export function PixelFoe({ kind, size = 48, armour }: { kind: EnemyKind; size?: number; armour?: Partial<Record<'head' | 'arms' | 'torso' | 'legs', number>> }) {
   const f = FOES[kind];
   const colour: Record<string, string> = { b: f.body, a: f.accent, e: '#ff4040', d: '#0b0b10' };
+  const plates = FOE_PLATES[kind === 'beast' ? 'beast' : 'biped'];
+  const solid = (x: number, y: number) => f.rows[y]?.[x] !== undefined && f.rows[y]![x] !== '.' && f.rows[y]![x] !== 'e';
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" shapeRendering="crispEdges" aria-hidden="true">
       {f.rows.flatMap((row, y) =>
         [...row].map((ch, x) => (ch === '.' ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colour[ch]} />)),
       )}
+      {armour && (Object.keys(plates) as (keyof typeof plates)[]).flatMap((slot) => {
+        const v = armour[slot] ?? 0;
+        if (v <= 0) return [];
+        return plates[slot].flatMap(([px, py, w, h]) => {
+          const out = [];
+          for (let y = py; y < py + h; y++) for (let x = px; x < px + w; x++) if (solid(x, y)) out.push(<rect key={`a${slot}${x}-${y}`} x={x} y={y} width={1} height={1} fill={tier(v)} />);
+          return out;
+        });
+      })}
     </svg>
   );
 }

@@ -1,3 +1,4 @@
+import { BackArrow } from '../BackArrow';
 import { useState } from 'react';
 import { DIFFICULTIES, sizeForTiles, type Difficulty, type GameConfig, type WinMode } from '@hp/engine';
 import { defaultMapChoice, MapSetupPanel, toMapSetup, type MapChoice } from './MapSetup';
@@ -50,7 +51,7 @@ export function SetupScreen({ onBack, onNext, multiplayer = false }: {
       </div>
 
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
         <button className="primary" onClick={() => onNext({ size: sizeForTiles(map.tiles), map: toMapSetup(map), difficulty, winMode, multiplayer }, multiplayer ? players : 1)}>
           {t('next')}
         </button>

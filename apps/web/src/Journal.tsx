@@ -228,10 +228,12 @@ export function Campfire({ game, me, leaving, onWrite, onSkip }: {
 type Tab = 'chronicle' | 'character' | 'people' | 'bestiary' | 'vow' | 'chapters';
 
 /** The book: every page the hero has written, the character, people, foes, the vow and the chapters. */
-export function JournalBook({ hero, summary, entries, inspiration, vow, level, onClose, note }: {
+export function JournalBook({ hero, summary, entries, inspiration, vow, level, onClose, note, onWrite }: {
   hero: { name: string; race: PlayerState['character']['race']; profession: PlayerState['character']['profession']; look?: PlayerState['character']['look'] };
   summary: JournalSummary; entries: JournalEntry[]; inspiration: number; vow: Vow | null; level: number;
   onClose: () => void; note?: string;
+  /** Opens a new entry now, during play (Jacob, 2026-11-27: not only at a camp). */
+  onWrite?: () => void;
 }) {
   const { t, tx, locale } = useT();
   const pl = locale === 'pl';
@@ -266,6 +268,7 @@ export function JournalBook({ hero, summary, entries, inspiration, vow, level, o
         <nav className="jr-tabs" role="tablist">
           {tabs.map((x) => <button key={x.id} role="tab" aria-selected={tab === x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>{x.name}</button>)}
         </nav>
+        {onWrite && <button className="primary jr-write-now" onClick={onWrite}>✒ {pl ? 'Napisz nowy wpis' : 'Write a new entry'}</button>}
         {note && <p className="jr-muted">{note}</p>}
 
         {tab === 'chronicle' && (

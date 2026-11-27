@@ -9,8 +9,7 @@ import {
 import { useT } from '../i18n';
 import { attrShort, itemName } from '../logText';
 import { Icon } from '../Icons';
-import { PixelHero } from '../PixelHero';
-import { ArmourBody, ArmourLegend } from '../ArmourBody';
+import { FigureLegend, HeroFigure } from '../ArmouredFigure';
 import { SPOT_NAME, SPOTS, TownScene, type Spot } from '../TownScene';
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -215,14 +214,13 @@ export function HeroDoll({ me }: { me: PlayerState }) {
         </li>
       </ul>
       <div className="doll-figure">
-        <div className="doll-pair">
-          <PixelHero
-            race={c.race} profession={c.profession} look={c.look} size={110}
-            gear={{ ...armour, shield: c.equipment.shield, weapon: c.equipment.weapon }}
-          />
-          <ArmourBody armour={armour} size={150} showRolls />
-        </div>
-        <ArmourLegend />
+        <HeroFigure
+          race={c.race} profession={c.profession} look={c.look} size={150} showRolls
+          armour={armour}
+          gear={{ ...armour, shield: c.equipment.shield, weapon: c.equipment.weapon }}
+          title={t('armour')}
+        />
+        <FigureLegend rolls />
       </div>
       <ul className="doll-side">
         <li className="doll-slot doll-weapon">
@@ -242,8 +240,8 @@ export function HeroDoll({ me }: { me: PlayerState }) {
         {slot('legs')}
       </ul>
       <p className="doll-note muted">{tx({
-        pl: 'Pancerz odejmuje się od obrażeń w trafione miejsce. Miejsce trafienia losuje k6 (małe cyfry na sylwetce); przy trafieniu o ponad 20 wybiera atakujący.',
-        en: 'Armour is taken off the damage of a hit on that spot. A k6 picks the spot (the small numbers on the figure); a hit by more than 20 lets the attacker choose.',
+        pl: 'Pancerz odejmuje się od obrażeń w trafione miejsce. Miejsce trafienia losuje k6 (małe cyfry przy wartościach); przy trafieniu o ponad 20 wybiera atakujący.',
+        en: 'Armour is taken off the damage of a hit on that spot. A k6 picks the spot (the small numbers beside the values); a hit by more than 20 lets the attacker choose.',
       })}</p>
     </div>
   );

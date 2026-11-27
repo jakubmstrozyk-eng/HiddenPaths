@@ -544,6 +544,14 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : here?.terrain === 'city' ? tx({ pl: 'karczma, kuźnia, plac, targ, kupiec, wieża mistyka', en: 'tavern, smithy, yard, market, merchant, mystic' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
               </button>
             )}
+            {me.journal && (
+              <button className="ghost act-btn journal-btn" onClick={() => (canWriteJournal(me) ? setCampfire({ leaving: false }) : setSheet('journal'))}>
+                <span className="act-title"><span aria-hidden="true">📖</span>{canWriteJournal(me) ? tx({ pl: 'Zapisz w dzienniku', en: 'Write in the journal' }) : tx({ pl: 'Otwórz dziennik', en: 'Open the journal' })}</span>
+                <small className="act-reward">{canWriteJournal(me)
+                  ? tx({ pl: 'Wpis o tym, co się wydarzyło od ostatniego · nie kończy tury', en: 'An entry on what happened since the last one · does not end the turn' })
+                  : tx({ pl: 'Kronika, charakter, znajomi, bestiariusz · nic nowego do zapisania', en: 'Chronicle, character, people, bestiary · nothing new to write' })}</small>
+              </button>
+            )}
             {myTurn && actions.some((a) => a.type === 'camp') && (
               <button className="ghost with-icon" onClick={() => endWith({ type: 'camp' })}><Icon name="camp" />{t('camp')}</button>
             )}
@@ -680,6 +688,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             level={c.level}
             note={me.journal.summary.entries > me.journal.written.length ? tx({ pl: 'Kronika pokazuje wpisy z tej gry. Cały dziennik znajdziesz w ekranie Bohaterowie.', en: 'The chronicle shows entries from this game. The whole journal is on the Heroes screen.' }) : undefined}
             onClose={() => setSheet(null)}
+            onWrite={canWriteJournal(me) ? () => { setSheet(null); setCampfire({ leaving: false }); } : undefined}
           />
         )}
         {campfire && !dice && !onTheWay && !replay && !me.pendingEvent && !me.combat && (
