@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { DEFAULT_LOOK, type EnemyKind, type HeroLook, type ProfessionId, type RaceId } from '@hp/content';
 
 /**
@@ -27,31 +27,43 @@ export const HEADS: Record<RaceId, string[][]> = {
     ['................', '.....dddddd.....', '....dhhhhhhd....', '....dhsssshd....', '....dsessesd....', '....dssssssd....', '.....dsSSsd.....'],
     ['.....dddddd.....', '....dhhhhhhd....', '...dhhhhhhhhd...', '...dhhsssshhd...', '...dhsesseshd...', '...dhsssssshd...', '...dhdsSSsdhd...'],
     ['...dddddddddd...', '....dkkkkkkd....', '..ddkaaaaaakdd..', '....dssssssd....', '....dsessesd....', '....dssssssd....', '.....dsSSsd.....'],
+    ['................', '.....dddddd.....', '....dssssssd....', '....dSssssSd....', '....dsessesd....', '....dhsSSshd....', '.....dhhhhd.....'],
+    ['.....dddddd.....', '....dccccccd....', '...dccccccccd...', '...dcdssssdcd...', '...dcsesseScd...', '...dcdssssdcd...', '....dcdSSdcd....'],
   ],
   nomads: [
     ['....dddddddd....', '...dkkkkkkkkd...', '..dkkhhhhhhkkd..', '..dkhsssssshkd..', '..dkhsesseshkd..', '..dkhsssssshkd..', '...dkkdSSdkkd...'],
     ['.....dddddd.....', '....dhhhhhhd....', '....dhhhhhhd....', '...dhsssssshd...', '...dhsesseshd...', '...dhsssssshd...', '...dadsSSsdad...'],
     ['.....dddddd.....', '....dhhhhhhd....', '....daaaaaadad..', '....dssssssd.a..', '....dsessesd....', '....dssssssd....', '.....dsSSsd.....'],
+    ['.......hh.......', '......dhhd......', '....ddhhhhdd....', '....dssssssd....', '....dsessesd....', '....dskssksd....', '.....dsSSsd.....'],
+    ['...d........d...', '...dkd....dkd...', '...dkkddddkkd...', '...dkdssssdkd...', '...dksesseskd...', '....dssssssd....', '.....dsSSsd.....'],
   ],
   myrmids: [
     ['.......dd.......', '......dkkd......', '.....dkkkkd.....', '....dssssssd....', '...dsweswesd....', '...dssssssssd...', '....dsSSSSsd....'],
     ['................', '.....dddddd.....', '....dssssssd....', '...dssssssssd...', '...dsweswesd....', '...dsssSSsssd...', '...dkdsSSsdkd...'],
     ['....k.k..k.k....', '....dkdkkdkd....', '....dssssssd....', '...dssssssssd...', '...dsweswesd....', '...dssssssssd...', '....dsSSSSsd....'],
+    ['......dLd.......', '.......d........', '.....dddddd.....', '....dssssssd....', '...dsweswesd....', '...dssssssssd...', '....dsSSSSsd....'],
+    ['................', '.....dddddd.....', '..kdssssssssdk..', '..kdssssssssdk..', '...dsweswesd....', '..kdssssssssdk..', '....dsSSSSsd....'],
   ],
   sunborn: [
     ['...dd......dd...', '...dsd....dsd...', '...dssddddssd...', '....dssssssd....', '....dskssksd....', '.....dsSSsd.....', '......dSSd......'],
     ['................', '....d.d..d.d....', '....dzdzzdzd....', '...dzzzzzzzzd...', '...dzkzzzzkzd...', '...dzzzzzzzzd...', '....dzZZZZzd....'],
     ['....dddddddd....', '...dkakakakad...', '..dkadssssdakd..', '..dkadskksdakd..', '..dkadssssdakd..', '..dkaddSSddakd..', '..ddd..dd..ddd..'],
+    ['................', '.....dddddd.....', '....dhhhhhhd....', '...dhhssssshd...', '...dhskssskyyd..', '...dhhssssdd....', '....dhhSSd......'],
+    ['.....dddddd.....', '...ddzzzzzzdd...', '..dzzzzzzzzzzd..', '..dzZdzzzzdZzd..', '..dzZdkzzkdZzd..', '...dzddzzddzd...', '......dZZd......'],
   ],
   keepers: [
     ['..k.k......k.k..', '...kk......kk...', '....kddddddk....', '....dssssssd....', '....dsgssgsd....', '....dssssssd....', '.....dsSSsd.....'],
     ['....h.h..h.h....', '....dhhhhhhd....', '...hdhhhhhhdh...', '....dssssssd....', '....dsgssgsd....', '....dssssssd....', '.....dsSSsd.....'],
     ['....dddddddd....', '...doooooooood..', '..dooooooooood..', '..doodssssdood..', '..doodgssgdood..', '..doodssssdood..', '...doodSSdood...'],
+    ['....dddddddd....', '..ddkkwkkkwkdd..', '.dkwkkkkkkkwkkd.', '.ddddssssssdddd.', '....dsgssgsd....', '....dssssssd....', '.....dsSSsd.....'],
+    ['...q.y..q..y....', '...hhhhhhhhhh...', '....dhhhhhhd....', '....dssssssd....', '....dsgssgsd....', '...hdssssssdh...', '...h.dsSSsd.h...'],
   ],
   flintborn: [
     ['................', '...dddddddddd...', '..dssssssssssd..', '..dSSSSSSSSSSd..', '..dssessssessd..', '..dssssssssssd..', '...dsSSSSSSsd...'],
     ['.....dyyyyd.....', '....dyyLyyyd....', '..dddddddddddd..', '..dssssssssssd..', '..dssessssessd..', '..dssssssssssd..', '...dsSSSSSSsd...'],
     ['...k..k..k..k...', '..dkddkddkddkd..', '..dssssssssssd..', '..dSSSSSSSSSSd..', '..dssessssessd..', '..dssssssssssd..', '...dsSSSSSSsd...'],
+    ['................', '...dddddddddd...', '..dssssssssssd..', '..dSSSSSSSSSSd..', '..dssessssessd..', '..dshhhhhhhhsd..', '...dhhhkkhhhd...'],
+    ['..d..........d..', '..dd........dd..', '..dsddddddddsd..', '..dsskssssSssd..', '..dssessssessd..', '..dSssssksssSd..', '...dsSSSSSSsd...'],
   ],
 };
 
@@ -60,6 +72,8 @@ export const TORSOS: string[][] = [
   ['....dccccccd....', '...dcccaacccd...', '..dsdccccccdsd..', '..dsdCaaaaCdsd..'],
   ['....dmmmmmmd....', '...dmmmaammmd...', '..dsdmmmmmmdsd..', '..dsdCddddCdsd..'],
   ['...dccccccccd...', '..dccccaaccccd..', '..dccccccccccd..', '..dsCccccccCsd..'],
+  ['....dccccccd....', '...dcccaacccd...', '..dsdccccccdsd..', '..dsdyyyyyydsd..'],
+  ['....diwwwwid....', '...diiwwwwiid...', '..dsdiiaaiidsd..', '..dsdCCCCCCdsd..'],
 ];
 
 /** Five rows each: rows 11 to 15. */
@@ -67,6 +81,8 @@ export const LEGS: string[][] = [
   ['....dCCCCCCd....', '....dCCddCCd....', '...dlld..dlld...', '...dlld..dlld...', '...dddd..dddd...'],
   ['....dCCCCCCd....', '....dCCddCCd....', '...dssd..dssd...', '...dssd..dssd...', '..dddd....dddd..'],
   ['....dCCCCCCd....', '....dllddlld....', '...dlad..dlad...', '...dlld..dlld...', '...dddd..dddd...'],
+  ['....dCCCCCCd....', '...dccccccccd...', '...dcCcCcCcCd...', '....dsd..dsd....', '....ddd..ddd....'],
+  ['....dCCCCCCd....', '....dCCddCCd....', '...dmmd..dmmd...', '...dlld..dlld...', '..ddddd..ddddd..'],
 ];
 
 type Item = 'sword' | 'bow' | 'trident' | 'staff' | 'daggers' | 'axe' | 'spear' | 'hammer';
@@ -140,6 +156,71 @@ function gearPixels(g: Gear): (readonly [number, number, number, number, string]
   return out;
 }
 
+/** A colour darkened towards black, for the shade of a chosen colour. */
+function shade(hex: string, by = 0.32): string {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.round(v * (1 - by)).toString(16).padStart(2, '0');
+  return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`;
+}
+
+/** The hero's own colours, chosen at creation, over the race's. */
+function lookColours(look: HeroLook | undefined): Palette {
+  const out: Palette = {};
+  if (look?.skin) { out.s = look.skin; out.S = shade(look.skin, 0.26); }
+  if (look?.hair) out.h = look.hair;
+  if (look?.cloth) { out.c = look.cloth; out.C = shade(look.cloth); }
+  return out;
+}
+
+type Grid = (string | null)[][];
+
+/**
+ * EPX (Scale2x): doubles a pixel picture, rounding off stair-steps on diagonals while keeping
+ * edges sharp. Run twice, the 16×16 hero becomes a smooth 64×64 one.
+ */
+function scale2x(g: Grid): Grid {
+  const h = g.length;
+  const w = g[0]!.length;
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? null : g[y]![x]!);
+  const out: Grid = Array.from({ length: h * 2 }, () => Array<string | null>(w * 2).fill(null));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = at(x, y);
+      const a = at(x, y - 1); const b = at(x + 1, y); const c = at(x - 1, y); const d = at(x, y + 1);
+      let e0 = p; let e1 = p; let e2 = p; let e3 = p;
+      if (c === a && c !== d && a !== b) e0 = a;
+      if (a === b && a !== c && b !== d) e1 = b;
+      if (d === c && d !== b && c !== a) e2 = c;
+      if (b === d && b !== a && d !== c) e3 = d;
+      out[y * 2]![x * 2] = e0; out[y * 2]![x * 2 + 1] = e1;
+      out[y * 2 + 1]![x * 2] = e2; out[y * 2 + 1]![x * 2 + 1] = e3;
+    }
+  }
+  return out;
+}
+
+/** The figure as rectangles, one per run of a colour along a row (far fewer shapes than pixels). */
+const drawn = new Map<string, { x: number; y: number; w: number; c: string }[]>();
+function runs(key: string, make: () => Grid) {
+  const hit = drawn.get(key);
+  if (hit) return hit;
+  const g = make();
+  const out: { x: number; y: number; w: number; c: string }[] = [];
+  g.forEach((row, y) => {
+    let x = 0;
+    while (x < row.length) {
+      const c = row[x];
+      let n = 1;
+      while (c && row[x + n] === c) n++;
+      if (c) out.push({ x, y, w: n, c });
+      x += n;
+    }
+  });
+  if (drawn.size > 300) drawn.clear();
+  drawn.set(key, out);
+  return out;
+}
+
 export function PixelHero({ race, profession, look, size = 48, walking = false, facing = 1, gear }: {
   race: RaceId;
   profession?: ProfessionId;
@@ -151,27 +232,47 @@ export function PixelHero({ race, profession, look, size = 48, walking = false, 
   gear?: Gear;
 }) {
   const [frame, setFrame] = useState(0);
+  const uid = useId().replace(/:/g, '');
   useEffect(() => {
     if (!walking) return setFrame(0);
     const timer = setInterval(() => setFrame((f) => (f + 1) % 2), 130);
     return () => clearInterval(timer);
   }, [walking]);
   const prof = profession ? PROFESSION[profession] : null;
-  const colour: Palette = { ...BASE, ...RACE_COLOURS[race], ...(prof ? { a: prof.trim } : {}) };
-  const rows = heroRows(race, look ?? DEFAULT_LOOK, walking ? frame : 0);
-  const held = gear ? WEAPON_SPRITE[gear.weapon] ?? prof?.item : prof?.item;
-  const item = held ? ITEMS[held] : [];
+  const colour: Palette = { ...BASE, ...RACE_COLOURS[race], ...(prof ? { a: prof.trim } : {}), ...lookColours(look) };
+  const f = walking ? frame : 0;
+  const key = JSON.stringify([race, profession, look, gear, f]);
+  const rects = runs(key, () => {
+    // The 16×16 picture: the body, then armour, then what the hero holds.
+    const grid: Grid = heroRows(race, look ?? DEFAULT_LOOK, f).map((row) => [...row].map((ch) => (ch === '.' ? null : colour[ch] ?? null)));
+    if (gear) for (const [x, y, w, h, c] of gearPixels(gear)) for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (grid[j]) grid[j]![i] = c;
+    const held = gear ? WEAPON_SPRITE[gear.weapon] ?? prof?.item : prof?.item;
+    for (const [x, y, c] of held ? ITEMS[held] : []) if (grid[y]) grid[y]![x] = colour[c] ?? null;
+    // Small figures on the map stay crisp at 32×32; anything larger is smoothed to 64×64.
+    return size <= 30 ? scale2x(grid) : scale2x(scale2x(grid));
+  });
+  const res = size <= 30 ? 32 : 64;
   return (
     <svg
-      width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true"
+      width={size} height={size} viewBox={`0 0 ${res} ${res}`} shapeRendering="crispEdges" aria-hidden="true"
       className={walking ? 'walking' : undefined}
       style={facing === -1 ? { transform: 'scaleX(-1)' } : undefined}
     >
-      {rows.flatMap((row, y) =>
-        [...row].map((ch, x) => (ch === '.' || !colour[ch] ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colour[ch]} />)),
+      {rects.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill={r.c} />)}
+      {res === 64 && (
+        // Light from the upper left over the whole figure, for a rounder, less flat look.
+        <>
+          <defs>
+            <mask id={`m${uid}`}>{rects.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill="#fff" />)}</mask>
+            <linearGradient id={`l${uid}`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#fff" stopOpacity="0.22" />
+              <stop offset="45%" stopColor="#fff" stopOpacity="0" />
+              <stop offset="100%" stopColor="#000" stopOpacity="0.3" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width={res} height={res} fill={`url(#l${uid})`} mask={`url(#m${uid})`} />
+        </>
       )}
-      {gear && gearPixels(gear).map(([x, y, w, h, c], i) => <rect key={`g${i}`} x={x} y={y} width={w} height={h} fill={c} />)}
-      {item.map(([x, y, c]) => <rect key={`i${x}-${y}`} x={x} y={y} width={1} height={1} fill={colour[c]} />)}
     </svg>
   );
 }

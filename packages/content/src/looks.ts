@@ -5,41 +5,60 @@ export interface HeroLook {
   head: number;
   torso: number;
   legs: number;
+  /** Colours picked by the player (#rrggbb); without them the race's own colours are used. */
+  skin?: string;
+  hair?: string;
+  cloth?: string;
 }
-export const LOOK_OPTIONS = 3;
+export const LOOK_OPTIONS = 5;
+export const LOOK_COLOURS = ['skin', 'hair', 'cloth'] as const;
+
+/** Skin tones offered for each race: the first is the race's own. */
+export const SKIN_TONES: Record<RaceId, string[]> = {
+  humans: ['#e8b796', '#f3d2b4', '#c98e62', '#9a6440', '#6a4028'],
+  nomads: ['#d9a066', '#ecc08a', '#b8804a', '#8e5a30', '#6a4024'],
+  myrmids: ['#5fb3b3', '#6ac0a0', '#5a9ad0', '#9ab8d0', '#4a8a7a'],
+  sunborn: ['#c98a3a', '#dcac68', '#a86a2a', '#9a9a4a', '#b07850'],
+  keepers: ['#b8e0a0', '#a8d0e8', '#ded6a8', '#8ac890', '#cdb0e8'],
+  flintborn: ['#8a8f98', '#a69686', '#6a7080', '#b4aea6', '#7e6e8e'],
+};
+/** Colours for hair, fur, crests and the like. */
+export const HAIR_COLOURS = ['#1a1410', '#4a2e1a', '#8a5a2a', '#c89048', '#ecdca0', '#b03a2a', '#e8e8f0', '#4a9a3a', '#3a5aa8', '#8a3aa8'];
+/** Colours for the hero's clothes. */
+export const CLOTH_COLOURS = ['#7a3b3b', '#2f5d7c', '#3f6b3a', '#8a6f3e', '#5a3a7a', '#a0802a', '#3a3a48', '#c8c0b0', '#a04a1a', '#2a7a7a'];
 export const DEFAULT_LOOK: HeroLook = { head: 0, torso: 0, legs: 0 };
 
 /** Names of the look options shown while creating a hero, per race. */
-export const LOOK_NAMES: Record<RaceId, Record<keyof HeroLook, Text[]>> = {
+export const LOOK_NAMES: Record<RaceId, Record<'head' | 'torso' | 'legs', Text[]>> = {
   nomads: {
-    head: [{ pl: 'Futrzany kaptur', en: 'Fur hood' }, { pl: 'Warkocze', en: 'Braids' }, { pl: 'Opaska zwiadowcy', en: "Scout's headband" }],
-    torso: [{ pl: 'Kurtka ze skór', en: 'Hide jacket' }, { pl: 'Płaszcz stepowy', en: 'Steppe cloak' }, { pl: 'Kamizelka z kłami', en: 'Fang vest' }],
-    legs: [{ pl: 'Futrzane buty', en: 'Fur boots' }, { pl: 'Owijacze', en: 'Wraps' }, { pl: 'Wysokie buty', en: 'Tall boots' }],
+    head: [{ pl: 'Futrzany kaptur', en: 'Fur hood' }, { pl: 'Warkocze', en: 'Braids' }, { pl: 'Opaska zwiadowcy', en: "Scout's headband" }, { pl: 'Czub wojownika', en: "Warrior's topknot" }, { pl: 'Wilcza skóra', en: 'Wolf pelt' }],
+    torso: [{ pl: 'Kurtka ze skór', en: 'Hide jacket' }, { pl: 'Płaszcz stepowy', en: 'Steppe cloak' }, { pl: 'Kamizelka z kłami', en: 'Fang vest' }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Futrzane buty', en: 'Fur boots' }, { pl: 'Owijacze', en: 'Wraps' }, { pl: 'Wysokie buty', en: 'Tall boots' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
   myrmids: {
-    head: [{ pl: 'Płetwa grzbietowa', en: 'Dorsal fin' }, { pl: 'Wąsy suma', en: 'Catfish barbels' }, { pl: 'Koral we włosach', en: 'Coral crest' }],
-    torso: [{ pl: 'Łuski', en: 'Scales' }, { pl: 'Sieć rybacka', en: 'Fishing net' }, { pl: 'Pancerz z muszli', en: 'Shell armour' }],
-    legs: [{ pl: 'Płetwy', en: 'Flippers' }, { pl: 'Bose stopy', en: 'Bare feet' }, { pl: 'Owinięte wodorostem', en: 'Kelp wraps' }],
+    head: [{ pl: 'Płetwa grzbietowa', en: 'Dorsal fin' }, { pl: 'Wąsy suma', en: 'Catfish barbels' }, { pl: 'Koral we włosach', en: 'Coral crest' }, { pl: 'Latarnia głębin', en: 'Deep-sea lure' }, { pl: 'Skrzela i falbany', en: 'Gills and frills' }],
+    torso: [{ pl: 'Łuski', en: 'Scales' }, { pl: 'Sieć rybacka', en: 'Fishing net' }, { pl: 'Pancerz z muszli', en: 'Shell armour' }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Płetwy', en: 'Flippers' }, { pl: 'Bose stopy', en: 'Bare feet' }, { pl: 'Owinięte wodorostem', en: 'Kelp wraps' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
   humans: {
-    head: [{ pl: 'Krótkie włosy', en: 'Short hair' }, { pl: 'Długie włosy', en: 'Long hair' }, { pl: 'Kapelusz', en: 'Hat' }],
-    torso: [{ pl: 'Tunika', en: 'Tunic' }, { pl: 'Kolczuga', en: 'Mail shirt' }, { pl: 'Płaszcz mieszczanina', en: "Burgher's coat" }],
-    legs: [{ pl: 'Buty podróżne', en: 'Travel boots' }, { pl: 'Nagolenniki', en: 'Greaves' }, { pl: 'Sandały', en: 'Sandals' }],
+    head: [{ pl: 'Krótkie włosy', en: 'Short hair' }, { pl: 'Długie włosy', en: 'Long hair' }, { pl: 'Kapelusz', en: 'Hat' }, { pl: 'Łysy z brodą', en: 'Bald and bearded' }, { pl: 'Kaptur', en: 'Hood' }],
+    torso: [{ pl: 'Tunika', en: 'Tunic' }, { pl: 'Kolczuga', en: 'Mail shirt' }, { pl: 'Płaszcz mieszczanina', en: "Burgher's coat" }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Buty podróżne', en: 'Travel boots' }, { pl: 'Nagolenniki', en: 'Greaves' }, { pl: 'Sandały', en: 'Sandals' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
   sunborn: {
-    head: [{ pl: 'Szakal', en: 'Jackal' }, { pl: 'Jaszczur', en: 'Lizard' }, { pl: 'Szakal w nemesie', en: 'Jackal in a headdress' }],
-    torso: [{ pl: 'Szata kapłańska', en: 'Priestly robe' }, { pl: 'Złoty napierśnik', en: 'Gold breastplate' }, { pl: 'Przepaska pustynna', en: 'Desert wrap' }],
-    legs: [{ pl: 'Sandały', en: 'Sandals' }, { pl: 'Ogon jaszczura', en: 'Lizard tail' }, { pl: 'Owijacze', en: 'Wraps' }],
+    head: [{ pl: 'Szakal', en: 'Jackal' }, { pl: 'Jaszczur', en: 'Lizard' }, { pl: 'Szakal w nemesie', en: 'Jackal in a headdress' }, { pl: 'Sokół', en: 'Falcon' }, { pl: 'Kobra', en: 'Cobra' }],
+    torso: [{ pl: 'Szata kapłańska', en: 'Priestly robe' }, { pl: 'Złoty napierśnik', en: 'Gold breastplate' }, { pl: 'Przepaska pustynna', en: 'Desert wrap' }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Sandały', en: 'Sandals' }, { pl: 'Ogon jaszczura', en: 'Lizard tail' }, { pl: 'Owijacze', en: 'Wraps' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
   keepers: {
-    head: [{ pl: 'Poroże', en: 'Antlers' }, { pl: 'Wieniec z liści', en: 'Leaf crown' }, { pl: 'Kaptur z mchu', en: 'Moss hood' }],
-    torso: [{ pl: 'Kora', en: 'Bark' }, { pl: 'Płaszcz z liści', en: 'Leaf cloak' }, { pl: 'Pnącza', en: 'Vines' }],
-    legs: [{ pl: 'Korzenie', en: 'Roots' }, { pl: 'Bose stopy', en: 'Bare feet' }, { pl: 'Kopyta', en: 'Hooves' }],
+    head: [{ pl: 'Poroże', en: 'Antlers' }, { pl: 'Wieniec z liści', en: 'Leaf crown' }, { pl: 'Kaptur z mchu', en: 'Moss hood' }, { pl: 'Kapelusz grzyba', en: 'Mushroom cap' }, { pl: 'Wianek kwiatów', en: 'Flower wreath' }],
+    torso: [{ pl: 'Kora', en: 'Bark' }, { pl: 'Płaszcz z liści', en: 'Leaf cloak' }, { pl: 'Pnącza', en: 'Vines' }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Korzenie', en: 'Roots' }, { pl: 'Bose stopy', en: 'Bare feet' }, { pl: 'Kopyta', en: 'Hooves' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
   flintborn: {
-    head: [{ pl: 'Kamienne czoło', en: 'Stone brow' }, { pl: 'Hełm górnika', en: "Miner's helmet" }, { pl: 'Kryształowa korona', en: 'Crystal crown' }],
-    torso: [{ pl: 'Skórzany fartuch', en: 'Leather apron' }, { pl: 'Kamienne płyty', en: 'Stone plates' }, { pl: 'Pas z narzędziami', en: 'Tool belt' }],
-    legs: [{ pl: 'Ciężkie buty', en: 'Heavy boots' }, { pl: 'Kamienne stopy', en: 'Stone feet' }, { pl: 'Okute buty', en: 'Iron-shod boots' }],
+    head: [{ pl: 'Kamienne czoło', en: 'Stone brow' }, { pl: 'Hełm górnika', en: "Miner's helmet" }, { pl: 'Kryształowa korona', en: 'Crystal crown' }, { pl: 'Kamienna broda', en: 'Stone beard' }, { pl: 'Rogi i kryształ', en: 'Horns and crystal' }],
+    torso: [{ pl: 'Skórzany fartuch', en: 'Leather apron' }, { pl: 'Kamienne płyty', en: 'Stone plates' }, { pl: 'Pas z narzędziami', en: 'Tool belt' }, { pl: 'Szata z pasem', en: 'Belted robe' }, { pl: 'Skórzana kamizelka', en: 'Leather vest' }],
+    legs: [{ pl: 'Ciężkie buty', en: 'Heavy boots' }, { pl: 'Kamienne stopy', en: 'Stone feet' }, { pl: 'Okute buty', en: 'Iron-shod boots' }, { pl: 'Kilt', en: 'Kilt' }, { pl: 'Spodnie z nakolannikami', en: 'Trousers with knee pads' }],
   },
 };
 
