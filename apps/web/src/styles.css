@@ -1612,6 +1612,10 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   background-image: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), #fff 0, #fff var(--ink), transparent calc(var(--ink) + 18px));
 }
 
+/* Quick skill cards offered on an event card, before the choice. */
+.ev-cards { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ev-cards .ev-rule { flex-basis: 100%; }
+.ev-cards button { flex: 1 1 40%; font-size: 0.9rem; padding: 8px 10px; }
 /* ── Dice box, take two: a real gaming tray. A wooden frame with bevelled walls (the far wall's inner face
    catches the light), brass corners, green felt with a stitched edge, and a slight tilt as if on a table. ── */
 .dice-box {

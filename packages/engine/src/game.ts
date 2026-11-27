@@ -155,7 +155,9 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   }
   if (player.pendingEvent?.puzzle) return [{ type: 'puzzle', answer: {} }];
   if (player.pendingEvent) {
-    return eventOptions(state, player).filter((o) => o.affordable).map((o) => ({ type: 'event', option: o.index }));
+    const options = eventOptions(state, player).filter((o) => o.affordable).map((o): Action => ({ type: 'event', option: o.index }));
+    // Quick skill cards may be played before answering the event (a buff for its test, or first aid).
+    return hiddenHere(player) ? options : [...options, ...playableCards(state, player).map((card): Action => ({ type: 'card', card }))];
   }
   const actions: Action[] = [];
   if (isOutside(player)) {
@@ -299,7 +301,8 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
   const anytime = action.type === 'spend' || action.type === 'keepCards';
-  if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'puzzle' && !anytime) busy(player);
+  // A card checks for itself whether it may be played now (quick ones also during an event, none in a fight).
+  if (action.type !== 'combat' && action.type !== 'event' && action.type !== 'puzzle' && action.type !== 'card' && !anytime) busy(player);
   if (isOutside(player) && action.type !== 'enter' && action.type !== 'endTurn' && action.type !== 'eat' && !anytime) {
     throw new EngineError('enter.first', 'Step onto the map first.');
   }
