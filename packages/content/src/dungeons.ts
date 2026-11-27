@@ -171,7 +171,7 @@ function themeCards(theme: DungeonTheme): EventCard[] {
       steps: steps({ options: [
         opt(t('Odpowiadam (Int: mniej fałszywych liter)', 'Answer (Int: fewer false letters)'), [{ do: 'puzzle', puzzle: {
           kind: 'riddle', helper: { attribute: 'cha' }, stat: 'int', seconds: 45, fastSeconds: 20,
-          win: safe, fast: [{ do: 'xp', amount: 1 }], lose: guardFight(theme.guards.slice(0, 1), 2),
+          win: safe, fast: [{ do: 'gold', amount: 2 }], lose: guardFight(theme.guards.slice(0, 1), 2),
         } }]),
         opt(t('Wolę walczyć ze strażnikiem', 'I would rather fight the guard'), guardFight(theme.guards.slice(0, 1), 2)),
       ] }),

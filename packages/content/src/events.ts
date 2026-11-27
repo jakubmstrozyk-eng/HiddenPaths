@@ -28,7 +28,7 @@ export const EVENTS: EventCard[] = [
     steps: { start: { options: [
       opt(t('Powtarzam melodię (SW: wolniejsza melodia)', 'Sing the tune back (Wil: a slower tune)'), [{ do: 'puzzle', puzzle: {
         kind: 'sequence', theme: 'ghost', stat: 'wil', length: 4,
-        byScore: [GHOST_FIGHT, GHOST_FIGHT, GHOST_FIGHT, GHOST_FIGHT, [{ do: 'peek' }, { do: 'xp', amount: 2 }, { do: 'gold', amount: 2 }]],
+        byScore: [GHOST_FIGHT, GHOST_FIGHT, GHOST_FIGHT, GHOST_FIGHT, [{ do: 'peek' }, { do: 'xp', amount: 1 }, { do: 'gold', amount: 2 }]],
       } }]),
       opt(t('Opieram się zawodzeniu (SW +10)', 'Resist the wailing (Wil +10)'), [{
         do: 'test', attribute: 'wil', modifier: 10,
@@ -46,7 +46,7 @@ export const EVENTS: EventCard[] = [
       opt(t('Daję 3 pożywienia', 'Give 3 food'), [{ do: 'ifRace', race: 'keepers', then: [{ do: 'permanent', target: 'int', amount: 10 }], else: [{ do: 'permanent', target: 'int', amount: 5 }] }], { food: 3 }),
       opt(t('Rozmawiam z mędrcem (quiz, Int: więcej czasu)', 'Talk with the sage (quiz, Int: more time)'), [{ do: 'puzzle', puzzle: {
         kind: 'quiz', helper: { attribute: 'int', modifier: -10 }, stat: 'int', questions: 5, seconds: 15,
-        byScore: [[], [{ do: 'xp', amount: 1 }], [{ do: 'xp', amount: 2 }], [{ do: 'xp', amount: 3 }], [{ do: 'xp', amount: 4 }], [{ do: 'xp', amount: 5 }, { do: 'permanent', target: 'int', amount: 5 }]],
+        byScore: [[], [], [], [{ do: 'xp', amount: 1 }], [{ do: 'xp', amount: 1 }], [{ do: 'xp', amount: 1 }, { do: 'permanent', target: 'int', amount: 5 }]],
       } }]),
       leave,
     ] } },
@@ -70,7 +70,7 @@ export const EVENTS: EventCard[] = [
     steps: { start: { options: [
       opt(t('Przyjmuję wyzwanie', 'Take the challenge'), [{ do: 'puzzle', puzzle: {
         kind: 'riddle', helper: { attribute: 'int' }, stat: 'int', seconds: 45, fastSeconds: 20,
-        win: [{ do: 'effect', target: 'com', amount: 10, rounds: 5 }], fast: [{ do: 'xp', amount: 2 }], lose: [{ do: 'gold', amount: -1 }],
+        win: [{ do: 'effect', target: 'com', amount: 10, rounds: 5 }], fast: [{ do: 'xp', amount: 1 }], lose: [{ do: 'gold', amount: -1 }],
       } }]),
       leave,
     ] } },
@@ -144,7 +144,7 @@ export const EVENTS: EventCard[] = [
     title: t('Karawana', 'The caravan'),
     text: t('Na horyzoncie grupa bandytów napada na małą karawanę. Co robisz?', 'On the horizon, bandits are attacking a small caravan. What do you do?'),
     steps: { start: { options: [
-      opt(t('Pomagam karawanie', 'Help the caravan'), [{ do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 2 }, { do: 'item', item: 'protectiveAmulet' }, { do: 'xp', amount: 5 }] }]),
+      opt(t('Pomagam karawanie', 'Help the caravan'), [{ do: 'fight', enemies: ['bandit', 'bandit', 'bandit'], onWin: [{ do: 'gold', amount: 2 }, { do: 'item', item: 'protectiveAmulet' }, { do: 'xp', amount: 1 }] }]),
       opt(t('Pomagam bandytom', 'Help the bandits'), [{ do: 'fight', enemies: ['caravanDriver'], onWin: [{ do: 'gold', amount: 2 }] }]),
       leave,
     ] } },
@@ -239,7 +239,7 @@ export const EVENTS: EventCard[] = [
     steps: { start: { options: [
       opt(t('Odpowiadam posągowi', 'Answer the statue'), [{ do: 'puzzle', puzzle: {
         kind: 'quiz', helper: { attribute: 'int' }, stat: 'int', questions: 3, seconds: 15,
-        byScore: [[], [], [{ do: 'permanent', target: 'int', amount: 5 }], [{ do: 'permanent', target: 'int', amount: 5 }, { do: 'xp', amount: 3 }]],
+        byScore: [[], [], [{ do: 'permanent', target: 'int', amount: 5 }], [{ do: 'permanent', target: 'int', amount: 5 }, { do: 'xp', amount: 1 }]],
       } }]),
       leave,
     ] } },
@@ -686,7 +686,7 @@ export const EVENTS: EventCard[] = [
     steps: { start: { options: [
       opt(t('Odczytuję gwiazdy (Int: znak blednie wolniej)', 'Read the stars (Int: the sign fades slower)'), [{ do: 'puzzle', puzzle: {
         kind: 'stars', stat: 'int',
-        byScore: [[], [{ do: 'peek' }], [{ do: 'peek' }, { do: 'xp', amount: 2 }, { do: 'effect', target: 'int', amount: 10, rounds: 3 }]],
+        byScore: [[], [{ do: 'peek' }], [{ do: 'peek' }, { do: 'xp', amount: 1 }, { do: 'effect', target: 'int', amount: 10, rounds: 3 }]],
       } }]),
       leave,
     ] } },

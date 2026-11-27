@@ -222,9 +222,9 @@ export interface TraitOption { card: number; trait: TraitId; option: Omit<EventO
 const o = (label: Text, then: Outcome[]): Omit<EventOption, 'trait'> => ({ label, then });
 const WITCH_SPELL: Outcome[] = [{ do: 'stuck', rounds: 1 }, { do: 'condition', id: 'enthralled', name: t('Zauroczenie', 'Enthralled'), test: 'wil', modifier: -5, worsen: -5, each: [{ do: 'stuck', rounds: 1 }] }];
 export const TRAIT_OPTIONS: TraitOption[] = [
-  { card: 24, trait: 'bold', option: o(t('Śpiewam głośniej od niej (SW)', 'Sing louder than her (Wil)'), [{ do: 'test', attribute: 'wil', pass: [{ do: 'xp', amount: 3 }], fail: WITCH_SPELL }]) },
-  { card: 24, trait: 'curious', option: o(t('Wsłuchuję się w słowa pieśni (Int.)', 'Listen to the words of the song (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'xp', amount: 2 }, { do: 'herbs', amount: 2 }], fail: WITCH_SPELL }]) },
-  { card: 25, trait: 'merciful', option: o(t('Dzielę się z nimi chlebem (Ch.)', 'Share bread with them (Cha)'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'xp', amount: 2 }, { do: 'food', amount: 2 }, { do: 'peek' }], fail: [{ do: 'gold', amount: -1 }] }]) },
+  { card: 24, trait: 'bold', option: o(t('Śpiewam głośniej od niej (SW)', 'Sing louder than her (Wil)'), [{ do: 'test', attribute: 'wil', pass: [{ do: 'xp', amount: 1 }], fail: WITCH_SPELL }]) },
+  { card: 24, trait: 'curious', option: o(t('Wsłuchuję się w słowa pieśni (Int.)', 'Listen to the words of the song (Int)'), [{ do: 'test', attribute: 'int', pass: [{ do: 'xp', amount: 1 }, { do: 'herbs', amount: 2 }], fail: WITCH_SPELL }]) },
+  { card: 25, trait: 'merciful', option: o(t('Dzielę się z nimi chlebem (Ch.)', 'Share bread with them (Cha)'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'xp', amount: 1 }, { do: 'food', amount: 2 }, { do: 'peek' }], fail: [{ do: 'gold', amount: -1 }] }]) },
   { card: 25, trait: 'ruthless', option: o(t('Zastraszam ich (S.)', 'Intimidate them (Str)'), [{ do: 'test', attribute: 'str', pass: [{ do: 'gold', amount: 3 }, { do: 'xp', amount: 1 }], fail: [{ do: 'fight', enemies: ['nomadWarrior', 'nomadWarrior'] }] }]) },
   { card: 51, trait: 'merciful', option: o(t('Puszczam go wolno i pytam o okolicę', 'Let him go and ask about the area'), [{ do: 'peek' }, { do: 'xp', amount: 1 }]) },
   { card: 51, trait: 'ruthless', option: o(t('Łapię go i przetrząsam mu kieszenie (Zr.)', 'Grab him and turn out his pockets (Dex)'), [{ do: 'test', attribute: 'dex', pass: [{ do: 'gold', amount: 3 }], fail: [{ do: 'gold', amount: -1 }] }]) },
@@ -234,7 +234,7 @@ export const TRAIT_OPTIONS: TraitOption[] = [
   { card: 12, trait: 'prudent', option: o(t('Idę obok karawany, z dala od kłopotów', 'Walk beside the caravan, clear of trouble'), [{ do: 'food', amount: 1 }, { do: 'xp', amount: 1 }]) },
   { card: 37, trait: 'schemer', option: o(t('Łaskoczę go pod stołem (Zr.)', 'Tickle him under the table (Dex)'), [{ do: 'test', attribute: 'dex', pass: [{ do: 'gold', amount: 2 }, { do: 'xp', amount: 1 }], fail: [{ do: 'gold', amount: -2 }] }]) },
   { card: 2, trait: 'curious', option: o(t('Zadaję mędrcowi trudne pytania (Int.)', 'Ask the sage hard questions (Int)'), [{ do: 'test', attribute: 'int', modifier: -10, pass: [{ do: 'permanent', target: 'int', amount: 5 }] }]) },
-  { card: 27, trait: 'bold', option: o(t('Patrzę koszmarowi w oczy (SW +10)', 'Stare the nightmare down (Wil +10)'), [{ do: 'test', attribute: 'wil', modifier: 10, pass: [{ do: 'xp', amount: 2 }], fail: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }, { do: 'condition', id: 'nightmare', name: t('Koszmar', 'Nightmare'), test: 'wil', each: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }] }] }]) },
+  { card: 27, trait: 'bold', option: o(t('Patrzę koszmarowi w oczy (SW +10)', 'Stare the nightmare down (Wil +10)'), [{ do: 'test', attribute: 'wil', modifier: 10, pass: [{ do: 'xp', amount: 1 }], fail: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }, { do: 'condition', id: 'nightmare', name: t('Koszmar', 'Nightmare'), test: 'wil', each: [{ do: 'effect', target: 'all', amount: -10, rounds: 1 }] }] }]) },
   { card: 29, trait: 'true', option: o(t('Odpracowuję runę w kuźni (S.)', 'Work off a rune at the forge (Str)'), [{ do: 'test', attribute: 'str', pass: [{ do: 'rune' }], fail: [{ do: 'effect', target: 'stamina', amount: -1, rounds: 1 }] }]) },
 ];
 

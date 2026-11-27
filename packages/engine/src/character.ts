@@ -1,5 +1,5 @@
 import {
-  ATTRIBUTES, DICE_STYLE_IDS, ITEMS, LOOK_COLOURS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  ATTRIBUTES, DICE_BOXES, DICE_ENGRAVINGS, DICE_FINISHES, DICE_STYLE_IDS, ITEMS, LOOK_COLOURS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
   type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
@@ -117,6 +117,10 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
     for (const die of ['d6', 'd10', 'd100'] as const) {
       if (!DICE_STYLE_IDS.includes(input.dice[die])) throw new EngineError('character.dice', 'Unknown dice style.');
     }
+    const { finish, engrave, box } = input.dice;
+    if (finish !== undefined && !DICE_FINISHES.some((f) => f.id === finish)) throw new EngineError('character.dice', 'Unknown dice finish.');
+    if (engrave !== undefined && !DICE_ENGRAVINGS.some((f) => f.id === engrave)) throw new EngineError('character.dice', 'Unknown engraving.');
+    if (box !== undefined && !DICE_BOXES.some((f) => f.id === box)) throw new EngineError('character.dice', 'Unknown dice box.');
   }
   if (spent > BONUS_POINTS) throw new EngineError('character.bonus', `Only ${BONUS_POINTS} bonus points can be spent.`);
   if (new Set(input.missions).size !== MISSIONS_KEPT) throw new EngineError('character.missions', `Keep exactly ${MISSIONS_KEPT} missions.`);
@@ -124,6 +128,15 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
     if (!GAME_MISSIONS.some((x) => x.id === m)) throw new EngineError('character.missions', `Unknown mission ${m}.`);
     if (offered && !offered.includes(m)) throw new EngineError('character.missions', `Mission ${m} was not drawn.`);
   }
+}
+
+/** Dice with only the colours, finish, engraving and box a hero may have. */
+export function cleanDice(dice: DiceLook): DiceLook {
+  const out: DiceLook = { d6: dice.d6, d10: dice.d10, d100: dice.d100 };
+  if (dice.finish) out.finish = dice.finish;
+  if (dice.engrave) out.engrave = dice.engrave;
+  if (dice.box) out.box = dice.box;
+  return out;
 }
 
 /** A look with only the parts and colours a hero may have. */
@@ -158,7 +171,7 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     skills: {},
     unspentPoints: 0,
     ...(input.look ? { look: cleanLook(input.look) } : {}),
-    ...(input.dice ? { dice: { d6: input.dice.d6, d10: input.dice.d10, d100: input.dice.d100 } } : {}),
+    ...(input.dice ? { dice: cleanDice(input.dice) } : {}),
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
     ...(input.growth ? grown(input) : {}),
   };
