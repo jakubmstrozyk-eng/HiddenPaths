@@ -22,6 +22,22 @@ export function itemName(id: string, locale: Locale): string {
   return t ? t[locale] : id;
 }
 
+/** What a successful field action brought, in words: "+2 jedzenia", "Żelazo → do ekwipunku". */
+export function gainedWords(gained: string[], locale: Locale): string[] {
+  const pl = locale === 'pl';
+  const counts = new Map<string, number>();
+  let food = 0;
+  for (const g of gained) {
+    const [kind, what] = g.split(':');
+    if (kind === 'food') food += Number(what) || 1;
+    else if ((kind === 'material' || kind === 'herb') && what) counts.set(what, (counts.get(what) ?? 0) + 1);
+  }
+  const out: string[] = [];
+  if (food) out.push(pl ? `+${food} jedzenia` : `+${food} food`);
+  for (const [id, n] of counts) out.push(`${n > 1 ? `${n}× ` : '+1 '}${itemName(id, locale)} ${pl ? '→ w ekwipunku' : '→ in your pack'}`);
+  return out;
+}
+
 export function cardName(id: string, locale: Locale): string {
   if (id === 'inspiration') return locale === 'pl' ? 'Natchnienie' : 'Inspiration';
   for (const prof of Object.values(PROFESSIONS)) {
@@ -137,7 +153,7 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
     case 'traded':
       return `${e.bought ? '−' : '+'}${fmt(e.gold)} ${t('gold').toLowerCase()} · ${itemName(e.item, locale)}`;
     case 'test':
-      return `${e.rerolled ? `${cardName(e.rerolled, locale)} ↻ · ` : ''}${tx({ pl: 'Test', en: 'Test' })} ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}${e.gained.length ? ` · ${e.gained.map((g) => g.split(':').slice(-1)[0]).join(', ')}` : ''}`;
+      return `${e.rerolled ? `${cardName(e.rerolled, locale)} ↻ · ` : ''}${tx({ pl: 'Test', en: 'Test' })} ${attrShort(e.attribute, locale)}: ${e.result.success ? t('success') : t('failure')}${gainedWords(e.gained, locale).length ? ` · ${gainedWords(e.gained, locale).join(' · ')}` : ''}`;
     case 'card':
       return cardLine(e.card, e, locale);
     case 'cooked':
