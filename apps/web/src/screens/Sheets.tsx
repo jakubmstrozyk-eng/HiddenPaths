@@ -240,8 +240,8 @@ export function HeroDoll({ me }: { me: PlayerState }) {
         {slot('legs')}
       </ul>
       <p className="doll-note muted">{tx({
-        pl: 'Pancerz odejmuje się od obrażeń w trafione miejsce. Miejsce trafienia losuje k6 (małe cyfry przy wartościach); przy trafieniu o ponad 20 wybiera atakujący.',
-        en: 'Armour is taken off the damage of a hit on that spot. A k6 picks the spot (the small numbers beside the values); a hit by more than 20 lets the attacker choose.',
+        pl: 'Pancerz odejmuje się od obrażeń w trafione miejsce. Miejsce trafienia losuje k6 (małe cyfry przy wartościach); przy trafieniu o 20 lub więcej wybiera atakujący.',
+        en: 'Armour is taken off the damage of a hit on that spot. A k6 picks the spot (the small numbers beside the values); a hit by 20 or more lets the attacker choose.',
       })}</p>
     </div>
   );

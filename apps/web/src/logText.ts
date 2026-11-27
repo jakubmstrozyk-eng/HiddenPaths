@@ -214,6 +214,7 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'blind': return `${cardName('cavedelver-blind', locale)}: ${ev.foes.filter((f) => !f.result.success).map((f) => foeName(f.uid, locale)).join(', ') || (pl ? 'nikt' : 'nobody')}`;
     case 'tear': return `${cardName('druid-fangs', locale)}: ${ev.torn ? (pl ? 'rozrywasz ciało, +4' : 'you tear it open, +4') : (pl ? 'wróg się wyrywa' : 'it pulls free')}`;
     case 'held': return `${foeName(ev.uid, locale)}: ${pl ? 'walczy po twojej stronie' : 'fights on your side'}`;
+    case 'drain': return `${foeName(ev.uid, locale)}: ${pl ? `czar wysysa 1 Wt (zostało ${ev.left}/${ev.of})` : `the spell drains 1 Sta (${ev.left}/${ev.of} left)`}`;
     case 'focus': return `${t('focus')}: +10`;
     case 'stunned': return ev.who === 'hero' ? (locale === 'pl' ? 'Jesteś ogłuszony' : 'You are stunned') : `${foeName(ev.who, locale)}: ${locale === 'pl' ? 'ogłuszony' : 'stunned'}`;
     case 'drink': return `${t('use')}: ${itemName(ev.item, locale)}`;

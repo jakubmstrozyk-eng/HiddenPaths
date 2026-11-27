@@ -898,6 +898,10 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .spot-step { display: grid; justify-items: center; gap: 6px; text-align: center; }
 .spot-step .spot-line { font-size: 15px; font-weight: 700; }
 .spot-step small { color: var(--muted); font-size: 12px; }
+.d6-wait { display: inline-block; }
+.spot-step .d6-throw { gap: 6px; margin-bottom: 4px; }
+.d6-wait.shaking { animation: die-shake 0.32s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .d6-wait.shaking { animation: none; } }
 .damage-sum { display: block; font-size: 11px; font-weight: 500; color: #fff; opacity: 0.85; white-space: nowrap; }
 .big-aim { font-size: 40px; line-height: 1; color: #fff; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
 .armour-legend i.bare { background: rgba(255, 107, 107, 0.35); border-color: #ff6b6b; }

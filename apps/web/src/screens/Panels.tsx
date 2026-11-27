@@ -7,7 +7,7 @@ import { EventScene } from '../EventScene';
 import { cardSwish } from '../Feedback';
 import { LEVEL_XP } from '@hp/engine';
 import { Afflictions } from '../Afflictions';
-import { outcomeText, xpWords, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
+import { xpWords, PUZZLE_NAME, testLabel, testOf } from '../outcomeText';
 import { PuzzleView } from '../Puzzles';
 import { useT } from '../i18n';
 
@@ -31,7 +31,7 @@ const oddsTone = (p: number) => (p >= 60 ? 'good' : p >= 35 ? 'even' : 'bad');
 /**
  * The event card: drawn from the deck (it slides off the pile, flies to the middle and turns face up),
  * then reads like a card of the game: number and kind, a picture of the place, the title, the story,
- * and below it the choices, each with its test, odds and what success or failure brings.
+ * and below it the choices, each with its test and odds; what success or failure brings shows only after the throw.
  */
 export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { game: GameState; me: PlayerState; lines: string[]; /** Experience gained on this card so far. */ xp?: number; act: (a: Action) => void; /** Dice are still rolling: the mini-game waits for them. */ hold?: boolean }) {
   const { t, tx, locale } = useT();
@@ -132,13 +132,11 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
           <div className="ev-rule"><span>{options.length > 1 ? (pl ? 'Twój wybór' : 'Your choice') : testOf(options[0]?.option.then ?? []) ? (pl ? 'Test' : 'Test') : (pl ? 'Co robisz' : 'What you do')}</span></div>
           <div className="ev-options">
             {options.map(({ option, index, affordable }, n) => {
-              // Every choice says which test it needs, the odds, and what it brings.
+              // Every choice says which test it needs and the odds; its outcome stays a surprise.
               const test = testOf(option.then);
               const puzzle = option.then.find((o) => o.do === 'puzzle');
               const bonus = test?.raceBonus && test.raceBonus.race === me.character.race ? test.raceBonus.amount : 0;
               const odds = test ? Math.round(successChance(me.character.attributes[test.attribute], testModifier(worldView(game), me, test.attribute, (test.modifier ?? 0) + bonus + cardTestBonus(me, card.id, test.attribute))) * 100) : null;
-              const rest = test ? option.then.filter((o) => o !== test) : option.then;
-              const win = test ? [...(test.pass ?? []), ...rest] : rest;
               const cost = option.cost && [
                 option.cost.gold ? `${option.cost.gold} ${t('gold').toLowerCase()}` : '',
                 option.cost.food ? `${option.cost.food} ${t('food').toLowerCase()}` : '',
@@ -159,19 +157,11 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
                   {puzzle && puzzle.do === 'puzzle' ? (
                     <span className="ev-chip puzzle">🧩 {PUZZLE_NAME[puzzle.puzzle.kind][locale]}</span>
                   ) : test && odds !== null ? (
-                    <span className={`ev-chip ${oddsTone(odds)}`}>🎲 {testLabel(test, locale)} · <b>{odds}%</b></span>
+                    <span className={`ev-chip ${oddsTone(odds)}`}>🎲 {pl ? 'Test' : 'Test'}: {testLabel(test, locale)} · {pl ? 'szansa' : 'chance'} <b>{odds}%</b></span>
                   ) : (
                     <span className="ev-chip free">{pl ? 'Bez testu' : 'No test'}</span>
                   )}
-                  {puzzle && puzzle.do === 'puzzle' ? (
-                    <>
-                      <small className="ev-out pass">{pl ? 'Nagroda: ' : 'Prize: '}{outcomeText(puzzleBest(puzzle.puzzle), locale) || (pl ? 'ciąg dalszy' : 'the story goes on')}</small>
-                      {puzzleWorst(puzzle.puzzle).length > 0 && <small className="ev-out fail">{pl ? 'Ryzyko: ' : 'Risk: '}{outcomeText(puzzleWorst(puzzle.puzzle), locale)}</small>}
-                    </>
-                  ) : (win.length > 0 || test) && (
-                    <small className="ev-out pass">{test ? (pl ? 'Sukces: ' : 'Success: ') : ''}{win.length ? outcomeText(win, locale) : (pl ? 'unikasz kłopotów' : 'you avoid the trouble')}</small>
-                  )}
-                  {test?.fail?.length ? <small className="ev-out fail">{pl ? 'Porażka: ' : 'Failure: '}{outcomeText(test.fail, locale)}</small> : null}
+                  {/* What success or failure brings stays hidden until the throw (Jacob, 2026-11-27): the card tells it afterwards. */}
                   {cost && <small className="ev-out cost">{pl ? 'Koszt: ' : 'Cost: '}{cost}{!affordable ? (pl ? ' (nie stać cię)' : ' (you cannot pay)') : ''}</small>}
                 </motion.button>
               );

@@ -23,6 +23,14 @@ export function testLabel(o: Extract<Outcome, { do: 'test' }>, locale: Locale): 
   return `${attrName(o.attribute, locale)}${o.modifier ? ` ${signed(o.modifier)}` : ''}`;
 }
 
+/** A choice's words without the test note in brackets: "Opieram się zawodzeniu (SW +10)" → "Opieram się zawodzeniu". */
+export const choiceWords = (label: string) => label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+
+/** What a throw on an event card is for: "Test: Siła Woli +10 · Opieram się zawodzeniu". */
+export function eventTestHeading(o: Extract<Outcome, { do: 'test' }>, label: string, locale: Locale): string {
+  return `${locale === 'pl' ? 'Test' : 'Test'}: ${testLabel(o, locale)} · ${choiceWords(label)}`;
+}
+
 /** Short words for what a list of outcomes does, for buttons: "+2 złota · +1 PD · walka: Wilk". */
 export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): string {
   if (!outcomes?.length) return locale === 'pl' ? 'nic' : 'nothing';
