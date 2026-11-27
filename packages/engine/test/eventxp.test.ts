@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOK_CARDS, DUNGEON_CARD_BASE, EVENTS, TRAIT_OPTIONS } from '@hp/content';
-import { createGame, currentPlayer, Rng, type CharacterInput, type GameConfig } from '../src';
+import { applyAction, createGame, currentPlayer, DIFFICULTIES, Rng, type CharacterInput, type GameConfig } from '../src';
 import { runOutcomes, startEvent } from '../src/events';
 import { onMap } from './helpers';
 
@@ -46,5 +46,20 @@ describe('event XP: at most 1 extra point per random event', () => {
     const xp = p.character.xp;
     runOutcomes(state, p, new Rng(7), [{ do: 'xp', amount: 8 }], DUNGEON_CARD_BASE + 1);
     expect(p.character.xp).toBe(xp + 8);
+  });
+});
+
+describe('event XP: peeking at the land', () => {
+  it('the ghost tells a secret of the land: +1 XP only, the shown fragments pay when stepped on', () => {
+    for (const difficulty of ['normal', 'nightmare'] as const) {
+      let state = onMap(createGame('ghost', { ...solo, difficulty }, [{ id: 'p1', character: hero }]));
+      currentPlayer(state).pendingEvent = { card: 1, step: 'start' };
+      const xp = currentPlayer(state).character.xp;
+      state = applyAction(state, 'p1', { type: 'event', option: 0 });
+      state = applyAction(state, 'p1', { type: 'puzzle', answer: { hits: 4 } });
+      const p = currentPlayer(state);
+      expect(p.character.xp - xp, difficulty).toBe(DIFFICULTIES[difficulty].xp);
+      expect(Object.keys(p.counters).some((k) => k.startsWith('peeked:'))).toBe(true);
+    }
   });
 });
