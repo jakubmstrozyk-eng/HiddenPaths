@@ -1,6 +1,6 @@
 import { springTrap } from './cards';
 import {
-  BOOK_READINGS, COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
+  BOOK_READINGS, COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, isDungeonCard, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
@@ -55,7 +55,14 @@ function canPay(player: PlayerState, option: EventOption): boolean {
   return (c.gold ?? 0) <= player.character.gold && (c.food ?? 0) <= player.character.food && (c.speed ?? 0) <= player.speedLeft;
 }
 
+/** A random event card gives at most this much extra XP in total, whatever path the player takes; fights pay their own XP. */
+export const EVENT_XP_CAP = 1;
+const EVENT_XP = 'eventXp';
+/** Clears the event XP tally when a new event card (or book reading) begins. */
+export const resetEventXp = (player: PlayerState) => { delete player.counters[EVENT_XP]; };
+
 export function startEvent(state: GameState, player: PlayerState, card: number) {
+  resetEventXp(player);
   player.pendingEvent = { card, step: 'start' };
   log(state, { type: 'eventDrawn', player: player.id, cell: player.position, card });
 }
@@ -204,9 +211,17 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         }
         log(state, { type: 'change', player: player.id, change: { what: 'herbs', amount: o.amount } });
         break;
-      case 'xp':
-        gainXp(state, player, o.amount * DIFFICULTIES[state.config.difficulty].xp);
+      case 'xp': {
+        let amount = o.amount;
+        if (card !== undefined && !isDungeonCard(card)) {
+          const given = player.counters[EVENT_XP] ?? 0;
+          amount = Math.min(amount, EVENT_XP_CAP - given);
+          if (amount <= 0) break;
+          player.counters[EVENT_XP] = given + amount;
+        }
+        gainXp(state, player, amount * DIFFICULTIES[state.config.difficulty].xp);
         break;
+      }
       case 'hit': {
         // Where the blow lands: d6 on the hit location table; the armour there takes off its value.
         const slot = HIT_LOCATIONS[roll(state, player, rng, 6) - 1]!;

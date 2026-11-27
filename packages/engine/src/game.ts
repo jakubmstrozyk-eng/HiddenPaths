@@ -4,7 +4,7 @@ import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, 
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
-import { ALL_EVENT_IDS, answerPuzzle, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, runOutcomes, startEvent, tickConditions, winCombat } from './events';
+import { ALL_EVENT_IDS, answerPuzzle, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, resetEventXp, runOutcomes, startEvent, tickConditions, winCombat } from './events';
 import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, roomMoves, settleRoom, placeDungeon, woundBoss } from './dungeon';
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
@@ -586,6 +586,7 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
   player.counters[key] = 1;
   const reading = bookReading(id);
   if (!reading) return;
+  resetEventXp(player);
   runOutcomes(state, player, rng, [{ do: 'puzzle', puzzle: reading.puzzle }], reading.card);
 }
 
