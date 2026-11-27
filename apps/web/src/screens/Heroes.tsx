@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  ATTRIBUTES, DEFAULT_DICE, DEFAULT_LOOK, DICE_STYLES, LOOK_NAMES, LOOK_OPTIONS, MISSIONS, PROFESSIONS, RACES,
+  ATTRIBUTES, CLOTH_COLOURS, DEFAULT_DICE, DEFAULT_LOOK, DICE_STYLES, HAIR_COLOURS, LOOK_NAMES, LOOK_OPTIONS, SKIN_TONES, MISSIONS, PROFESSIONS, RACES,
   type Attribute, type DiceLook, type HeroLook, type ProfessionId, type RaceId,
 } from '@hp/content';
 import {
@@ -373,8 +373,30 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
                 <div key={part} className="look-part">
                   <span>{t(PART_KEY[part])}</span>
                   <button aria-label={`← ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + LOOK_OPTIONS - 1) % LOOK_OPTIONS })}>‹</button>
-                  <b>{tx(LOOK_NAMES[race][part][look[part]]!)}</b>
+                  <b>{tx(LOOK_NAMES[race][part][look[part]]!)} <small className="look-count">{look[part] + 1}/{LOOK_OPTIONS}</small></b>
                   <button aria-label={`→ ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + 1) % LOOK_OPTIONS })}>›</button>
+                </div>
+              ))}
+              <h3>{tx({ pl: 'Kolory', en: 'Colours' })}</h3>
+              {([
+                ['skin', tx({ pl: 'Skóra', en: 'Skin' }), SKIN_TONES[race]],
+                ['hair', tx({ pl: 'Włosy i ozdoby', en: 'Hair and crest' }), HAIR_COLOURS],
+                ['cloth', tx({ pl: 'Strój', en: 'Clothes' }), CLOTH_COLOURS],
+              ] as const).map(([part, label, colours]) => (
+                <div key={part} className="look-colour">
+                  <span>{label}</span>
+                  <div className="swatches">
+                    <button
+                      className={`swatch swatch-auto ${!look[part] ? 'active' : ''}`}
+                      title={tx({ pl: 'Barwy rasy', en: "The race's own" })}
+                      aria-label={tx({ pl: 'Barwy rasy', en: "The race's own" })}
+                      aria-pressed={!look[part]}
+                      onClick={() => { const { [part]: _drop, ...rest } = look; setLook(rest); }}
+                    >↺</button>
+                    {colours.map((c) => (
+                      <button key={c} className={`swatch ${look[part] === c ? 'active' : ''}`} style={{ background: c }} aria-label={c} aria-pressed={look[part] === c} onClick={() => setLook({ ...look, [part]: c })} />
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

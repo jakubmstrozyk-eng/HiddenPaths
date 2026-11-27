@@ -10,7 +10,9 @@ describe('heroes', () => {
   it('a hero is checked like a character and trimmed', () => {
     expect(validateHero(hero).name).toBe('Ara');
     expect(() => validateHero({ ...hero, profession: 'warrior' })).toThrow();
-    expect(() => validateHero({ ...hero, look: { head: 3, torso: 0, legs: 0 } })).toThrow();
+    expect(() => validateHero({ ...hero, look: { head: 5, torso: 0, legs: 0 } })).toThrow();
+    expect(() => validateHero({ ...hero, look: { head: 0, torso: 0, legs: 0, skin: 'red' } })).toThrow();
+    expect(validateHero({ ...hero, look: { head: 4, torso: 3, legs: 4, hair: '#ab12cd', junk: 1 } as never }).look).toEqual({ head: 4, torso: 3, legs: 4, hair: '#ab12cd' });
     expect(() => validateHero({ ...hero, dice: { d6: 'plaid', d10: 'gold', d100: 'void' } })).toThrow();
     expect(() => validateHero({ ...hero, mode: 'both' as never })).toThrow();
   });

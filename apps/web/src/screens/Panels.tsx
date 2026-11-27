@@ -5,7 +5,9 @@ import { cardTestBonus, eventOptions, isOutside, knownPerson, landAt, successCha
 import { JOURNAL_PEOPLE, PERSON_MARKS, TRAITS, type TraitId } from '@hp/content';
 import { EventScene } from '../EventScene';
 import { cardSwish } from '../Feedback';
-import { outcomeText, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
+import { LEVEL_XP } from '@hp/engine';
+import { Afflictions } from '../Afflictions';
+import { outcomeText, xpWords, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
 import { PuzzleView } from '../Puzzles';
 import { useT } from '../i18n';
 
@@ -31,7 +33,7 @@ const oddsTone = (p: number) => (p >= 60 ? 'good' : p >= 35 ? 'even' : 'bad');
  * then reads like a card of the game: number and kind, a picture of the place, the title, the story,
  * and below it the choices, each with its test, odds and what success or failure brings.
  */
-export function EventPanel({ game, me, lines, act, hold = false }: { game: GameState; me: PlayerState; lines: string[]; act: (a: Action) => void; /** Dice are still rolling: the mini-game waits for them. */ hold?: boolean }) {
+export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { game: GameState; me: PlayerState; lines: string[]; /** Experience gained on this card so far. */ xp?: number; act: (a: Action) => void; /** Dice are still rolling: the mini-game waits for them. */ hold?: boolean }) {
   const { t, tx, locale } = useT();
   const pl = locale === 'pl';
   const pending = me.pendingEvent!;
@@ -100,6 +102,7 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
             <h2>{tx(card.title)}</h2>
             {room ? <small>{tx(room.name)}</small> : here && here !== 'core' && <small>{tx(TERRAINS[here].name)}</small>}
           </header>
+          <Afflictions game={game} me={me} compact />
           <p className="ev-text">{tx(step.text ?? card.text)}</p>
           {(() => {
             const known = pending.step === 'start' ? knownPerson(me, card.id) : null;
@@ -172,9 +175,37 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
             })}
           </div>
           </>)}
+          <XpFoot gained={xp} xp={me.character.xp} level={me.character.level} />
         </motion.article>
       </motion.div>
     </div>
+  );
+}
+
+/**
+ * The foot of a card: the experience it gave, in full words, and the hero's way to the next level.
+ * It sits at the bottom because it matters less than the story and the choices.
+ */
+export function XpFoot({ gained, xp, level }: { gained: number; xp: number; level: number }) {
+  const { tx, locale } = useT();
+  const from = LEVEL_XP[level] ?? 0;
+  const to = LEVEL_XP[level + 1];
+  const share = to === undefined ? 1 : Math.min(1, Math.max(0, (xp - from) / (to - from)));
+  const n = Number.isInteger(gained) ? gained : Math.round(gained * 100) / 100;
+  return (
+    <footer className="ev-xp">
+      <span className="ev-xp-gain">
+        {gained > 0
+          ? <>+{locale === 'pl' ? String(n).replace('.', ',') : n} {xpWords(n, locale)}</>
+          : tx({ pl: 'Punkty Doświadczenia', en: 'Experience' })}
+      </span>
+      <span className="ev-xp-bar" aria-hidden="true"><span style={{ width: `${share * 100}%` }} /></span>
+      <small>
+        {to === undefined
+          ? tx({ pl: `Poziom ${level} · najwyższy`, en: `Level ${level} · the top` })
+          : tx({ pl: `Poziom ${level} · ${Math.floor(xp)} / ${to} · brakuje ${Math.ceil(to - xp)}`, en: `Level ${level} · ${Math.floor(xp)} / ${to} · ${Math.ceil(to - xp)} to go` })}
+      </small>
+    </footer>
   );
 }
 
@@ -192,7 +223,7 @@ function CardBackArt() {
 }
 
 /** The outcome of a card (or a fight) after it is over, on the same kind of card as the event. */
-export function StoryPanel({ title, lines, onClose }: { title: string; lines: string[]; onClose: () => void }) {
+export function StoryPanel({ title, lines, xp = 0, level, xpNow, onClose }: { title: string; lines: string[]; xp?: number; level?: number; xpNow?: number; onClose: () => void }) {
   const { t } = useT();
   return (
     <div className="overlay" onClick={onClose}>
@@ -206,6 +237,7 @@ export function StoryPanel({ title, lines, onClose }: { title: string; lines: st
             <motion.li key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 * i }}>{l}</motion.li>
           ))}
         </ul>
+        {xp > 0 && level !== undefined && xpNow !== undefined && <XpFoot gained={xp} xp={xpNow} level={level} />}
         <button className="ev-continue" onClick={onClose}>{t('continueStory')}</button>
       </motion.article>
     </div>

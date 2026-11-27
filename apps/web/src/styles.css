@@ -1371,3 +1371,134 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .jr-axis { grid-template-columns: 5.5rem 1fr 5.5rem; font-size: 12px; }
   .jr-chip-vow { display: none; }
 }
+
+/* ── Story text: a clear book face, larger and brighter than before ── */
+.ev-text {
+  font: 400 17.5px/1.62 'Literata', Georgia, 'Times New Roman', serif; font-optical-sizing: auto;
+  color: #fbf7ff; text-align: left; padding: 10px 12px; letter-spacing: 0.005em;
+  background: rgba(8, 5, 16, 0.55); border-left: 3px solid var(--edge); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.ev-text::first-letter { font-weight: 600; font-size: 1.25em; color: #fff3d6; }
+.ev-lines { font-size: 14px; }
+.ev-out { font-size: 13px; }
+@media (max-width: 560px) { .ev-text { font-size: 16.5px; } }
+
+/* ── Experience at the foot of a card ── */
+.ev-xp { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 10px; margin-top: 4px; padding: 8px 10px 2px; border-top: 1px dashed rgba(224, 178, 92, 0.35); }
+.ev-xp-gain { font: 700 13px var(--num); color: #c9b8ff; }
+.ev-xp-bar { height: 6px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.ev-xp-bar span { display: block; height: 100%; background: linear-gradient(90deg, #8f7bff, #e0c8ff); box-shadow: 0 0 8px rgba(143, 123, 255, 0.7); }
+.ev-xp small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; text-align: right; }
+
+/* ── Experience in the hero's bar, always in sight ── */
+.xpbar { min-width: 168px; }
+.xpbar .xp-track { display: block; height: 7px; margin-top: 4px; background: #2a2440; overflow: hidden; }
+.xpbar .xp-track span { display: block; height: 100%; background: linear-gradient(90deg, #8f7bff, #e0c8ff); box-shadow: 0 0 8px rgba(160, 140, 255, 0.8); }
+.xpbar .xp-left { margin-top: 3px; text-transform: none; letter-spacing: 0; font-size: 10.5px; color: #c9b8ff; }
+@media (max-width: 560px) { .xpbar { flex-basis: 100%; } }
+
+/* ── Afflictions: what is wrong with the hero and how to end it ── */
+.afflictions { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.afflictions-head { align-self: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #ff9a8a; }
+.affliction {
+  flex: 1 1 260px; max-width: 420px; display: grid; gap: 3px; text-align: left; padding: 8px 10px; color: var(--ink);
+  background: linear-gradient(160deg, rgba(90, 20, 40, 0.55), rgba(30, 8, 16, 0.75)); border: 1px solid #ff8a7a;
+  box-shadow: 0 0 14px rgba(255, 90, 70, 0.25); animation: aff-pulse 2.6s ease-in-out infinite;
+}
+@keyframes aff-pulse { 50% { box-shadow: 0 0 22px rgba(255, 90, 70, 0.45); } }
+.aff-title { display: flex; align-items: center; gap: 8px; }
+.aff-title i { font-style: normal; display: grid; place-items: center; width: 22px; height: 22px; background: #ff5a3a; color: #1a0608; font-weight: 800; font-size: 14px; }
+.aff-title b { font: 700 15px var(--display); color: #ffd0c8; }
+.aff-odds { margin-left: auto; font: 700 11px var(--num); color: #ffe066; border: 1px solid currentColor; padding: 0 5px; }
+.aff-effect { font-size: 12.5px; line-height: 1.4; color: #ffe2dc; }
+.aff-cure { font-size: 12px; line-height: 1.4; color: #cfe8b0; }
+.aff-cure em { font-style: normal; font-weight: 700; color: #9be8b4; }
+.aff-ready { font-size: 11.5px; color: #6ef0a0; font-weight: 700; }
+.afflictions.compact { gap: 6px; }
+.afflictions.compact .affliction { flex: 1 1 100%; max-width: none; padding: 6px 8px; animation: none; }
+.afflictions.compact .aff-title b { font-size: 13px; }
+.afflictions.compact .affliction:not(.open) .aff-cure, .afflictions.compact .affliction:not(.open) .aff-ready { display: none; }
+.aff-more { display: none; font-size: 10.5px; color: #cfe8b0; }
+.afflictions.compact .affliction:not(.open) .aff-more { display: block; }
+@media (max-width: 560px) {
+  .afflictions .affliction:not(.open) .aff-cure, .afflictions .affliction:not(.open) .aff-ready { display: none; }
+  .afflictions .affliction:not(.open) .aff-more { display: block; }
+  .afflictions-head { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .affliction { animation: none; } }
+
+/* ── The dice box: the screen goes dark, the dice fly into a felt box and bounce off its walls ── */
+.dice-tray.box-tray {
+  gap: 14px; padding: 16px; cursor: default;
+  background: radial-gradient(ellipse at 50% 55%, rgba(20, 12, 40, 0.9), rgba(2, 1, 6, 0.97) 70%);
+  -webkit-backdrop-filter: blur(7px) saturate(0.6); backdrop-filter: blur(7px) saturate(0.6);
+}
+.dice-tray.box-tray .tray-head { background: rgba(18, 12, 34, 0.95); border-color: rgba(224, 178, 92, 0.45); width: min(100%, 560px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); }
+.dice-box {
+  position: relative; width: min(100%, 620px); height: min(44vh, 320px); min-height: 200px; padding: 16px;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.25) 0 2px, transparent 2px 100%) 0 0 / 38px 100%,
+    linear-gradient(180deg, #8a5a2e, #5e3a1c 50%, #4a2c14);
+  box-shadow: 0 0 0 2px #1a0e06, 0 0 0 5px #b08848, 0 0 0 7px #1a0e06, 0 26px 60px rgba(0, 0, 0, 0.8), 0 0 80px rgba(143, 123, 255, 0.25);
+  cursor: pointer;
+}
+.dice-box::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(255, 220, 160, 0.25); pointer-events: none; }
+.dice-box-felt {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.07), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at 50% 50%, #3a2468, #1c1036 75%);
+  box-shadow: inset 0 10px 18px rgba(0, 0, 0, 0.75), inset 0 -4px 10px rgba(0, 0, 0, 0.5), inset 8px 0 14px rgba(0, 0, 0, 0.55), inset -8px 0 14px rgba(0, 0, 0, 0.55);
+}
+.box-empty { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, 0.35); font: 700 14px var(--display); letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; }
+.box-die { position: absolute; left: 0; top: 0; will-change: transform; z-index: 2; }
+.box-die .die { width: 48px; height: 48px; font-size: 21px; box-shadow: inset -5px -5px 0 rgba(0, 0, 0, 0.22), inset 5px 5px 0 rgba(255, 255, 255, 0.35); }
+.box-shadow { position: absolute; left: 0; top: 0; width: 48px; height: 48px; border-radius: 50%; background: radial-gradient(circle, rgba(0, 0, 0, 0.75), transparent 68%); filter: blur(3px); will-change: transform; z-index: 1; }
+.box-die-tag { position: absolute; left: 50%; top: -16px; transform: translateX(-50%); white-space: nowrap; font: 700 10px var(--num); color: #fff; background: rgba(10, 6, 20, 0.85); padding: 0 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+.hand-row { gap: 10px; }
+.hand-row .die { width: 46px; height: 46px; font-size: 20px; }
+.box-results { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; min-height: 52px; max-width: 640px; }
+.box-result { display: grid; justify-items: center; gap: 1px; padding: 5px 12px; background: rgba(16, 10, 30, 0.92); border: 1px solid var(--line); }
+.box-result small { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.box-result b { font: 800 24px var(--num); line-height: 1.1; }
+.box-result.ok { border-color: #6ef0a0; } .box-result.ok b { color: #6ef0a0; }
+.box-result.bad { border-color: #ff8a7a; } .box-result.bad b { color: #ff8a7a; }
+.box-result.first-throw { opacity: 0.5; }
+.box-need { font-size: 10px; color: var(--muted); }
+.odds-strip { position: relative; display: block; width: 100%; height: 14px; margin: 18px 0 6px; background: linear-gradient(90deg, #5a1a22, #8a2a2a); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
+.odds-win { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #1d6b38, #3fcf7a); box-shadow: 0 0 12px rgba(110, 240, 160, 0.45); }
+.odds-target { position: absolute; top: -18px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; }
+.odds-target b { position: absolute; top: -2px; left: 4px; font: 800 13px var(--num); color: #fff; }
+.odds-roll { position: absolute; top: 12px; transform: translateX(-50%); display: grid; justify-items: center; line-height: 1; font-size: 12px; }
+.odds-roll b { font: 800 14px var(--num); }
+.odds-roll.ok { color: #6ef0a0; } .odds-roll.bad { color: #ff8a7a; }
+.odds-note { margin-top: 18px; color: var(--muted); font-size: 12px; }
+@media (max-width: 560px) {
+  .dice-box { height: min(40vh, 280px); padding: 10px; }
+  .box-die .die, .hand-row .die { width: 42px; height: 42px; font-size: 18px; }
+  .box-shadow { width: 42px; height: 42px; }
+}
+
+/* ── Hero looks: five options per part and colours ── */
+.look-count { font: 600 11px var(--num); color: var(--muted); margin-left: 4px; }
+.look-colour { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 8px; margin-bottom: 10px; }
+.look-colour > span { font-size: 13px; color: var(--muted); }
+.look-colour .swatch { width: 28px; height: 28px; }
+.swatch-auto { background: repeating-conic-gradient(#3a3450 0 25%, #1a1628 0 50%) 0 0 / 10px 10px; color: #fff; font-size: 14px; line-height: 1; }
+@media (max-width: 560px) { .look-colour { grid-template-columns: 1fr; gap: 4px; } }
+.aff-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.aff-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; font: 700 12px var(--num); color: #ffd0c8; background: rgba(90, 20, 40, 0.6); border: 1px solid #ff8a7a; }
+.aff-chip i { font-style: normal; display: grid; place-items: center; width: 18px; height: 18px; background: #ff5a3a; color: #1a0608; font-size: 12px; }
+.aff-chip.open { background: #ff8a7a; color: #1a0608; }
+.aff-chips-hint { font-size: 10.5px; color: var(--muted); }
+.aff-detail { display: grid; gap: 3px; margin-top: 6px; padding: 7px 9px; background: rgba(30, 8, 16, 0.75); border-left: 3px solid #ff8a7a; }
+.box-under { min-height: 112px; display: grid; align-content: start; justify-items: center; }
+/* The full cards sit in the side panel on a wide screen; above the map there are chips (tap for more). */
+.afflictions.aff-side { flex-direction: column; }
+.afflictions.aff-side .affliction { flex: none; max-width: none; padding: 7px 9px; }
+.afflictions.aff-side .afflictions-head { align-self: flex-start; }
+.afflictions.aff-side .aff-title b { font-size: 14px; }
+.afflictions.top .afflictions-head { display: inline; margin-right: 2px; }
+@media (min-width: 901px) { .afflictions.top { display: none; } }
+@media (max-width: 900px) { .afflictions.aff-side { display: none; } }
