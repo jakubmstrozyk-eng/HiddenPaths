@@ -274,6 +274,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       xpAcc = 0;
     } else if (stillInScene) {
       setLines(acc);
+    } else if (entries.some((e) => (e.type === 'test' || e.type === 'check') && 'player' in e && e.player === me.id)) {
+      // Every test of a plain action (hunting, gathering, mining, a service...) ends on a card with what it brought (Jacob, 2026-11-27).
+      const onIt = cells[nextMe.position]?.terrain;
+      const terrain = !onIt || onIt === 'void' ? 'core' : onIt;
+      const heading = rollHeading(a, me, entries) ?? (terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name));
+      const ok = entries.some((e) => (e.type === 'test' || e.type === 'check') && e.result.success);
+      setStory({ title: heading, lines: fresh.length ? fresh : [ok ? t('success') : t('failure')], xp: gained });
     } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken' || e.type === 'mission')) {
       // Plain actions only open a card for big moments: death, a new level, the Stone.
       const onIt = cells[nextMe.position]?.terrain;
