@@ -300,6 +300,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .card .primary { background: #15101f; color: #fff; width: 100%; }
 .card .ghost { border-color: rgba(21, 16, 31, 0.3); color: #15101f; }
 .card.victory { text-align: center; }
+.victory-scene { position: relative; margin: -4px -4px 12px; border: 2px solid #15101f; line-height: 0; overflow: hidden; }
+.victory-scene svg { width: 100%; height: auto; display: block; }
+.victory-hero { position: absolute; bottom: 4%; line-height: 0; }
 
 .arena {
   width: min(100%, 640px); max-height: calc(100dvh - 32px); overflow: auto;

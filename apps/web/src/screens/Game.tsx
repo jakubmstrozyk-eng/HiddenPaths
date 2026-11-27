@@ -12,6 +12,7 @@ import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
 import { attrShort, cardName, combatLine, describe, diceOf, foeName, itemName, type DiceRoll } from '../logText';
 import { HeroArt } from '../HeroArt';
+import { VictoryScene } from '../VictoryScene';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
 import { BagSheet, HeroSheet, TownSheet } from './Sheets';
@@ -737,6 +738,10 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {game.winner && !story && (
           <div className="overlay" key="won">
             <motion.article className="card victory" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+              {(() => {
+                const w = game.players.find((p) => p.id === game.winner)?.character;
+                return w ? <VictoryScene mode={game.config.winMode} race={w.race} profession={w.profession} look={w.look} /> : null;
+              })()}
               <h2>{game.winner === me.id ? t('victory') : `${names[game.winner] ?? game.players.find((p) => p.id === game.winner)?.character.name} ${locale === 'pl' ? 'wygrywa' : 'wins'}`}</h2>
               <p className="card-text">{game.config.winMode === 'stone' ? t('victoryStone') : t('victoryExploration')}</p>
               <div className="card-options">
