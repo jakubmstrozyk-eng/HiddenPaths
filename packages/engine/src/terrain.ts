@@ -89,6 +89,8 @@ export interface ActorState {
     attributes: Record<Attribute, number>;
     vitality: number;
     maxVitality: number;
+    /** Full Stamina (Wt.) of the hero, not what is left this round. */
+    stamina?: number;
     food: number;
     gold: number;
     skills: Partial<Record<SkillId, number>>;

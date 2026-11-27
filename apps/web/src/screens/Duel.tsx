@@ -27,8 +27,10 @@ import { SkillHand } from '../SkillCards';
 type Step =
   | { kind: 'roll'; who: string; test: UiKey; result: TestResult; vs?: string; card?: string }
   | { kind: 'hit'; who: string; target: string; damage: number; location?: ArmourSlot; roll?: number; damageRoll?: number; armour?: number; card?: string }
-  /** Where a blow lands: the k6 for the spot, or the striker's own pick after a hit by more than 20. */
+  /** Where a blow lands: the k6 for the spot, or the striker's own pick after a hit by 20 or more. */
   | { kind: 'spot'; who: string; target: string; slot: ArmourSlot; roll?: number; margin: number }
+  /** The k6 for extra damage, thrown after every hit: strength + k6 − armour on the spot. */
+  | { kind: 'dmg'; who: string; target: string; roll: number; strength: number; armour: number; damage: number; halved?: boolean }
   | { kind: 'note'; who: string; text: string };
 
 const HERO = 'hero';
@@ -69,6 +71,9 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         else if (ev.blocked) out.push({ kind: 'note', who: HERO, text: pl ? 'Bariera zatrzymuje cios!' : 'The barrier stops the blow!' });
         else if (ev.result.success && ev.damage !== undefined) {
           if (ev.location) out.push({ kind: 'spot', who: ev.by, target: ev.target, slot: ev.location, roll: ev.locationRoll, margin: ev.result.margin });
+          if (ev.damageRoll !== undefined && ev.strength !== undefined) {
+            out.push({ kind: 'dmg', who: ev.by, target: ev.target, roll: ev.damageRoll, strength: ev.strength, armour: ev.armour ?? 0, damage: ev.damage, ...(ev.halved ? { halved: true } : {}) });
+          }
           out.push({ kind: 'hit', who: ev.by, target: ev.target, damage: ev.damage, location: ev.location, roll: ev.locationRoll, damageRoll: ev.damageRoll, armour: ev.armour, card: ev.card ?? ev.scroll });
         }
         break;
@@ -154,6 +159,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         if (ev.torn) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Rozdarcie! +4' : 'Torn open! +4' });
         break;
       case 'held': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Walczy po twojej stronie!' : 'Fights on your side!' }); break;
+      case 'drain': out.push({ kind: 'note', who: HERO, text: pl ? `Czar wysysa 1 Wt · zostało ${ev.left}/${ev.of}` : `The spell drains 1 Sta · ${ev.left}/${ev.of} left` }); break;
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
     }
   }
@@ -175,7 +181,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
   const world = worldView(game);
   const alive = combat.foes.filter((f) => f.vitality > 0);
   const [target, setTarget] = useState<string | null>(null);
-  /** The spot the hero goes for; it counts when the Combat test passes by more than 20. Null: the weakest spot. */
+  /** The spot the hero goes for; it counts when the Combat test passes by 20 or more. Null: the weakest spot. */
   const [aim, setAim] = useState<ArmourSlot | null>(null);
   // With several foes the player picks whom to strike; a lone foe is the target by itself.
   const chosen = alive.find((f) => f.uid === target) ?? (alive.length === 1 ? alive[0] : undefined);
@@ -203,8 +209,10 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     if (heroHurt && step?.kind === 'hit') hurtSound(step.damage >= 5);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at, heroHurt]);
-  // The tap that chose the move throws the first die; every later throw of the hero waits for its own tap.
-  const waitingForTap = step?.kind === 'roll' && step.who === HERO && at > 0 && !rolled;
+  // The tap that chose the move throws the first die; every later throw of the hero waits for its own tap,
+  // the k6 for the hit location and the k6 for damage too.
+  const throwsDie = step?.kind === 'roll' || step?.kind === 'dmg' || (step?.kind === 'spot' && step.roll !== undefined);
+  const waitingForTap = throwsDie && step!.who === HERO && (at > 0 || step!.kind !== 'roll') && !rolled;
 
   useEffect(() => {
     if (!entries) return;
@@ -213,13 +221,13 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
       return () => clearTimeout(done);
     }
     if (waitingForTap) return;
-    if (step?.kind === 'roll' && !rolled) {
+    if (throwsDie && !rolled) {
       setRolled(true);
       return;
     }
     // The foes' moves play slowly enough to follow; the player can speed them up.
     const foeStep = !!step && step.who !== HERO;
-    const base = step?.kind === 'roll' ? ROLL_MS + (foeStep ? FOE_PAUSE_MS : PAUSE_MS) : step?.kind === 'hit' ? (foeStep ? 1500 : 1300) : step?.kind === 'spot' ? (foeStep ? 1400 : 1200) : (foeStep ? 1300 : 900);
+    const base = step?.kind === 'roll' ? ROLL_MS + (foeStep ? FOE_PAUSE_MS : PAUSE_MS) : step?.kind === 'hit' ? (foeStep ? 1500 : 1300) : step?.kind === 'spot' || step?.kind === 'dmg' ? (foeStep ? 1500 : 1300) : (foeStep ? 1300 : 900);
     const wait = pace === 'fast' ? Math.round(base * 0.45) : base;
     const next = setTimeout(() => { setAt((i) => i + 1); setRolled(false); }, wait);
     return () => clearTimeout(next);
@@ -382,12 +390,21 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 <motion.div key={`spot-${at}`} className="spot-step" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                   <small>{step.who === HERO ? c.name : foeName(step.who, locale)} · {locale === 'pl' ? 'miejsce trafienia' : 'hit location'}</small>
                   {step.roll !== undefined
-                    ? <motion.span initial={{ rotate: -200, y: -20 }} animate={{ rotate: 0, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}><DieFace kind="d6" value={step.roll} style={diceStyle(c.dice?.d6)} size={46} /></motion.span>
+                    ? <D6Throw value={step.roll} rolled={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} dice={c.dice} />
                     : <span className="big-aim" aria-hidden="true">◎</span>}
-                  <span className="spot-line">{step.roll !== undefined ? `k6 = ${step.roll}: ` : ''}{spotName(step.slot, step.roll, locale)}</span>
+                  <span className="spot-line">{step.roll === undefined ? spotName(step.slot, step.roll, locale) : rolled ? `k6 = ${step.roll}: ${spotName(step.slot, step.roll, locale)}` : '\u00a0'}</span>
                   <small>{step.roll !== undefined
-                    ? (locale === 'pl' ? `trafienie o ${step.margin} (do 20): miejsce losuje k6` : `hit by ${step.margin} (20 or less): a k6 picks the spot`)
-                    : (locale === 'pl' ? `trafienie o ${step.margin} (ponad 20): ${step.who === HERO ? 'wybierasz miejsce' : 'wybiera słabe miejsce'}` : `hit by ${step.margin} (over 20): ${step.who === HERO ? 'you pick the spot' : 'it picks a weak spot'}`)}</small>
+                    ? (locale === 'pl' ? `trafienie o ${step.margin} (poniżej 20): miejsce losuje k6` : `hit by ${step.margin} (under 20): a k6 picks the spot`)
+                    : (locale === 'pl' ? `trafienie o ${step.margin} (20 lub więcej): ${step.who === HERO ? 'wybierasz miejsce' : 'wybiera słabe miejsce'}` : `hit by ${step.margin} (20 or more): ${step.who === HERO ? 'you pick the spot' : 'it picks a weak spot'}`)}</small>
+                </motion.div>
+              )}
+              {step?.kind === 'dmg' && (
+                <motion.div key={`dmg-${at}`} className="spot-step" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                  <small>{step.who === HERO ? c.name : step.who.startsWith('pet-') ? (locale === 'pl' ? 'Towarzysz' : 'Companion') : foeName(step.who, locale)} · {locale === 'pl' ? 'dodatkowe obrażenia' : 'extra damage'}</small>
+                  <D6Throw value={step.roll} rolled={rolled} onTap={waitingForTap ? () => setRolled(true) : undefined} dice={c.dice} />
+                  <span className="spot-line">{rolled
+                    ? `k6 ${step.roll} + ${locale === 'pl' ? 'siła' : 'strength'} ${step.strength}${step.armour ? ` − ${locale === 'pl' ? 'pancerz' : 'armour'} ${step.armour}` : ''}${step.halved ? ` ÷ 2` : ''} = ${step.damage}`
+                    : `${locale === 'pl' ? 'siła' : 'strength'} ${step.strength} + k6${step.armour ? ` − ${locale === 'pl' ? 'pancerz' : 'armour'} ${step.armour}` : ''}`}</span>
                 </motion.div>
               )}
               {step?.kind === 'note' && (
@@ -402,8 +419,8 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                       <b>{locale === 'pl' ? 'Celujesz w' : 'Aiming at'}: {aim ? spotName(aim, undefined, locale) : (locale === 'pl' ? 'najsłabsze miejsce' : 'the weakest spot')}</b>
                       <FoeFigure kind={ENEMIES[aimFoe.enemy]!.kind} armour={aimArmour} size={110} aim={aim} onPick={(s) => setAim(aim === s ? null : s)} showRolls title={foeName(aimFoe.uid, locale)} />
                       <small>{locale === 'pl'
-                        ? 'Dotknij miejsca. Liczy się, gdy trafisz o ponad 20; inaczej miejsce wylosuje k6. Obrażenia: siła broni + k6 − pancerz.'
-                        : 'Tap a spot. It counts when you hit by more than 20; otherwise a k6 picks it. Damage: weapon strength + k6 − armour.'}</small>
+                        ? 'Dotknij miejsca. Liczy się, gdy trafisz o 20 lub więcej; inaczej miejsce wylosuje k6. Obrażenia: siła broni + k6 − pancerz.'
+                        : 'Tap a spot. It counts when you hit by 20 or more; otherwise a k6 picks it. Damage: weapon strength + k6 − armour.'}</small>
                     </div>
                   )}
                   <button className="ghost small" onClick={() => setPrompt(null)}>{t('back')}</button>
@@ -600,6 +617,40 @@ function DicePair({ face, spin, shaking, dice }: { face: number | null; spin: bo
         </motion.span>
       ))}
     </span>
+  );
+}
+
+/** A single k6 (hit location or extra damage). The hero holds and throws it; a foe's lands by itself. */
+function D6Throw({ value, rolled, onTap, dice }: { value: number; rolled: boolean; onTap?: () => void; dice?: DiceLook }) {
+  const { tx } = useT();
+  const style = diceStyle(dice?.d6);
+  const [face, setFace] = useState<number | null>(null);
+  useEffect(() => {
+    if (!rolled) return setFace(null);
+    let n = 0;
+    const timer = setInterval(() => {
+      n++;
+      if (n >= 6) {
+        clearInterval(timer);
+        setFace(value);
+        clack(0.3, 50);
+        return;
+      }
+      setFace(1 + Math.floor(Math.random() * 6));
+    }, 70);
+    return () => clearInterval(timer);
+  }, [rolled, value]);
+  if (onTap) {
+    return (
+      <ShakeToThrow onThrow={onTap} hint={tx({ pl: 'Rzuć k6', en: 'Throw the k6' })} className="d6-throw">
+        {(shaking) => <span className={`d6-wait ${shaking ? 'shaking' : ''}`}><DieFace kind="d6" value={6} style={style} size={46} /></span>}
+      </ShakeToThrow>
+    );
+  }
+  return (
+    <motion.span initial={{ rotate: -200, y: -20 }} animate={{ rotate: 0, y: 0 }} transition={{ duration: 0.45, ease: 'easeOut' }}>
+      <DieFace kind="d6" value={face ?? 1} style={style} size={46} />
+    </motion.span>
   );
 }
 
