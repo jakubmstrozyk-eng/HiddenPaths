@@ -38,7 +38,7 @@ const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(
 
 /** What each spot in the picture offers. */
 const SPOT_SERVICES: Partial<Record<Spot, Service[]>> = {
-  bar: ['meal'], table: ['gossip', 'story'], rooms: ['stay'], tavern: ['meal', 'stay', 'gossip', 'story'], smith: ['sharpen'], yard: ['train'],
+  bar: ['meal'], table: ['gossip', 'story'], rooms: ['stay'], tavern: ['meal', 'stay', 'gossip', 'story'], smith: ['sharpen'], yard: ['train'], castle: ['deliver'],
 };
 
 /** Inn, village and city as a picture: click a building or a corner and its services, wares or portals open below. */
@@ -66,7 +66,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
 
   const serviceButtons = (list: Service[]) => (
     <div className="choices">
-      {list.map((s) => (
+      {list.filter((s) => s !== 'deliver' || services.includes(s)).map((s) => (
         <button key={s} className="choice" disabled={!services.includes(s)} onClick={() => act({ type: 'service', service: s })}>
           <span>{t(s)}</span>
           <small className="act-test">{serviceTest(s, game, me, locale)}</small>
@@ -100,6 +100,11 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
       <p className="muted scene-hint">{tx({ pl: 'Kliknij miejsce na obrazku, żeby tam wejść.', en: 'Click a place in the picture to go there.' })}</p>
       <h3 className="spot-title">{name(chosen)}</h3>
       {SPOT_SERVICES[chosen] && serviceButtons(SPOT_SERVICES[chosen]!)}
+      {chosen === 'castle' && !services.includes('deliver') && (
+        <p className="muted">{game.config.winMode === 'stone'
+          ? tx({ pl: 'Strażnicy czekają na Kamień początku. Przynieś go ze środka świata.', en: 'The guards await the Stone of Beginnings. Bring it from the centre of the world.' })
+          : tx({ pl: 'W tej grze zamek nie czeka na Kamień: wygrywa ten, kto odkryje cały świat.', en: 'In this game the castle awaits no Stone: whoever reveals the whole world wins.' })}</p>
+      )}
       {chosen === 'smith' && wares(atSmith)}
       {chosen === 'shop' && wares(atShop)}
       {chosen === 'mystic' && (
@@ -158,6 +163,7 @@ function serviceReward(s: Service, inn: boolean, locale: string, me: PlayerState
     case 'gossip': return pl ? 'sukces: +10 Charyzmy na 2 rundy' : 'success: +10 Charisma for 2 rounds';
     case 'train': return pl ? `−${TOWN.train.stamina} Wt → +1 Walki na stałe` : `−${TOWN.train.stamina} Sta → +1 Combat for good`;
     case 'sharpen': return pl ? `${TOWN.sharpen} zł → +1 obrażeń na 2 rundy` : `${TOWN.sharpen} gold → +1 damage for 2 rounds`;
+    case 'deliver': return pl ? 'oddajesz Kamień i kończysz grę zwycięstwem · najpierw skorzystaj z miasta, jeśli chcesz' : 'hand the Stone over and win the game · use the town first if you like';
     default: return '';
   }
 }

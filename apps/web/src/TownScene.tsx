@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
 /** The places in a settlement a hero can walk into. */
-export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal' | 'mystic';
+export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal' | 'mystic' | 'castle';
 
 export const SPOTS: Record<'inn' | 'village' | 'city', Spot[]> = {
   inn: ['bar', 'table', 'rooms'],
   village: ['tavern', 'smith', 'yard', 'market', 'shop'],
-  city: ['tavern', 'smith', 'yard', 'market', 'shop', 'mystic', 'portal'],
+  city: ['tavern', 'smith', 'yard', 'market', 'shop', 'mystic', 'portal', 'castle'],
 };
 
 export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
@@ -20,6 +20,7 @@ export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
   shop: { pl: 'Kupiec i zielarz', en: 'Merchant and herbalist' },
   portal: { pl: 'Portal', en: 'Portal' },
   mystic: { pl: 'Wieża Mistyka', en: "The Mystic's tower" },
+  castle: { pl: 'Zamek', en: 'Castle' },
 };
 
 /** A clickable building or corner of the picture, lit when hovered or chosen. */
@@ -93,6 +94,21 @@ function TownStreet({ chosen, onPick, name, city }: { chosen: Spot | null; onPic
       <rect width={800} height={360} fill={city ? '#3a4a6a' : '#5a7aa0'} />
       <circle cx={680} cy={60} r={26} fill="#ffe8a0" opacity={0.9} />
       {city && <><rect x={0} y={120} width={800} height={30} fill="#6a6a78" /><rect x={0} y={112} width={800} height={10} fill="#8a8a98" />{[...Array(20)].map((_, i) => <rect key={i} x={i * 40} y={104} width={20} height={10} fill="#8a8a98" />)}</>}
+      {city && (
+        <Hot spot="castle" chosen={chosen} onPick={onPick} label={name('castle')} x={250} y={18}>
+          <rect x={212} y={52} width={76} height={60} fill="#7a7a88" stroke="#1a120c" strokeWidth={2} />
+          {[0, 1, 2, 3].map((i) => <rect key={i} x={214 + i * 20} y={44} width={12} height={10} fill="#7a7a88" stroke="#1a120c" strokeWidth={1.5} />)}
+          {[184, 288].map((x) => (
+            <g key={x}>
+              <rect x={x} y={36} width={28} height={76} fill="#8a8a98" stroke="#1a120c" strokeWidth={2} />
+              <polygon points={`${x - 4},36 ${x + 14},8 ${x + 32},36`} fill="#5a3a6a" stroke="#1a120c" strokeWidth={2} />
+              <rect x={x + 10} y={54} width={8} height={12} fill="#ffd070" stroke="#1a120c" />
+            </g>
+          ))}
+          <path d="M238 112 L238 86 Q250 72 262 86 L262 112 Z" fill="#3a2414" stroke="#1a120c" strokeWidth={2} />
+          <rect x={249} y={20} width={2} height={26} fill="#1a120c" /><path d="M251 20 L268 25 L251 30 Z" fill="#d8b040" />
+        </Hot>
+      )}
       <rect y={260} width={800} height={100} fill={city ? '#7a7464' : '#6a8a42'} />
       <path d="M0 300 Q400 270 800 300 L800 330 Q400 300 0 330 Z" fill={city ? '#9a927c' : '#a08a5a'} />
       <Hot spot="tavern" chosen={chosen} onPick={onPick} label={name('tavern')} x={95} y={110}>
