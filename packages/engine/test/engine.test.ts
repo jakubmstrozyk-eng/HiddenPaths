@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MISSIONS, RACES, TERRAINS } from '@hp/content';
 import {
+  mealDue,
   Rng, seedFromString, test as d100, successChance,
   SIZE_PRESETS, generateMap, terrainPool, regionOf, neighbours,
   createCharacter, drawMissionChoices, levelForXp,
@@ -210,6 +211,21 @@ describe('turns', () => {
     // Forgetting to eat: the food stays in the bag, the hero goes hungry.
     game = applyAction(game, 'p1', { type: 'endTurn' });
     expect(currentPlayer(game).character.food).toBe(food - 1);
+    expect(currentPlayer(game).roundsWithoutFood).toBe(1);
+  });
+
+  it('in the desert with 1 food for a 2-food meal the hero still eats it, and is still hungry', () => {
+    let game = createGame('turns-8', solo, [{ id: 'p1', character: hero() }]);
+    const p = currentPlayer(game);
+    const desert = game.map.cells.findIndex((c) => c.terrain === 'desert');
+    expect(desert).toBeGreaterThanOrEqual(0);
+    p.position = desert;
+    p.character.food = 1;
+    expect(mealDue(game, p).left).toBe(2);
+    game = applyAction(game, 'p1', { type: 'eat' });
+    expect(currentPlayer(game).character.food).toBe(0);
+    expect(mealDue(game, currentPlayer(game)).left).toBe(1);
+    game = applyAction(game, 'p1', { type: 'endTurn' });
     expect(currentPlayer(game).roundsWithoutFood).toBe(1);
   });
 

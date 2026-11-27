@@ -224,10 +224,15 @@ function CardBackArt() {
 }
 
 /** The outcome of a card (or a fight) after it is over, on the same kind of card as the event. */
-export function StoryPanel({ title, lines, xp = 0, level, xpNow, onClose }: { title: string; lines: string[]; xp?: number; level?: number; xpNow?: number; onClose: () => void }) {
+export function StoryPanel({ title, lines, xp = 0, level, xpNow, locked = false, onClose }: {
+  title: string; lines: string[]; xp?: number; level?: number; xpNow?: number;
+  /** A fight's outcome: only its own button closes it, a stray tap beside the card does nothing. */
+  locked?: boolean;
+  onClose: () => void;
+}) {
   const { t } = useT();
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay" onClick={locked ? undefined : onClose}>
       <motion.article className="ev-card ev-story" {...rise} onClick={(e) => e.stopPropagation()}>
         <header className="ev-head">
           <small>{t('whatHappened')}</small>

@@ -639,20 +639,22 @@ export function mealDue(state: GameState, player: PlayerState): { needed: number
   return { needed, eaten, left: Math.max(0, needed - eaten) };
 }
 
+/** Any food helps: with 1 portion where the desert asks for 2, the hero still eats it (and is still hungry). */
 function canEat(state: GameState, player: PlayerState): boolean {
   const { left } = mealDue(state, player);
-  return left > 0 && player.character.food >= left;
+  return left > 0 && player.character.food > 0;
 }
 
-/** The hero eats what this round still asks for. */
+/** The hero eats what this round still asks for, or all the food left when that is less. */
 function eat(state: GameState, player: PlayerState) {
   const c = player.character;
   const { left, eaten } = mealDue(state, player);
-  eatMeal(state, player, left);
-  c.food -= left;
+  const portions = Math.min(left, c.food);
+  eatMeal(state, player, portions);
+  c.food -= portions;
   trimMeals(player);
-  player.roundsWithoutFood = 0;
-  player.counters[ateKey(state)] = eaten + left;
+  if (portions === left) player.roundsWithoutFood = 0;
+  player.counters[ateKey(state)] = eaten + portions;
   log(state, { type: 'ate', player: player.id, foodLeft: c.food });
 }
 
