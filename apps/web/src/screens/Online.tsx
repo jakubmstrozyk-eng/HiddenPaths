@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { currentPlayer, type Action, type GameState } from '@hp/engine';
 import { api, ApiError, type GameSummary, type GameView, type Me } from '../api';
 import { useT, type UiKey } from '../i18n';
-import { PixelHero } from '../PixelHero';
+import { HeroArt } from '../HeroArt';
 import { GameScreen } from './Game';
 
 const errorText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : String(e));
@@ -301,7 +301,7 @@ function Lobby({ view, me, onMenu, onStarted }: { view: GameView; me: Me; onMenu
       <ul className="lobby-players">
         {view.players.map((p) => (
           <li key={p.userId}>
-            <PixelHero race={p.race as never} size={32} />
+            <HeroArt race={p.race as never} size={32} />
             <span><b>{p.hero}</b> <small className="muted">{p.name}{p.userId === view.host ? ` · ${t('host')}` : ''}</small></span>
           </li>
         ))}

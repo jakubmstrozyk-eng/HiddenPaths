@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ArmourSlot, EnemyKind, HeroLook, ProfessionId, RaceId } from '@hp/content';
 import { useT } from './i18n';
-import { PixelFoe, PixelHero, type Gear } from './PixelHero';
+import { FoeArt, HeroArt, type Gear } from './HeroArt';
 import { spotName } from './ArmourBody';
 
 /**
@@ -29,12 +29,12 @@ type Body = { grid: number; spots: Spot[] };
 const HERO: Body = {
   grid: 16,
   spots: [
-    { slot: 'head', rolls: [1], rect: [3, 0, 10, 7], anchor: [11.5, 3], side: 1, y: 2.4 },
-    { slot: 'torso', rolls: [4], rect: [5, 7, 6, 4], anchor: [6, 8], side: -1, y: 5.6 },
-    { slot: 'arms', rolls: [3], rect: [1, 7, 4, 4], anchor: [2.5, 9.2], side: -1, y: 9.6 },
-    { slot: 'arms', rolls: [2], rect: [11, 7, 4, 4], anchor: [13.6, 9.2], side: 1, y: 8.4 },
-    { slot: 'legs', rolls: [6], rect: [3, 11, 5, 5], anchor: [4.6, 13.6], side: -1, y: 13.8 },
-    { slot: 'legs', rolls: [5], rect: [8, 11, 5, 5], anchor: [11.4, 13.6], side: 1, y: 13.8 },
+    { slot: 'head', rolls: [1], rect: [5.5, 1.5, 5, 5.5], anchor: [10, 3.4], side: 1, y: 2.4 },
+    { slot: 'torso', rolls: [4], rect: [5.5, 7, 5, 4], anchor: [6.4, 8.2], side: -1, y: 5.6 },
+    { slot: 'arms', rolls: [3], rect: [3.6, 7.2, 2, 4.2], anchor: [4.6, 9.6], side: -1, y: 9.6 },
+    { slot: 'arms', rolls: [2], rect: [10.4, 7.2, 2, 4.2], anchor: [11.4, 9.6], side: 1, y: 8.4 },
+    { slot: 'legs', rolls: [6], rect: [5.6, 11, 2.2, 4.4], anchor: [6.8, 13.4], side: -1, y: 13.8 },
+    { slot: 'legs', rolls: [5], rect: [8.2, 11, 2.2, 4.4], anchor: [9.2, 13.4], side: 1, y: 13.8 },
   ],
 };
 
@@ -134,12 +134,12 @@ function Figure({ body, sprite, armour, size = 72, aim, hit, onPick, showRolls =
 export function HeroFigure({ race, profession, look, gear, ...rest }: FigureProps & {
   race: RaceId; profession?: ProfessionId; look?: HeroLook; gear?: Gear;
 }) {
-  return <Figure body={HERO} sprite={<PixelHero race={race} profession={profession} look={look} size={rest.size ?? 72} gear={gear} />} {...rest} />;
+  return <Figure body={HERO} sprite={<HeroArt race={race} profession={profession} look={look} size={rest.size ?? 72} gear={gear} />} {...rest} />;
 }
 
 /** A foe, with the value of each spot beside it. */
 export function FoeFigure({ kind, ...rest }: FigureProps & { kind: EnemyKind }) {
-  return <Figure body={kind === 'beast' ? BEAST : BIPED} sprite={<PixelFoe kind={kind} size={rest.size ?? 72} armour={rest.armour} />} {...rest} />;
+  return <Figure body={kind === 'beast' ? BEAST : BIPED} sprite={<FoeArt kind={kind} size={rest.size ?? 72} armour={rest.armour} />} {...rest} />;
 }
 
 /** What the colours of the values mean, with a word on the k6. */

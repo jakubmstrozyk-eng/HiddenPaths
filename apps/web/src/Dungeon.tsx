@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { DUNGEON_THEMES, EVENT_BY_ID, type RoomKind, type Text } from '@hp/content';
 import { roomSpeed, type Action, type Dungeon, type GameState, type PlayerState } from '@hp/engine';
-import { PixelHero } from './PixelHero';
+import { HeroArt } from './HeroArt';
 import { useT } from './i18n';
 
 const KIND: Record<RoomKind, { icon: string; name: Text }> = {
@@ -89,7 +89,7 @@ export function DungeonBoard({ game, me, actions, act, onClose }: {
               <small>{seen ? tx(kind.name) : '???'}</small>
               {room.cleared && <span className="room-done" aria-hidden="true">✓</span>}
               {others.filter((p) => p.delve!.room === i).map((p) => (
-                <span key={p.id} className="room-other"><PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={20} /></span>
+                <span key={p.id} className="room-other"><HeroArt race={p.character.race} profession={p.character.profession} look={p.character.look} size={20} /></span>
               ))}
               {here === i && <Figure me={me} />}
             </button>
@@ -112,7 +112,7 @@ function Figure({ me }: { me: PlayerState }) {
   const c = me.character;
   return (
     <motion.span className="room-hero" layoutId="dungeon-hero" transition={{ duration: 0.5, ease: 'easeInOut' }}>
-      <PixelHero race={c.race} profession={c.profession} look={c.look} size={34} walking={false} />
+      <HeroArt race={c.race} profession={c.profession} look={c.look} size={34} walking={false} />
     </motion.span>
   );
 }

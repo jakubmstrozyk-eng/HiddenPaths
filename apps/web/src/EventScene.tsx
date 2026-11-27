@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { RaceId, ProfessionId, HeroLook, TerrainId } from '@hp/content';
-import { PixelHero } from './PixelHero';
+import { HeroArt } from './HeroArt';
 
 /**
  * A little stage for every event card: a sky and a land that fit the card (or the fragment the hero
@@ -657,7 +657,7 @@ export function EventScene({ card, step, terrain, hostile, hero }: { card: numbe
         </defs>
       </svg>
       {hero && (scene?.hero ?? true) && (
-        <span className="ev-scene-hero"><PixelHero race={hero.race} profession={hero.profession} look={hero.look} size={44} /></span>
+        <span className="ev-scene-hero"><HeroArt race={hero.race} profession={hero.profession} look={hero.look} size={44} /></span>
       )}
     </div>
   );

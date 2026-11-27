@@ -11,7 +11,7 @@ import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
 import { useT } from '../i18n';
 import { attrShort, cardName, combatLine, describe, diceOf, foeName, itemName, type DiceRoll } from '../logText';
-import { PixelHero } from '../PixelHero';
+import { HeroArt } from '../HeroArt';
 import { EventPanel, StoryPanel } from './Panels';
 import { Duel } from './Duel';
 import { BagSheet, HeroSheet, TownSheet } from './Sheets';
@@ -122,7 +122,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const boardWidth = Math.max(160, Math.min(room.w * width / (width + 1.8), room.h * width / (height + 1.8), 720));
+  // Room around the board for heroes still waiting outside it; once everyone is in, the board takes it.
+  const rim = game.players.some((p) => isOutside(p)) ? 1.8 : 0.5;
+  const boardWidth = Math.max(160, Math.min(room.w * width / (width + rim), room.h * width / (height + rim), 1100));
   const [gate, setGate] = useState<Side>(HOME_SIDE[c.race]);
   const enterable = new Set(actions.flatMap((a) => (a.type === 'enter' ? [a.side] : [])));
   // The dungeon: shown instead of the map while the hero is below, or when they look down the entrance.
@@ -353,12 +355,18 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           </button>
         )}
         <div className="who">
-          <PixelHero race={c.race} profession={c.profession} look={c.look} size={28} />
+          <HeroArt race={c.race} profession={c.profession} look={c.look} size={28} />
           <span>
             <b>{c.name}</b> · {t('level')} {c.level} · {t('round')} {game.round}
           </span>
         </div>
         <JournalChip me={me} onOpen={() => setSheet('journal')} />
+        {/* Hero, bag and journal: in the bar on a computer, pinned to the bottom of the screen on a phone. */}
+        <nav className="game-nav" aria-label={tx({ pl: 'Bohater', en: 'Hero' })}>
+          <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" /><span>{t('heroSheet')}</span></button>
+          <button className="ghost with-icon" disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" /><span>{t('bag')}</span></button>
+          <button className="ghost with-icon" onClick={() => setSheet('journal')}><span aria-hidden="true" className="nav-emoji">📖</span><span>{tx({ pl: 'Dziennik', en: 'Journal' })}</span></button>
+        </nav>
         <div className="stats">
           <MoveBar icon="speed" label={t('speed')} left={me.speedLeft} max={c.speed} kind="speed" />
           <MoveBar icon="stamina" label={t('stamina')} left={me.staminaLeft} max={c.stamina} kind="stamina" />
@@ -369,7 +377,6 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         </div>
       </header>
 
-      <GoalsPanel game={game} me={me} />
       <Afflictions game={game} me={me} compact className="top" />
 
       <div className="play-area">
@@ -456,7 +463,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 title={names[p.id] ?? p.character.name}
               >
                 <span className="figurine">
-                  <PixelHero race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
+                  <HeroArt race={p.character.race} profession={p.character.profession} look={p.character.look} size={28} />
                 </span>
                 <small className="hero-tag">{p.character.name}</small>
               </motion.div>
@@ -472,11 +479,18 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               style={{ width: `${100 / width}%`, height: `${100 / height}%` }}
             >
               <span className="figurine">
-                <PixelHero race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
+                <HeroArt race={c.race} profession={c.profession} look={c.look} size={40} walking={walking} facing={facing} />
               </span>
             </motion.div>
           </div>
         </div>
+        <div className="play-side">
+        {!myTurn && !game.winner && (
+          <p className="waiting">
+            {locale === 'pl' ? `Ruch gracza ${names[turnOf.id] ?? turnOf.character.name}` : `${names[turnOf.id] ?? turnOf.character.name} is playing`}
+            {hoursLeft !== null ? (locale === 'pl' ? ` · zostało ok. ${hoursLeft} h` : ` · about ${hoursLeft} h left`) : ''}
+          </p>
+        )}
         <aside className="frag-panel" aria-label={tx({ pl: 'Na tym fragmencie', en: 'On this fragment' })}>
           <p className="here">
             <Icon name="map" size={14} /> <b>{delving && dungeonTheme ? tx(dungeonTheme.name) : outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
@@ -637,15 +651,6 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             </button>
           </div>
         </aside>
-      </div>
-
-      <footer className="dock">
-        {!myTurn && !game.winner && (
-          <p className="waiting">
-            {locale === 'pl' ? `Ruch gracza ${names[turnOf.id] ?? turnOf.character.name}` : `${names[turnOf.id] ?? turnOf.character.name} is playing`}
-            {hoursLeft !== null ? (locale === 'pl' ? ` · zostało ok. ${hoursLeft} h` : ` · about ${hoursLeft} h left`) : ''}
-          </p>
-        )}
         <SkillHand
           profession={c.profession}
           owned={c.cards}
@@ -653,12 +658,10 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
           onPlay={(card) => (card === 'trapper-tannery' ? setTannery(true) : act({ type: 'card', card }))}
         />
-        <div className="dock-actions">
-          <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" />{t('heroSheet')}</button>
-          <button className="ghost with-icon" disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
-          <button className="ghost with-icon" onClick={() => setSheet('journal')}><span aria-hidden="true">📖</span>{tx({ pl: 'Dziennik', en: 'Journal' })}</button>
+        <GoalsPanel game={game} me={me} />
         </div>
-      </footer>
+      </div>
+
 
       <AnimatePresence>
         {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} xp={sceneXp} act={act} hold={!!dice} />}
