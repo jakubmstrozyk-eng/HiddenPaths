@@ -1,7 +1,6 @@
 :root {
-  /* Fantasy faces, both SIL Open Font License, both with full Polish diacritics:
-     Uncial Antiqua for the game's name, Metamorphous for headings and menu labels. */
-  --title: 'Uncial Antiqua', 'Metamorphous', Georgia, serif;
+  /* Fantasy face, SIL Open Font License, full Polish diacritics: Metamorphous for the name, headings and menu labels. */
+  --title: 'Metamorphous', Georgia, serif;
   --display: 'Metamorphous', 'Cinzel', Georgia, serif;
   --num: Inter, system-ui, sans-serif;
   --ink: #f4f2ff;
@@ -101,9 +100,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   inset: -30%; clip-path: none;
   background: radial-gradient(closest-side, rgba(255, 255, 255, 0.07), transparent 70%) 20% 30% / 70% 70% no-repeat,
               radial-gradient(closest-side, rgba(255, 255, 255, 0.05), transparent 70%) 80% 70% / 60% 60% no-repeat;
-  animation: smoke-creep 11s ease-in-out infinite alternate;
+  transform: rotate(-12deg);
 }
-@keyframes smoke-creep { to { transform: translate(14%, -10%) rotate(25deg); } }
 
 /* Every press throws a splash of matter; difference blending keeps it dark on white and white on dark. */
 .ink-defs { position: absolute; width: 0; height: 0; }
@@ -129,7 +127,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 @media (prefers-reduced-motion: reduce) {
   .tile, .ghost, .choice, .lang, .primary { transition-property: color, background-color, border-color; }
   .tile:hover:not(:disabled) .ink-fill i, .tile:focus-visible:not(:disabled) .ink-fill i { clip-path: none; }
-  .title-rule .gem, .tile:disabled .ink-fill i { animation: none; }
+  .title-rule .gem { animation: none; }
 }
 @media (max-width: 420px) {
   .tiles { gap: 12px; }
