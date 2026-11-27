@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 import type { Locale, Text } from '@hp/content';
 
 const UI = {
-  tagline: { pl: 'Świat pękł. Ścieżki są ukryte.', en: 'The world has cracked. The paths are hidden.' },
+  tagline: { pl: 'Świat zapadł się w mroku. Twoje kroki odsłaniają go na nowo', en: 'The world has sunk into darkness. Your steps reveal it anew' },
   newGame: { pl: 'Nowa gra', en: 'New game' },
   continue: { pl: 'Kontynuuj', en: 'Continue' },
   multiplayer: { pl: 'Gra wieloosobowa', en: 'Multiplayer' },

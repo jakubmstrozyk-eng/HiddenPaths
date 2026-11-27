@@ -55,7 +55,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
 .title-rule path { fill: none; stroke: rgba(255, 255, 255, 0.7); stroke-width: 1.2; }
 .title-rule .gem { stroke: #fff; animation: gem-breathe 4s ease-in-out infinite; transform-origin: 160px 10px; }
 @keyframes gem-breathe { 50% { opacity: 0.45; transform: rotate(45deg) scale(0.8); } }
-.tagline { font-family: var(--display); color: rgba(255, 255, 255, 0.72); margin: 0 0 22px; font-size: 17px; letter-spacing: 0.04em; }
+.tagline { text-wrap: balance; font-family: var(--display); color: rgba(255, 255, 255, 0.72); margin: 0 0 22px; font-size: 17px; letter-spacing: 0.04em; }
 .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 540px; }
 
 /* Ink radius: a registered property so the spreading light can be transitioned. */
