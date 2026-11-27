@@ -712,7 +712,13 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .jr-chip-camp { color: #f0c040; }
 .jr-camp-only { margin: 6px 0; }
 @media (max-width: 560px) { .goals-head { display: none; } .goal { flex-basis: 40%; padding: 5px 8px; } .goal-text { font-size: 11px; } }
-@media (max-width: 560px) { .goal.vow.free { display: none; } .goals-head.vows-head { display: block; flex-basis: 100%; margin-top: 2px; } }
+/* On a phone: goals in one row of two, the vows in the next, under their own heading. */
+@media (max-width: 560px) {
+  .goals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .goals .goal { min-width: 0; }
+  .goals-head.vows-head { display: block; grid-column: 1 / -1; margin-top: 2px; }
+  .goal.vow.free .goal-text { display: block; }
+}
 
 /* Career goals on a hero card */
 .career { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
