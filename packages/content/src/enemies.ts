@@ -29,6 +29,8 @@ export interface Enemy {
   armour: Partial<Record<ArmourSlot, number>>;
   xp: number;
   traits: EnemyTrait[];
+  /** A thinking foe (people, demons, the beastman...): a hero it kills loses all their gold to it. Beasts, spiders and the dead do not rob. */
+  sentient?: boolean;
 }
 
 const t = (pl: string, en: string): Text => ({ pl, en });
@@ -37,28 +39,28 @@ const all = (v: number) => ({ head: v, arms: v, torso: v, legs: v });
 const list: Enemy[] = [
   { id: 'giantSpider', name: t('Wielki pająk', 'Giant spider'), kind: 'beast', dex: 20, str: 40, wil: 30, int: 10, com: 30, vitality: 16, weapon: { name: t('Kolce jadowe', 'Venom spines'), power: 0 }, armour: all(1), xp: 5, traits: ['poison'] },
   { id: 'wolf', name: t('Wilk', 'Wolf'), kind: 'beast', dex: 30, str: 20, wil: 20, int: 20, com: 20, vitality: 8, weapon: { name: t('Kły i szpony', 'Fangs and claws'), power: -1 }, armour: {}, xp: 2, traits: [] },
-  { id: 'youngVoidDemon', name: t('Młody demon pustki', 'Young void demon'), kind: 'demon', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 12, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: { torso: 2, arms: 2 }, xp: 4, traits: [] },
-  { id: 'bandit', name: t('Bandyta', 'Bandit'), kind: 'thug', dex: 30, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: {}, xp: 4, traits: [] },
+  { id: 'youngVoidDemon', name: t('Młody demon pustki', 'Young void demon'), kind: 'demon', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 12, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: { torso: 2, arms: 2 }, xp: 4, traits: [], sentient: true },
+  { id: 'bandit', name: t('Bandyta', 'Bandit'), kind: 'thug', dex: 30, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: {}, xp: 4, traits: [], sentient: true },
   { id: 'banshee', name: t('Banshee', 'Banshee'), kind: 'wraith', dex: 40, str: 20, wil: 40, int: 20, com: 40, vitality: 8, weapon: { name: t('Porażenie', 'Shriek'), power: -2, ranged: true }, armour: {}, xp: 7, traits: ['stun', 'ethereal'] },
   { id: 'mummy', name: t('Mumia', 'Mummy'), kind: 'wraith', dex: 20, str: 30, wil: 20, int: 10, com: 30, vitality: 10, weapon: { name: t('Szpony', 'Claws'), power: -1 }, armour: {}, xp: 5, traits: ['rot'] },
-  { id: 'voidDemon', name: t('Demon pustki', 'Void demon'), kind: 'demon', dex: 40, str: 40, wil: 30, int: 30, com: 40, vitality: 16, weapon: { name: t('Dwuręczny topór', 'Great axe'), power: 1, blade: true }, armour: all(2), xp: 7, traits: [] },
-  { id: 'witch', name: t('Czarownica', 'Witch'), kind: 'thug', dex: 20, str: 20, wil: 40, int: 40, com: 20, vitality: 12, weapon: { name: t('Błyskawica', 'Lightning'), power: 1, ranged: true }, armour: {}, xp: 5, traits: ['drain'] },
-  { id: 'minotaur', name: t('Minotaur', 'Minotaur'), kind: 'beast', dex: 30, str: 50, wil: 40, int: 30, com: 40, vitality: 20, weapon: { name: t('Topór', 'Axe'), power: 0, blade: true }, armour: { torso: 3, head: 2 }, xp: 9, traits: ['penetrating'] },
-  { id: 'imp', name: t('Chochlik', 'Imp'), kind: 'demon', dex: 50, str: 10, wil: 10, int: 10, com: 20, vitality: 4, weapon: { name: t('Sztylet', 'Dagger'), power: -2, blade: true }, armour: {}, xp: 1, traits: [] },
-  { id: 'beastman', name: t('Zwierzoludź', 'Beastman'), kind: 'beast', dex: 30, str: 40, wil: 30, int: 20, com: 35, vitality: 16, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: all(1), xp: 5, traits: [] },
+  { id: 'voidDemon', name: t('Demon pustki', 'Void demon'), kind: 'demon', dex: 40, str: 40, wil: 30, int: 30, com: 40, vitality: 16, weapon: { name: t('Dwuręczny topór', 'Great axe'), power: 1, blade: true }, armour: all(2), xp: 7, traits: [], sentient: true },
+  { id: 'witch', name: t('Czarownica', 'Witch'), kind: 'thug', dex: 20, str: 20, wil: 40, int: 40, com: 20, vitality: 12, weapon: { name: t('Błyskawica', 'Lightning'), power: 1, ranged: true }, armour: {}, xp: 5, traits: ['drain'], sentient: true },
+  { id: 'minotaur', name: t('Minotaur', 'Minotaur'), kind: 'beast', dex: 30, str: 50, wil: 40, int: 30, com: 40, vitality: 20, weapon: { name: t('Topór', 'Axe'), power: 0, blade: true }, armour: { torso: 3, head: 2 }, xp: 9, traits: ['penetrating'], sentient: true },
+  { id: 'imp', name: t('Chochlik', 'Imp'), kind: 'demon', dex: 50, str: 10, wil: 10, int: 10, com: 20, vitality: 4, weapon: { name: t('Sztylet', 'Dagger'), power: -2, blade: true }, armour: {}, xp: 1, traits: [], sentient: true },
+  { id: 'beastman', name: t('Zwierzoludź', 'Beastman'), kind: 'beast', dex: 30, str: 40, wil: 30, int: 20, com: 35, vitality: 16, weapon: { name: t('Miecz', 'Sword'), power: 0, blade: true }, armour: all(1), xp: 5, traits: [], sentient: true },
   { id: 'raven', name: t('Kruk', 'Raven'), kind: 'beast', dex: 30, str: 20, wil: 20, int: 10, com: 20, vitality: 6, weapon: { name: t('Pazury', 'Talons'), power: -1 }, armour: {}, xp: 2, traits: ['harrying'] },
   { id: 'bear', name: t('Niedźwiedź', 'Bear'), kind: 'beast', dex: 30, str: 60, wil: 40, int: 0, com: 30, vitality: 24, weapon: { name: t('Łapa', 'Paw'), power: -1 }, armour: {}, xp: 5, traits: [] },
   { id: 'manticore', name: t('Mantikora', 'Manticore'), kind: 'beast', dex: 60, str: 50, wil: 40, int: 0, com: 50, vitality: 36, weapon: { name: t('Szpony', 'Claws'), power: 0 }, armour: {}, xp: 16, traits: ['stinger'] },
   // Foes that appear only in event cards.
   { id: 'honeybadger', name: t('Honeybadger', 'Honeybadger'), kind: 'beast', dex: 30, str: 60, wil: 30, int: 10, com: 30, vitality: 24, weapon: { name: t('Łapa', 'Paw'), power: -1 }, armour: {}, xp: 8, traits: [] },
-  { id: 'nomadWarrior', name: t('Nomada', 'Nomad'), kind: 'human', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Długi łuk', 'Longbow'), power: 1, ranged: true }, armour: {}, xp: 2, traits: [] },
-  { id: 'caravanDriver', name: t('Woźnica', 'Caravan driver'), kind: 'human', dex: 30, str: 40, wil: 30, int: 30, com: 40, vitality: 15, weapon: { name: t('Kusza', 'Crossbow'), power: 1, ranged: true }, armour: {}, xp: 3, traits: [] },
+  { id: 'nomadWarrior', name: t('Nomada', 'Nomad'), kind: 'human', dex: 40, str: 30, wil: 30, int: 30, com: 30, vitality: 14, weapon: { name: t('Długi łuk', 'Longbow'), power: 1, ranged: true }, armour: {}, xp: 2, traits: [], sentient: true },
+  { id: 'caravanDriver', name: t('Woźnica', 'Caravan driver'), kind: 'human', dex: 30, str: 40, wil: 30, int: 30, com: 40, vitality: 15, weapon: { name: t('Kusza', 'Crossbow'), power: 1, ranged: true }, armour: {}, xp: 3, traits: [], sentient: true },
   // Lords of the dungeons, one for each theme.
   { id: 'stoneWarden', name: t('Kamienny Strażnik', 'Stone Warden'), kind: 'demon', dex: 20, str: 50, wil: 40, int: 10, com: 40, vitality: 20, weapon: { name: t('Kamienne pięści', 'Stone fists'), power: 1 }, armour: all(3), xp: 10, traits: ['stun'] },
   { id: 'spiderQueen', name: t('Królowa Pająków', 'Spider Queen'), kind: 'beast', dex: 40, str: 40, wil: 30, int: 20, com: 40, vitality: 20, weapon: { name: t('Żądło', 'Sting'), power: 0 }, armour: all(1), xp: 10, traits: ['poison', 'stinger'] },
   { id: 'drowned', name: t('Topielica', 'The Drowned One'), kind: 'wraith', dex: 40, str: 30, wil: 50, int: 30, com: 35, vitality: 16, weapon: { name: t('Lodowaty dotyk', 'Icy touch'), power: 0 }, armour: {}, xp: 10, traits: ['drain'] },
-  { id: 'mummyKing', name: t('Król Mumii', 'Mummy King'), kind: 'wraith', dex: 20, str: 40, wil: 40, int: 30, com: 40, vitality: 22, weapon: { name: t('Berło', 'Sceptre'), power: 1 }, armour: { torso: 2, head: 2 }, xp: 11, traits: ['rot'] },
-  { id: 'riftWarden', name: t('Strażnik Szczeliny', 'Rift Warden'), kind: 'demon', dex: 40, str: 40, wil: 40, int: 30, com: 45, vitality: 18, weapon: { name: t('Ostrze pustki', 'Void blade'), power: 1, blade: true }, armour: all(2), xp: 12, traits: ['ethereal'] },
+  { id: 'mummyKing', name: t('Król Mumii', 'Mummy King'), kind: 'wraith', dex: 20, str: 40, wil: 40, int: 30, com: 40, vitality: 22, weapon: { name: t('Berło', 'Sceptre'), power: 1 }, armour: { torso: 2, head: 2 }, xp: 11, traits: ['rot'], sentient: true },
+  { id: 'riftWarden', name: t('Strażnik Szczeliny', 'Rift Warden'), kind: 'demon', dex: 40, str: 40, wil: 40, int: 30, com: 45, vitality: 18, weapon: { name: t('Ostrze pustki', 'Void blade'), power: 1, blade: true }, armour: all(2), xp: 12, traits: ['ethereal'], sentient: true },
 ];
 
 export const ENEMIES: Record<string, Enemy> = Object.fromEntries(list.map((e) => [e.id, e]));

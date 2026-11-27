@@ -173,13 +173,15 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
   return out;
 }
 
-export function Duel({ game, me, entries, act, onReplayDone }: {
+export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
   game: GameState;
   me: PlayerState;
   /** The throws of the round just played; null while the player chooses a move. */
   entries: LogEntry[] | null;
   act: (a: Action) => void;
   onReplayDone: () => void;
+  /** The X in the top-right corner: the only way to put the fight window away before it ends. */
+  onClose: () => void;
 }) {
   const T = useT();
   const { t, locale } = T;
@@ -361,6 +363,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
           <button className={`ghost small pace ${pace === 'fast' ? 'on' : ''}`} onClick={togglePace} aria-pressed={pace === 'fast'}>
             {pace === 'fast' ? '▶▶' : '▶'} {pace === 'fast' ? (locale === 'pl' ? 'Szybko' : 'Fast') : (locale === 'pl' ? 'Przyspiesz' : 'Speed up')}
           </button>
+          <button className="ghost small duel-close" onClick={onClose} aria-label={locale === 'pl' ? 'Zamknij okno walki' : 'Close the fight window'} title={locale === 'pl' ? 'Zamknij okno walki' : 'Close the fight window'}>✕</button>
         </header>
 
         <div className="duel-field">

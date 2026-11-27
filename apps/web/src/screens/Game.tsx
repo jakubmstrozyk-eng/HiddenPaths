@@ -138,7 +138,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [last, setLast] = useState<LogEntry[]>([]);
   const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
   const [lines, setLines] = useState<string[]>([]);
-  const [story, setStory] = useState<{ title: string; lines: string[]; xp: number } | null>(null);
+  /** `fight`: the outcome of a fight, which closes only by its own button, never by a tap beside it. */
+  const [story, setStory] = useState<{ title: string; lines: string[]; xp: number; fight?: boolean } | null>(null);
   /** Experience gained since the card (or fight) began, shown at the foot of the card. */
   const [sceneXp, setSceneXp] = useState(0);
   const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | 'journal' | null>(null);
@@ -147,8 +148,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   /** The campfire opens by itself once per camp; after "Not now" the journal button still writes while the fire burns. */
   const campShown = useRef(false);
   const [storyTitle, setStoryTitle] = useState('');
-  const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
+  /** A fight round playing back; `walkFirst` when the fight broke out on a step, so the hero walks there before it shows. */
+  const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[]; walkFirst?: boolean } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
+  /** The fight window put away with its X (Jacob, 2026-11-27: the only way to close it early); a button brings it back. */
+  const [fightHidden, setFightHidden] = useState(false);
+  const closeFight = useCallback(() => { setReplay(null); setFightHidden(true); }, []);
+  useEffect(() => { if (!me.combat) setFightHidden(false); }, [me.combat]);
 
   // The hero walks to a new fragment instead of jumping: legs move while the sprite slides across.
   const [walking, setWalking] = useState(false);
@@ -230,7 +236,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       const before = structuredClone(next);
       const foes = before.players.find((p) => p.id === me.id)!.combat!.foes;
       for (const e of entries) if (e.type === 'combat' && e.event.type === 'trap') foes.find((f) => f.uid === (e.event as { uid: string }).uid)!.vitality += (e.event as { damage: number }).damage;
-      setReplay({ before, entries: entries.filter((e) => e.type === 'combat') });
+      setReplay({ before, entries: entries.filter((e) => e.type === 'combat'), walkFirst: true });
     } else {
       // Only this hero's own throws: another player's rolls at the turn change are not ours to watch.
       const rolls = diceOf(entries.filter((e) => !('player' in e) || e.player === me.id), T);
@@ -256,7 +262,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     acc = [...acc, ...fresh];
     const stillInScene = !!(nextMe.pendingEvent || nextMe.combat);
     if ((inScene || drawn || started) && !stillInScene) {
-      setStory({ title, lines: acc, xp: xpAcc });
+      setStory({ title, lines: acc, xp: xpAcc, fight: !!(me.combat || started) });
       setLines([]);
       xpAcc = 0;
     } else if (stillInScene) {
@@ -314,7 +320,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   useEffect(() => {
     const a = afterEat.current;
     afterEat.current = null;
-    if (a && mealDue(game, me).left === 0) act(a);
+    // Go on with the move that asked, even when the food ran short of the whole meal (the desert asks for 2).
+    if (a) act(a);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.version]);
   const noMovesLeft = !actions.some((a) => a.type === 'move' || a.type === 'enter');
@@ -648,7 +655,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             )}
             {myTurn && quiet && canEat && (
               <button className={`eat-btn act-meal due ${noMovesLeft ? 'urgent' : ''}`} onClick={eat}>
-                <Icon name="food" size={16} />{tx({ pl: 'Zjedz posiłek', en: 'Eat a meal' })} · −{meal.left}
+                <Icon name="food" size={16} />{tx({ pl: 'Zjedz posiłek', en: 'Eat a meal' })} · −{Math.min(meal.left, c.food)}
               </button>
             )}
             <button className="primary end-turn" disabled={!quiet} onClick={() => endWith({ type: 'endTurn' })}>
@@ -672,7 +679,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
 
       <AnimatePresence>
         {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} xp={sceneXp} act={act} hold={!!dice} />}
-        {!onTheWay && (replay || me.combat) && (
+        {/* A round playing back stays on screen even when it moves the hero (a death, a flight): unmounting
+            here closed the fight mid-round and played it again from the start once the walk ended. */}
+        {!fightHidden && (replay ? !(replay.walkFirst && onTheWay) : !onTheWay && !!me.combat) && (
           <Duel
             key="combat"
             game={replay ? replay.before : game}
@@ -680,9 +689,15 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             entries={replay?.entries ?? null}
             act={act}
             onReplayDone={endReplay}
+            onClose={closeFight}
           />
         )}
-        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} xp={story.xp} level={c.level} xpNow={c.xp} onClose={() => setStory(null)} />}
+        {fightHidden && me.combat && !onTheWay && (
+          <button key="back-to-fight" className="primary back-to-fight with-icon" onClick={() => setFightHidden(false)}>
+            <Icon name="sword" />{tx({ pl: 'Wróć do walki', en: 'Back to the fight' })}
+          </button>
+        )}
+        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} xp={story.xp} level={c.level} xpNow={c.xp} locked={story.fight} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
@@ -850,7 +865,7 @@ function MealReminder({ left, food, hungerRounds, onEat, onSkip, onBack }: {
         </p>
         <p className="card-text"><small>{penalty}</small></p>
         <div className="card-options">
-          <button className="eat-big" onClick={onEat}>{tx({ pl: `Zjedz (−${left}) i kontynuuj`, en: `Eat (−${left}) and go on` })}</button>
+          <button className="eat-big" onClick={onEat}>{tx({ pl: `Zjedz (−${Math.min(left, food)}) i kontynuuj`, en: `Eat (−${Math.min(left, food)}) and go on` })}</button>
           <button className="ghost" onClick={onSkip}>{tx({ pl: 'Kontynuuj bez jedzenia', en: 'Go on without eating' })}</button>
         </div>
       </motion.article>

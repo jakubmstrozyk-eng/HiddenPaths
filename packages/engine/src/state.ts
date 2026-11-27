@@ -89,6 +89,8 @@ export type LogEntry =
   | { type: 'ate'; player: string; foodLeft: number }
   | { type: 'hungry'; player: string; rounds: number; vitalityLost: number }
   | { type: 'died'; player: string }
+  /** A thinking foe that killed the hero took all their gold. */
+  | { type: 'robbed'; player: string; enemy: string; gold: number }
   | { type: 'respawned'; player: string; cell: number }
   | { type: 'levelUp'; player: string; level: number; cards?: string[] }
   | { type: 'service'; player: string; service: string; cost: number }

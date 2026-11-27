@@ -132,6 +132,8 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return e.pushed ? (pl ? 'Zostajesz przeniesiony.' : 'You are carried away.') : null;
     case 'died':
       return t('died');
+    case 'robbed':
+      return pl ? `${foeName(e.enemy, locale)} zabiera całe Twoje złoto (−${fmt(e.gold)}).` : `${foeName(e.enemy, locale)} takes all your gold (−${fmt(e.gold)}).`;
     case 'stoneTaken':
       return t('stoneCarried');
     case 'traded':

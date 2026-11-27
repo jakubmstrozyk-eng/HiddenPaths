@@ -670,6 +670,9 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 
 /* Fight: pace control, the foe striking now, the chosen target, and the blow itself */
 .duel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.duel-head .pace { margin-left: auto; }
+.duel-close { min-width: 36px; min-height: 36px; padding: 0; font-size: 18px; line-height: 1; }
+.back-to-fight { position: fixed; z-index: 50; left: 50%; bottom: calc(160px + env(safe-area-inset-bottom)); transform: translateX(-50%); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
 .pace.on { border-color: #ffe066; color: #ffe066; }
 .foe-card { position: relative; }
 .foe-card.attacking {

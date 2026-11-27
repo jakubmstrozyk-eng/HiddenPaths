@@ -1,3 +1,4 @@
+import { ENEMIES } from '@hp/content';
 import { levelForXp, levelUp } from './character';
 import { DIFFICULTIES, dangerLevel } from './config';
 import { landAt, neighbours } from './mapgen';
@@ -71,10 +72,22 @@ export function reveal(state: GameState, player: PlayerState, cell: number, rng?
   return true;
 }
 
-/** Death: the hero wakes at the start or at the last city's Fountain of rebirth with half Vitality. */
+/** Hunger rounds a hero who starved to death wakes with: both penalties paid, 3 rounds before starving again. */
+const STARVED_WAKE = 6;
+
+/**
+ * Death: the hero wakes at the start or at the last city's Fountain of rebirth with half Vitality.
+ * Food and hunger stay as they were at death (Jacob, 2026-11-27); a thinking foe that killed the hero takes their gold.
+ */
 export function respawn(state: GameState, player: PlayerState) {
   const c = player.character;
   log(state, { type: 'died', player: player.id });
+  const robber = player.combat?.foes.find((f) => !f.tamed && f.vitality > 0 && ENEMIES[f.enemy]?.sentient)
+    ?? player.combat?.foes.find((f) => !f.tamed && ENEMIES[f.enemy]?.sentient);
+  if (robber && c.gold > 0) {
+    log(state, { type: 'robbed', player: player.id, enemy: robber.enemy, gold: c.gold });
+    c.gold = 0;
+  }
   player.position = player.respawnAt;
   player.cameFrom = null;
   player.combat = null;
@@ -84,7 +97,8 @@ export function respawn(state: GameState, player: PlayerState) {
   player.hasStone = false;
   player.effects = player.effects.filter((e) => e.untilRound > 100_000);
   c.vitality = Math.ceil(c.maxVitality / 2);
-  player.roundsWithoutFood = 0;
+  // Starving to death does not start the hunger over; otherwise the hero is as hungry as before.
+  if (player.roundsWithoutFood >= 9) player.roundsWithoutFood = STARVED_WAKE;
   player.speedLeft = 0;
   log(state, { type: 'respawned', player: player.id, cell: player.respawnAt });
 }
