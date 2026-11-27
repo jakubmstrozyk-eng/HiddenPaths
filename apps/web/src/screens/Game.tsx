@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
   applyAction, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
-  type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
+  LEVEL_XP, type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
@@ -19,6 +19,7 @@ import { SaveDialog } from './Saves';
 import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { KeepCards, SkillHand } from '../SkillCards';
+import { Afflictions } from '../Afflictions';
 
 /** Tannery: the parts of the body, as the card sheet names them (arms and legs are made as a pair here). */
 const TANNERY_LABEL = {
@@ -134,7 +135,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [last, setLast] = useState<LogEntry[]>([]);
   const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
   const [lines, setLines] = useState<string[]>([]);
-  const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
+  const [story, setStory] = useState<{ title: string; lines: string[]; xp: number } | null>(null);
+  /** Experience gained since the card (or fight) began, shown at the foot of the card. */
+  const [sceneXp, setSceneXp] = useState(0);
   const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | null>(null);
   const [storyTitle, setStoryTitle] = useState('');
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
@@ -233,30 +236,35 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     const started = entries.find((e) => e.type === 'combatStarted');
     let title = storyTitle;
     let acc = inScene ? [...lines] : [];
+    const gained = nextMe.character.xp - me.character.xp;
+    let xpAcc = inScene ? sceneXp + gained : gained;
     if (drawn && drawn.type === 'eventDrawn') {
       title = tx(EVENT_BY_ID[drawn.card]!.title);
       acc = [];
     } else if (started && !inScene) {
       title = t('fight');
     }
-    const fresh = entries.map((e) => (nextMe.combat || me.combat ? combatLine(e, T) : describe(e, T))).filter((l): l is string => !!l);
+    // Experience is not a line of the story: the card shows it at its foot, in full words.
+    const fresh = entries.filter((e) => !(e.type === 'revealed' || (e.type === 'change' && e.change.what === 'xp'))).map((e) => (nextMe.combat || me.combat ? combatLine(e, T) : describe(e, T))).filter((l): l is string => !!l);
     acc = [...acc, ...fresh];
     const stillInScene = !!(nextMe.pendingEvent || nextMe.combat);
     if ((inScene || drawn || started) && !stillInScene) {
-      setStory({ title, lines: acc });
+      setStory({ title, lines: acc, xp: xpAcc });
       setLines([]);
+      xpAcc = 0;
     } else if (stillInScene) {
       setLines(acc);
     } else if (entries.some((e) => e.type === 'died' || e.type === 'levelUp' || e.type === 'stoneTaken' || e.type === 'mission')) {
       // Plain actions only open a card for big moments: death, a new level, the Stone.
       const onIt = cells[nextMe.position]?.terrain;
       const terrain = !onIt || onIt === 'void' ? 'core' : onIt;
-      setStory({ title: terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name), lines: fresh });
+      setStory({ title: terrain === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[terrain].name), lines: fresh, xp: gained });
     }
+    setSceneXp(stillInScene ? xpAcc : 0);
     setStoryTitle(title);
     onChange(next);
     void submit?.(game, a);
-  }, [game, me, lines, storyTitle, T, t, tx, cells, onChange, submit]);
+  }, [game, me, lines, sceneXp, storyTitle, T, t, tx, cells, onChange, submit]);
 
   // Eating is the player's own move. Ending the turn (or camping, which ends it) without having eaten
   // asks first: eat now and go on, or go on hungry.
@@ -330,11 +338,12 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           <Stat key={hurt?.key ?? 'vit'} icon="vitality" label={t('vitality')} value={`${c.vitality}/${c.maxVitality}`} warn={c.vitality <= c.maxVitality / 3} hit={!!hurt} />
           <FoodBar food={c.food} meals={meal.needed} eaten={meal.eaten} label={t('food')} canEat={canEat && quiet} urgent={noMovesLeft} onEat={eat} />
           <Stat icon="gold" label={t('gold')} value={Number.isInteger(c.gold) ? c.gold : c.gold.toFixed(2)} />
-          <Stat icon="xp" label={t('xp')} value={Math.floor(c.xp)} />
+          <XpBar xp={c.xp} level={c.level} />
         </div>
       </header>
 
       <GoalsPanel game={game} me={me} />
+      <Afflictions game={game} me={me} compact className="top" />
 
       <div className="play-area">
         <div className="board-wrap" ref={wrapRef}>
@@ -443,15 +452,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             <Icon name="map" size={14} /> <b>{delving && dungeonTheme ? tx(dungeonTheme.name) : outside ? t('beforeMap') : hereTerrain ? tx(hereTerrain.name) : tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' })}</b>
             {outside ? ` · ${t('pickSide')}` : delving ? ` · ${tx({ pl: 'Wybierz korytarz albo wyjdź z lochu', en: 'Pick a corridor or climb out' })}` : me.hasStone ? ` · ${t('stoneCarried')}` : lastNote ? ` · ${lastNote}` : ` · ${t('tapToMove')}`}
           </p>
-          {me.conditions.length > 0 && (
-            <p className="conditions-note">
-              {me.conditions.map((cd) => (
-                <span key={cd.id} className="condition-tag" title={tx({ pl: 'Na początku każdej tury rzucasz na tę cechę; sukces kończy stan.', en: 'At the start of each turn you roll this attribute; a pass ends it.' })}>
-                  {tx(cd.name)} · {tx({ pl: 'test', en: 'test' })} {attrShort(cd.test, locale)} {tx({ pl: 'na początku tury', en: 'each turn' })}
-                </span>
-              ))}
-            </p>
-          )}
+          <Afflictions game={game} me={me} className="aff-side" />
           {aim && (
             <p className="conditions-note aim-note">
               {tx({ pl: 'Teleportacja: wybierz fragment do 2 pól stąd.', en: 'Teleport: pick a fragment up to 2 steps away.' })}{' '}
@@ -621,7 +622,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
       </footer>
 
       <AnimatePresence>
-        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} act={act} hold={!!dice} />}
+        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} xp={sceneXp} act={act} hold={!!dice} />}
         {!onTheWay && (replay || me.combat) && (
           <Duel
             key="combat"
@@ -632,7 +633,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             onReplayDone={endReplay}
           />
         )}
-        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} onClose={() => setStory(null)} />}
+        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} xp={story.xp} level={c.level} xpNow={c.xp} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
@@ -677,6 +678,30 @@ function Stat({ icon, label, value, warn, hit }: { icon: IconName; label: string
     <span className={`stat ${warn ? 'warn' : ''} ${hit ? 'hit' : ''}`}>
       <small>{label}</small>
       <b><Icon name={icon} size={14} /> {value}</b>
+    </span>
+  );
+}
+
+/**
+ * Experience, always in sight: the level, a bar filling towards the next one, the points gained
+ * and how many are still missing.
+ */
+function XpBar({ xp, level }: { xp: number; level: number }) {
+  const { tx } = useT();
+  const from = LEVEL_XP[level] ?? 0;
+  const to = LEVEL_XP[level + 1];
+  const have = Math.floor(xp);
+  const share = to === undefined ? 1 : Math.min(1, Math.max(0, (xp - from) / (to - from)));
+  return (
+    <span className="stat xpbar" role="meter" aria-label={tx({ pl: 'Punkty Doświadczenia', en: 'Experience' })} aria-valuemin={from} aria-valuemax={to ?? from} aria-valuenow={have}>
+      <small>{tx({ pl: `Doświadczenie · poziom ${level}`, en: `Experience · level ${level}` })}</small>
+      <b><Icon name="xp" size={14} /> {have}{to !== undefined ? ` / ${to}` : ''}</b>
+      <span className="xp-track" aria-hidden="true"><motion.span initial={false} animate={{ width: `${share * 100}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} /></span>
+      <small className="xp-left">
+        {to === undefined
+          ? tx({ pl: 'najwyższy poziom', en: 'top level' })
+          : tx({ pl: `brakuje ${Math.ceil(to - xp)} do poziomu ${level + 1}`, en: `${Math.ceil(to - xp)} to level ${level + 1}` })}
+      </small>
     </span>
   );
 }

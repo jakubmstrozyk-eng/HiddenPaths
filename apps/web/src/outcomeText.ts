@@ -28,16 +28,18 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
   if (!outcomes?.length) return locale === 'pl' ? 'nic' : 'nothing';
   const pl = locale === 'pl';
   const out: string[] = [];
+  // Experience goes last and in full words: it matters less than what the choice does.
+  let xp = 0;
   for (const o of outcomes) {
     switch (o.do) {
       case 'gold': out.push(`${signed(o.amount)} ${pl ? 'złota' : 'gold'}`); break;
       case 'food': out.push(`${signed(o.amount)} ${pl ? 'jedzenia' : 'food'}`); break;
-      case 'xp': out.push(`${signed(o.amount)} ${pl ? 'PD' : 'XP'}`); break;
+      case 'xp': xp += o.amount; break;
       case 'herbs': out.push(`${signed(o.amount)} ${pl ? 'ziół' : 'herbs'}`); break;
       case 'vitality': out.push(`${signed(o.amount)} ${pl ? 'Żyw.' : 'Vit'}`); break;
       case 'hit': out.push(pl ? `cios za ${o.damage} (k6 na miejsce, pancerz chroni)` : `a ${o.damage}-point blow (d6 for the spot, armour helps)`); break;
       case 'halfVitality': out.push(pl ? 'połowa Żywotności' : 'half your Vitality'); break;
-      case 'effect': out.push(`${signed(o.amount)} ${attrName(o.target, locale)}${o.rounds ? ` ${pl ? 'na' : 'for'} ${o.rounds} ${pl ? 'rund' : 'rounds'}` : ` ${pl ? 'do końca gry' : 'for the game'}`}`); break;
+      case 'effect': out.push(`${signed(o.amount)} ${attrName(o.target, locale)}${o.rounds ? ` ${pl ? 'na' : 'for'} ${roundsWord(o.rounds, locale)}` : ` ${pl ? 'do końca gry' : 'for the game'}`}`); break;
       case 'permanent': out.push(`${signed(o.amount)} ${attrName(o.target, locale)} ${pl ? 'na stałe' : 'for good'}`); break;
       case 'skill': out.push(`${signed(o.amount)} ${(SKILL[o.skill] ?? [o.skill, o.skill])[pl ? 0 : 1]}`); break;
       case 'item': out.push(itemName(o.item, locale)); break;
@@ -54,7 +56,7 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'roll': out.push(pl ? `rzut k${o.die} na tabelę` : `a d${o.die} roll on a table`); break;
       case 'goto': out.push(pl ? 'ciąg dalszy' : 'the story goes on'); break;
       case 'move': out.push(pl ? 'przeniesienie' : 'you are moved'); break;
-      case 'stuck': out.push(pl ? `utknięcie na ${o.rounds} rund` : `stuck for ${o.rounds} rounds`); break;
+      case 'stuck': out.push(pl ? `utknięcie na ${roundsWord(o.rounds, locale)}` : `stuck for ${roundsWord(o.rounds, locale)}`); break;
       case 'loseSpeed': out.push(pl ? 'utrata Szybkości' : 'lose your Speed'); break;
       case 'loseAll': out.push(pl ? 'utrata rzeczy' : 'lose your things'); break;
       case 'camp': out.push(pl ? 'darmowy obóz' : 'a free camp'); break;
@@ -67,7 +69,28 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'bookRead': out.push(pl ? 'udana lektura' : 'a good reading'); break;
     }
   }
+  if (xp) out.push(`${signed(xp)} ${xpWords(xp, locale)}`);
   return [...new Set(out)].join(' · ');
+}
+
+/** "1 rundę", "3 rundy", "5 rund" (or "1 round", "3 rounds"). */
+function roundsWord(n: number, locale: Locale): string {
+  if (locale !== 'pl') return `${n} ${n === 1 ? 'round' : 'rounds'}`;
+  if (n === 1) return '1 rundę';
+  const last = n % 10;
+  const tens = n % 100;
+  return `${n} ${last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? 'rundy' : 'rund'}`;
+}
+
+/** "Punkt Doświadczenia", "Punkty Doświadczenia" or "Punktów Doświadczenia", as the number asks. */
+export function xpWords(n: number, locale: Locale): string {
+  if (locale !== 'pl') return Math.abs(n) === 1 ? 'Experience Point' : 'Experience Points';
+  const a = Math.abs(n);
+  if (!Number.isInteger(a)) return 'Punktu Doświadczenia';
+  if (a === 1) return 'Punkt Doświadczenia';
+  const last = a % 10;
+  const tens = a % 100;
+  return last >= 2 && last <= 4 && (tens < 12 || tens > 14) ? 'Punkty Doświadczenia' : 'Punktów Doświadczenia';
 }
 
 export type { Attribute };

@@ -36,7 +36,8 @@ export function buzz(ms: number | number[]) {
  * while they spin, and let go to throw. A plain click throws at once.
  */
 export function ShakeToThrow({ onThrow, hint, children, className = '' }: {
-  onThrow: () => void;
+  /** Called on release with the hand's last speed in px/ms (zero for a click or a key). */
+  onThrow: (velocity: { x: number; y: number }) => void;
   hint: string;
   /** The dice, drawn shaking or still. */
   children: (shaking: boolean) => ReactNode;
@@ -47,6 +48,8 @@ export function ShakeToThrow({ onThrow, hint, children, className = '' }: {
   const [held, setHeld] = useState(false);
   const [shaking, setShaking] = useState(false);
   const start = useRef<{ x: number; y: number; last: number; travel: number } | null>(null);
+  /** The last few positions of the hand, for the speed of the throw. */
+  const trail = useRef<{ x: number; y: number; t: number }[]>([]);
   const thrown = useRef(false);
 
   const release = () => {
@@ -59,7 +62,12 @@ export function ShakeToThrow({ onThrow, hint, children, className = '' }: {
     animate(x, 0, { type: 'spring', stiffness: 500, damping: 18 });
     animate(y, 0, { type: 'spring', stiffness: 500, damping: 18 });
     buzz(25);
-    onThrow();
+    const pts = trail.current;
+    trail.current = [];
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    const dt = a && b ? b.t - a.t : 0;
+    onThrow(a && b && dt > 0 ? { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt } : { x: 0, y: 0 });
   };
 
   return (
@@ -82,6 +90,8 @@ export function ShakeToThrow({ onThrow, hint, children, className = '' }: {
           const dy = e.clientY - s.y;
           x.set(dx);
           y.set(dy);
+          const now0 = performance.now();
+          trail.current = [...trail.current.filter((p) => now0 - p.t < 90), { x: e.clientX, y: e.clientY, t: now0 }];
           const travel = Math.hypot(dx, dy);
           if (travel > SHAKE_PX && !shaking) setShaking(true);
           // A rattle now and then while the hand moves fast.

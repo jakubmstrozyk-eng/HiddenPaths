@@ -1,5 +1,5 @@
 import {
-  ATTRIBUTES, DICE_STYLE_IDS, ITEMS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
+  ATTRIBUTES, DICE_STYLE_IDS, ITEMS, LOOK_COLOURS, LOOK_OPTIONS, MISSIONS, GAME_MISSIONS, PROFESSIONS, RACES, STARTING_KIT,
   type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId, type SkillId,
 } from '@hp/content';
 import { EngineError } from './errors';
@@ -106,6 +106,10 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
       const v = input.look[part];
       if (!Number.isInteger(v) || v < 0 || v >= LOOK_OPTIONS) throw new EngineError('character.look', 'Unknown look.');
     }
+    for (const part of LOOK_COLOURS) {
+      const v = input.look[part];
+      if (v !== undefined && !(typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v))) throw new EngineError('character.look', 'Unknown colour.');
+    }
   }
   if (input.dice) {
     for (const die of ['d6', 'd10', 'd100'] as const) {
@@ -118,6 +122,13 @@ export function validateCharacter(input: CharacterInput, offered?: string[]): vo
     if (!GAME_MISSIONS.some((x) => x.id === m)) throw new EngineError('character.missions', `Unknown mission ${m}.`);
     if (offered && !offered.includes(m)) throw new EngineError('character.missions', `Mission ${m} was not drawn.`);
   }
+}
+
+/** A look with only the parts and colours a hero may have. */
+export function cleanLook(look: HeroLook): HeroLook {
+  const out: HeroLook = { head: look.head, torso: look.torso, legs: look.legs };
+  for (const part of LOOK_COLOURS) if (look[part]) out[part] = look[part];
+  return out;
 }
 
 /** Builds a level 1 character with the starting kit from the rules. */
@@ -144,7 +155,7 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
     equipment: { weapon: STARTING_KIT.weapon, armour: [...STARTING_KIT.armour], shield: false, rune: null },
     skills: {},
     unspentPoints: 0,
-    ...(input.look ? { look: { head: input.look.head, torso: input.look.torso, legs: input.look.legs } } : {}),
+    ...(input.look ? { look: cleanLook(input.look) } : {}),
     ...(input.dice ? { dice: { d6: input.dice.d6, d10: input.dice.d10, d100: input.dice.d100 } } : {}),
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
     ...(input.growth ? grown(input) : {}),
