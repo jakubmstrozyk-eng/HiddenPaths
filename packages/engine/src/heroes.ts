@@ -2,6 +2,7 @@ import { DEFAULT_DICE, DEFAULT_LOOK, type Attributes, type DiceLook, type HeroLo
 import { cleanLook, MISSIONS_KEPT, validateCharacter, type CharacterInput, type HeroGrowth } from './character';
 import { EngineError } from './errors';
 import type { GameCareer } from './missions';
+import type { HeroJournal } from './journal';
 
 /**
  * A hero is made once and kept apart from games: the same hero can play several games at
@@ -22,9 +23,11 @@ export interface Hero {
   career?: Record<string, GameCareer>;
   /** What the hero has grown into over its games (Jacob, 2026-11-26): the furthest any game took it. */
   growth?: HeroGrowth;
+  /** The hero journal: entries from every game, Inspiration and the current vow (Jacob, 2026-11-27). */
+  journal?: HeroJournal;
 }
 
-export type NewHero = Omit<Hero, 'id' | 'createdAt' | 'career' | 'growth'>;
+export type NewHero = Omit<Hero, 'id' | 'createdAt' | 'career' | 'growth' | 'journal'>;
 
 /**
  * Keeps the hero's furthest development: a game's latest state replaces the kept one when it has at least as
@@ -64,12 +67,13 @@ export function validateHero(input: NewHero): NewHero {
 }
 
 /** The character a hero brings into a new game, with the missions chosen for it. */
-export function heroCharacter(hero: Pick<Hero, 'name' | 'race' | 'profession' | 'bonus' | 'look' | 'dice' | 'growth'> & { id?: string }, missions: string[]): CharacterInput {
+export function heroCharacter(hero: Pick<Hero, 'name' | 'race' | 'profession' | 'bonus' | 'look' | 'dice' | 'growth' | 'journal'> & { id?: string }, missions: string[]): CharacterInput {
   if (missions.length !== MISSIONS_KEPT) throw new EngineError('character.missions', `Keep exactly ${MISSIONS_KEPT} missions.`);
   return {
     name: hero.name, race: hero.race, profession: hero.profession, bonus: { ...hero.bonus }, missions: [...missions], look: { ...hero.look }, dice: { ...hero.dice },
     ...(hero.id ? { heroId: hero.id } : {}),
     ...(hero.growth ? { growth: structuredClone(hero.growth) } : {}),
+    ...(hero.journal ? { journal: structuredClone(hero.journal) } : {}),
   };
 }
 

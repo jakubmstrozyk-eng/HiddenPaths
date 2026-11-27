@@ -1,5 +1,6 @@
 import { landAt } from './mapgen';
-import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, TERRAINS, type ArmourSlot, type HerbId, type MaterialId } from '@hp/content';
+import { HERBS, ITEMS, LOOT_COMMON, MATERIALS, SCROLLS, STORY_REWARD, TERRAINS, type ArmourSlot, type HerbId, type MaterialId } from '@hp/content';
+import { storyBonus } from './journal';
 import { EngineError } from './errors';
 import { giveItem, runOutcomes } from './events';
 import { log, worldView } from './progress';
@@ -33,14 +34,21 @@ export function availableServices(state: GameState, player: PlayerState): Servic
   if (!place) return [];
   const c = player.character;
   const out: Service[] = [];
-  if (c.gold >= TOWN.meal) out.push('meal');
-  if (c.gold >= TOWN.stay && !player.counters[onceKey(state, 'stay')]) out.push('stay');
+  if (c.gold >= servicePrice(player, 'meal')) out.push('meal');
+  if (c.gold >= servicePrice(player, 'stay') && !player.counters[onceKey(state, 'stay')]) out.push('stay');
   if (!player.counters[onceKey(state, 'gossip')]) out.push('gossip');
+  // The journal's legend: in the inn, at the travellers' table, a hero with a closed chapter tells a story once a round.
+  if (place === 'inn' && (player.journal?.summary.chapters.length ?? 0) > 0 && !player.counters[onceKey(state, 'story')]) out.push('story');
   if (place !== 'inn') {
     if (player.staminaLeft >= TOWN.train.stamina && (player.counters.trained ?? 0) < TOWN.train.max[place]) out.push('train');
     if (c.gold >= TOWN.sharpen) out.push('sharpen');
   }
   return out;
+}
+
+/** A meal or a stay: 1 gold less with a friend in town (a chapter's lesson in the journal). */
+export function servicePrice(player: Pick<PlayerState, 'journal'>, service: 'meal' | 'stay'): number {
+  return Math.max(0, TOWN[service] - (player.journal?.summary.lessons.friend ? 1 : 0));
 }
 
 /** Inn table rolled on a stay: bad food, a brawl or a thief. */
@@ -63,15 +71,27 @@ export function useService(state: GameState, player: PlayerState, rng: Rng, serv
   const c = player.character;
   const world = worldView(state);
   switch (service) {
-    case 'meal':
-      c.gold -= TOWN.meal;
+    case 'meal': {
+      const cost = servicePrice(player, 'meal');
+      c.gold -= cost;
       c.food += 1;
-      log(state, { type: 'service', player: player.id, service, cost: TOWN.meal });
+      log(state, { type: 'service', player: player.id, service, cost });
       break;
+    }
+    case 'story': {
+      player.counters[onceKey(state, 'story')] = 1;
+      log(state, { type: 'service', player: player.id, service, cost: 0 });
+      const result = heroTest(world, player, 'cha', rng, storyBonus(player));
+      log(state, { type: 'check', player: player.id, attribute: 'cha', result });
+      log(state, { type: 'journal', player: player.id, what: 'story', ok: result.success });
+      if (result.success) runOutcomes(state, player, rng, STORY_REWARD);
+      break;
+    }
     case 'stay': {
-      c.gold -= TOWN.stay;
+      const cost = servicePrice(player, 'stay');
+      c.gold -= cost;
       player.counters[onceKey(state, 'stay')] = 1;
-      log(state, { type: 'service', player: player.id, service, cost: TOWN.stay });
+      log(state, { type: 'service', player: player.id, service, cost });
       runOutcomes(state, player, rng, [{ do: 'camp' }, { do: 'effect', target: 'all', amount: 10, rounds: 2 }]);
       if (placeOf(state, player) === 'inn') innTrouble(state, player, rng);
       break;

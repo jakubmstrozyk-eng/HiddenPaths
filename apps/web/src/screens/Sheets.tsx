@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute, type ScrollItem } from '@hp/content';
 import {
-  buyPrice, heroArmour, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
+  buyPrice, heroArmour, servicePrice, storyBonus, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
   type Action, type GameState, type PlayerState, type Service,
   landAt,
 } from '@hp/engine';
@@ -39,7 +39,7 @@ const fmt = (n: number) => (Number.isInteger(n) ? `${n}` : n.toFixed(2).replace(
 
 /** What each spot in the picture offers. */
 const SPOT_SERVICES: Partial<Record<Spot, Service[]>> = {
-  bar: ['meal'], table: ['gossip'], rooms: ['stay'], tavern: ['meal', 'stay', 'gossip'], smith: ['sharpen'], yard: ['train'],
+  bar: ['meal'], table: ['gossip', 'story'], rooms: ['stay'], tavern: ['meal', 'stay', 'gossip', 'story'], smith: ['sharpen'], yard: ['train'],
 };
 
 /** Inn, village and city as a picture: click a building or a corner and its services, wares or portals open below. */
@@ -71,7 +71,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
         <button key={s} className="choice" disabled={!services.includes(s)} onClick={() => act({ type: 'service', service: s })}>
           <span>{t(s)}</span>
           <small className="act-test">{serviceTest(s, game, me, locale)}</small>
-          <small className="act-reward">{serviceReward(s, terrain === 'inn', locale)}</small>
+          <small className="act-reward">{serviceReward(s, terrain === 'inn', locale, me)}</small>
         </button>
       ))}
     </div>
@@ -141,17 +141,20 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
 /** The test a service asks for, with its odds, or that it needs none. */
 function serviceTest(s: Service, game: GameState, me: PlayerState, locale: string): string {
   const pl = locale === 'pl';
-  if (s !== 'gossip') return pl ? 'Bez testu' : 'No test';
-  const odds = Math.round(successChance(me.character.attributes.cha, testModifier(worldView(game), me, 'cha')) * 100);
+  if (s !== 'gossip' && s !== 'story') return pl ? 'Bez testu' : 'No test';
+  const odds = Math.round(successChance(me.character.attributes.cha, testModifier(worldView(game), me, 'cha', s === 'story' ? storyBonus(me) : 0)) * 100);
   return `${pl ? 'Test: Charyzma' : 'Test: Charisma'} · ${odds}%`;
 }
 
 /** What a service costs and gives. Mirrors useService in the engine. */
-function serviceReward(s: Service, inn: boolean, locale: string): string {
+function serviceReward(s: Service, inn: boolean, locale: string, me: PlayerState): string {
   const pl = locale === 'pl';
+  const meal = servicePrice(me, 'meal');
+  const stay = servicePrice(me, 'stay');
   switch (s) {
-    case 'meal': return pl ? `${TOWN.meal} zł → +1 jedzenia` : `${TOWN.meal} gold → +1 food`;
-    case 'stay': return (pl ? `${TOWN.stay} zł → odpoczynek jak w obozie i +10 do wszystkich cech na 2 rundy` : `${TOWN.stay} gold → rest as at a camp and +10 to all attributes for 2 rounds`)
+    case 'meal': return pl ? `${meal} zł → +1 jedzenia` : `${meal} gold → +1 food`;
+    case 'story': return pl ? `historia z dziennika (+${storyBonus(me)} Ch.) · sukces: +1 jedzenia i +2 zł` : `a tale from the journal (+${storyBonus(me)} Cha) · success: +1 food and +2 gold`;
+    case 'stay': return (pl ? `${stay} zł → odpoczynek jak w obozie i +10 do wszystkich cech na 2 rundy` : `${stay} gold → rest as at a camp and +10 to all attributes for 2 rounds`)
       + (inn ? (pl ? ' · w gospodzie bywają kłopoty' : ' · inns can bring trouble') : '');
     case 'gossip': return pl ? 'sukces: +10 Charyzmy na 2 rundy' : 'success: +10 Charisma for 2 rounds';
     case 'train': return pl ? `−${TOWN.train.stamina} Wt → +1 Walki na stałe` : `−${TOWN.train.stamina} Sta → +1 Combat for good`;

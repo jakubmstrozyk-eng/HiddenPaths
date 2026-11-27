@@ -5,7 +5,7 @@ import {
   type Attribute, type DiceLook, type HeroLook, type ProfessionId, type RaceId,
 } from '@hp/content';
 import {
-  BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
+  BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, summarize, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
 } from '@hp/engine';
 import { heroGamesInPlay, HERO_GAMES } from '../saves';
 import { DieFace, diceStyle } from '../DiceFace';
@@ -14,6 +14,7 @@ import { useT } from '../i18n';
 import { PixelHero } from '../PixelHero';
 import { WorldMap } from '../WorldMap';
 import { Choice } from './Setup';
+import { JournalBook } from '../Journal';
 
 /* ------------------------------------------------------------------------------------------ */
 /* The list of heroes                                                                          */
@@ -68,9 +69,10 @@ export function CareerBadges({ hero }: { hero: Hero }) {
 }
 
 export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; onBack: () => void; onCreate: () => void }) {
-  const { t } = useT();
+  const { t, tx } = useT();
   const { heroes, error, reload } = useHeroes(store);
   const [sure, setSure] = useState<string | null>(null);
+  const [reading, setReading] = useState<Hero | null>(null);
   return (
     <div className="panel">
       <h2>{t('heroes')}</h2>
@@ -84,6 +86,7 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
         </button>
         {heroes?.map((h) => (
           <HeroCard key={h.id} hero={h}>
+            <button className="ghost small" onClick={() => setReading(h)}>📖 {tx({ pl: 'Dziennik', en: 'Journal' })}{h.journal?.entries.length ? ` (${h.journal.entries.length})` : ''}</button>
             <button
               className={`ghost small ${sure === h.id ? 'danger' : ''}`}
               onClick={async () => {
@@ -101,6 +104,20 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
       <div className="actions">
         <button className="ghost" onClick={onBack}>{t('back')}</button>
       </div>
+      <AnimatePresence>
+        {reading && (
+          <JournalBook
+            key="journal"
+            hero={reading}
+            summary={summarize(reading.journal?.entries ?? [])}
+            entries={reading.journal?.entries ?? []}
+            inspiration={reading.journal?.inspiration ?? 0}
+            vow={reading.journal?.vow ?? null}
+            level={reading.growth?.level ?? 1}
+            onClose={() => setReading(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

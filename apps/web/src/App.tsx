@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from 'motion/react';
 import type { Locale } from '@hp/content';
-import { careerOf, createGame, growthOf, heroCharacter, type GameConfig, type GameState, type Hero } from '@hp/engine';
+import { careerOf, createGame, growthOf, heroCharacter, journalShare, type GameConfig, type GameState, type Hero } from '@hp/engine';
 import { api, getSession, serverAvailable, setSession, type Me } from './api';
 import { DarkMatter } from './DarkMatter';
 import { LocaleContext, useT, type UiKey } from './i18n';
@@ -245,7 +245,7 @@ export function App() {
                   game={screen.game}
                   onChange={(g) => {
                     autosave(g);
-                    for (const p of g.players) if (p.character.heroId) recordDeviceCareer(p.character.heroId, g.seed, careerOf(p), growthOf(p.character, p.inventory));
+                    for (const p of g.players) if (p.character.heroId) recordDeviceCareer(p.character.heroId, g.seed, careerOf(p), growthOf(p.character, p.inventory), journalShare(p));
                     setScreen({ name: 'game', game: g });
                   }}
                   canSave

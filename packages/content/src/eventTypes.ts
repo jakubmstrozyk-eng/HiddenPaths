@@ -126,6 +126,8 @@ export interface EventOption {
   label: Text;
   cost?: { gold?: number; food?: number; speed?: number };
   then: Outcome[];
+  /** A choice only a hero with this character trait sees (the hero journal). */
+  trait?: string;
 }
 
 export interface EventStep {

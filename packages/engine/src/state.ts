@@ -4,6 +4,7 @@ import type { CombatEvent, CombatMove, CombatResult, CombatState } from './comba
 import type { GameConfig } from './config';
 import type { TestResult } from './dice';
 import type { Delve, Dungeon } from './dungeon';
+import type { GameJournal, JournalWrite } from './journal';
 import type { GameMap } from './mapgen';
 import type { PuzzleAnswer, PuzzleState } from './puzzles';
 import type { Companion, Condition, Effect, Inventory, TerrainOutcome } from './terrain';
@@ -51,6 +52,10 @@ export interface PlayerState {
   companions?: Companion[];
   /** Inside the dungeon: the room and the way back. The hero's position stays on the entrance fragment. */
   delve?: Delve | null;
+  /** The hero journal while this game runs (missing in older saves). */
+  journal?: GameJournal;
+  /** Fragments a dream marked with a question mark (the journal's omens). */
+  hints?: number[];
 }
 
 /** A change to a hero's stats or belongings, for the log and the app's floating numbers. */
@@ -123,6 +128,9 @@ export type LogEntry =
   | { type: 'depleted'; player: string; cell: number; action: TerrainAction; until: number }
   /** Fragments nobody stood on for 5 rounds went dark again, with new terrain beneath. */
   | { type: 'covered'; player: string; cells: number[] }
+  /** The hero journal: an entry written, new traits, an Inspiration, a vow kept or broken, a chapter, a dream come true, a story told. */
+  | { type: 'journal'; player: string; what: 'entry' | 'traits' | 'inspiration' | 'inspired' | 'vowKept' | 'vowBroken' | 'chapter' | 'omen' | 'story';
+      rewarded?: boolean; traits?: string[]; vow?: string; xp?: number; lesson?: string; enemy?: string; ok?: boolean }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
@@ -154,7 +162,7 @@ export interface GameState {
 }
 
 /** Town services that cost gold or Stamina. */
-export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen';
+export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen' | 'story';
 
 /** A side of the map, where a hero stands before stepping onto it. */
 export type Side = 'N' | 'E' | 'S' | 'W';
@@ -198,6 +206,8 @@ export type Action =
   | { type: 'eat' }
   /** Inside or into the dungeon: walk to a room (from the entrance, one of its first rooms), or climb out. */
   | { type: 'dungeon'; to: number | 'exit' }
+  /** The hero journal at the campfire; any player may write, even out of turn. No `entry` closes it unwritten. */
+  | { type: 'journal'; entry?: JournalWrite }
   | { type: 'endTurn' };
 
 export interface NewPlayer {

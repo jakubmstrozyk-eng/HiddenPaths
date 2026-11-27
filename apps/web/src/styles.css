@@ -1273,6 +1273,105 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .ev-scene *, .ev-scene-hero { animation: none !important; }
 }
 
+/* ---- Hero journal: the campfire and the book (Jacob, 2026-11-27) ---- */
+:root { --paper: #f1e8d4; --paper-ink: #2a2116; --paper-muted: #6f604a; --paper-line: #d5c6a6; --ember: #e08a3c; --journal: 'Alegreya', Georgia, 'Times New Roman', serif; }
+.jr-overlay { background: radial-gradient(circle at 50% 100%, rgba(224, 138, 60, 0.28), rgba(0, 0, 0, 0.86) 70%); z-index: 40; }
+.jr-camp {
+  position: relative; width: min(100%, 620px); max-height: calc(100dvh - 32px); overflow: auto;
+  background: var(--paper); color: var(--paper-ink); font-family: var(--journal); font-size: 17px; line-height: 1.5;
+  padding: 22px 22px 18px; border-radius: 4px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 0 60px rgba(120, 90, 40, 0.18);
+}
+.jr-fire { position: absolute; top: 14px; right: 18px; width: 34px; height: 34px; }
+.jr-fire span { position: absolute; bottom: 0; left: 50%; width: 14px; height: 24px; margin-left: -7px; border-radius: 50% 50% 40% 40%; background: radial-gradient(circle at 50% 70%, #ffd27a, var(--ember) 60%, transparent 72%); animation: jr-flame 1.1s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+.jr-fire span:nth-child(2) { left: 30%; height: 18px; animation-delay: 0.3s; }
+.jr-fire span:nth-child(3) { left: 70%; height: 16px; animation-delay: 0.6s; }
+@keyframes jr-flame { from { transform: scaleY(0.85) rotate(-4deg); opacity: 0.85; } to { transform: scaleY(1.1) rotate(4deg); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .jr-fire span { animation: none; } }
+.jr-head { display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--paper-line); padding-bottom: 10px; }
+.jr-head small { font: 600 11px/1 var(--num); letter-spacing: 0.16em; text-transform: uppercase; color: #8a5a22; }
+.jr-head h2 { font-family: var(--display); margin: 0; font-size: 24px; }
+.jr-date { font-style: italic; color: var(--paper-muted); font-size: 15px; }
+.jr-page { padding: 12px 0 6px; border-bottom: 1px dashed var(--paper-line); display: flex; flex-direction: column; gap: 8px; }
+.jr-page h3 { margin: 0; font: 700 13px/1.2 var(--num); letter-spacing: 0.08em; text-transform: uppercase; color: #2f6b5e; }
+.jr-chron { margin: 0; padding-left: 20px; }
+.jr-chron li { margin: 2px 0; }
+.jr-sum { margin: 0; font-weight: 600; }
+.jr-muted { margin: 0; color: var(--paper-muted); font-size: 14px; }
+.jr-reward { margin: 0; font-size: 15px; color: var(--paper-muted); }
+.jr-reward.ok { color: #8a4a12; font-weight: 600; }
+.jr-q { margin: 0; font-weight: 600; font-size: 18px; }
+.jr-opts { display: flex; flex-direction: column; gap: 6px; }
+.jr-opt {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: left;
+  background: rgba(255, 255, 255, 0.45); color: var(--paper-ink); border: 1px solid var(--paper-line); border-radius: 3px; padding: 9px 12px; font: inherit;
+}
+.jr-opt small { font: 600 11px/1.3 var(--num); color: var(--paper-muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.06em; }
+.jr-opt:hover { border-color: #2f6b5e; }
+.jr-opt.on { background: #dfe9dc; border-color: #2f6b5e; box-shadow: inset 3px 0 0 #2f6b5e; }
+.jr-text, .jr-line {
+  width: 100%; font: italic 16px/1.5 var(--journal); color: var(--paper-ink); background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--paper-line); border-radius: 3px; padding: 8px 10px; resize: vertical;
+}
+.jr-person { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jr-marks { display: flex; gap: 4px; }
+.jr-mark { font: 600 12px/1 var(--num); padding: 6px 9px; border-radius: 3px; border: 1px solid var(--paper-line); background: transparent; color: var(--paper-ink); }
+.jr-mark.on.m-friend { background: #cfe6c9; border-color: #4f8a45; }
+.jr-mark.on.m-debtor { background: #efe0b4; border-color: #a88a2c; }
+.jr-mark.on.m-foe { background: #f1c9c0; border-color: #a5442d; }
+.jr-mark.on.m-met { background: #e4ddd0; }
+.jr-check { display: flex; gap: 8px; align-items: center; }
+.jr-foot { display: flex; justify-content: flex-end; gap: 10px; padding-top: 14px; }
+.jr-foot .ghost { color: var(--paper-ink); border-color: var(--paper-line); padding: 10px 16px; }
+.jr-foot .primary { background: #2a2116; color: var(--paper); padding: 10px 18px; }
+.jr-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 12px; max-width: 46vw; }
+.jr-chip .lit { color: #f0c040; font-weight: 700; }
+.jr-chip-vow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.frag-hint {
+  position: absolute; top: 4px; left: 4px; z-index: 3; width: 22px; height: 22px; display: grid; place-items: center;
+  font: 800 15px/1 var(--display); color: #2a2116; background: #f1e8d4; border-radius: 50%; box-shadow: 0 0 12px rgba(240, 192, 64, 0.8);
+  animation: jr-hint 1.6s ease-in-out infinite alternate;
+}
+@keyframes jr-hint { from { transform: scale(0.92); } to { transform: scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .frag-hint { animation: none; } }
+.jr-book { background: var(--paper); color: var(--paper-ink); font-family: var(--journal); font-size: 16px; }
+.jr-book .sheet-head h2 { color: var(--paper-ink); }
+.jr-book .sheet-head .ghost { color: var(--paper-ink); border-color: var(--paper-line); }
+.jr-book.cover-1 { border-top: 6px solid #7a4b2a; }
+.jr-book.cover-2 { border-top: 6px solid #2f6b5e; }
+.jr-book.cover-3 { border-top: 6px solid #c9a227; }
+.jr-front { display: flex; gap: 14px; align-items: center; padding: 10px 0; }
+.jr-insp { margin-top: 4px; }
+.jr-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--paper-line); margin: 6px 0 12px; }
+.jr-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 8px 10px; font: 600 13px/1 var(--num); color: var(--paper-muted); }
+.jr-tabs button.on { color: var(--paper-ink); border-bottom-color: #2f6b5e; }
+.jr-entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.jr-entry { border-left: 2px solid var(--paper-line); padding-left: 12px; }
+.jr-answer { margin: 4px 0 0; font-style: italic; }
+.jr-own { margin: 4px 0 0; font-style: italic; color: #4a3b26; }
+.jr-chapter-mark { margin: 6px 0 0; font-weight: 700; color: #8a5a22; }
+.jr-axes { display: flex; flex-direction: column; gap: 12px; }
+.jr-axis { display: grid; grid-template-columns: 7.5rem 1fr 7.5rem; gap: 10px; align-items: center; font-size: 14px; }
+.jr-axis span:last-child { text-align: right; }
+.jr-track { position: relative; height: 6px; background: var(--paper-line); border-radius: 3px; }
+.jr-track i { position: absolute; top: -5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: #2f6b5e; }
+.jr-track em { position: absolute; top: -4px; width: 1px; height: 14px; background: var(--paper-muted); }
+.jr-trait { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: rgba(255, 255, 255, 0.45); border: 1px solid var(--paper-line); border-radius: 3px; }
+.jr-trait .plus { color: #2f6b5e; font-size: 14px; }
+.jr-trait .minus { color: #a5442d; font-size: 14px; }
+.jr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.jr-list li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; border-bottom: 1px dashed var(--paper-line); padding-bottom: 6px; }
+.jr-beast { flex-direction: column; }
+.jr-vow { display: flex; flex-direction: column; gap: 8px; }
+.jr-bar { height: 8px; background: var(--paper-line); border-radius: 4px; overflow: hidden; }
+.jr-bar i { display: block; height: 100%; background: #2f6b5e; }
+.ev-trait { display: inline-block; font: 700 10px/1 var(--num); letter-spacing: 0.08em; text-transform: uppercase; color: #f0c040; margin-bottom: 4px; }
+.ev-known { margin: 6px 0 0; font-size: 13px; color: #f0e2b0; text-align: center; }
+@media (max-width: 520px) {
+  .jr-camp { padding: 18px 16px 14px; font-size: 16px; }
+  .jr-axis { grid-template-columns: 5.5rem 1fr 5.5rem; font-size: 12px; }
+  .jr-chip-vow { display: none; }
+}
+
 /* ── Story text: a clear book face, larger and brighter than before ── */
 .ev-text {
   font: 400 17.5px/1.62 'Literata', Georgia, 'Times New Roman', serif; font-optical-sizing: auto;
