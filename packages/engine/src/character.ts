@@ -25,6 +25,8 @@ export interface CharacterInput {
   heroId?: string;
   /** What the hero earned in earlier games: they start this one with it (Jacob, 2026-11-26). */
   growth?: HeroGrowth;
+  /** The hero journal from earlier games (Jacob, 2026-11-27). Read when the game starts, not kept in the character. */
+  journal?: import('./journal').HeroJournal;
 }
 
 /**

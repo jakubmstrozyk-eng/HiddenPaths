@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
-  applyAction, careerOf, createGame, growthOf, currentPlayer, grantXp, newEntries, timeoutTurn, validateCharacter, EngineError,
+  applyAction, careerOf, createGame, growthOf, currentPlayer, grantXp, journalShare, newEntries, timeoutTurn, validateCharacter, withJournal, EngineError, type HeroJournal,
   type Action, type CharacterInput, type GameConfig, type GameState, type LogEntry,
   sizeForTiles, validateMapSetup,
 } from '@hp/engine';
@@ -246,6 +246,18 @@ export class Games {
             where id::text = $1 and user_id = $2 and coalesce((data->'growth'->>'xp')::numeric, -1) <= $4`,
           [me.character.heroId, user.id, JSON.stringify(growth), growth.xp],
         );
+        // The hero journal: this game's entries join the hero's, with the latest Inspiration and vow (Jacob, 2026-11-27).
+        const share = journalShare(me);
+        const before = game.state.players.find((p) => p.id === user.id);
+        if (share && JSON.stringify(share) !== JSON.stringify(before ? journalShare(before) : null)) {
+          const [row] = await tx.query<{ journal: HeroJournal | string | null }>(
+            `select data->'journal' as journal from heroes where id::text = $1 and user_id = $2`, [me.character.heroId, user.id]);
+          const kept = typeof row?.journal === 'string' ? (JSON.parse(row.journal) as HeroJournal) : row?.journal ?? undefined;
+          await tx.query(
+            `update heroes set data = data || jsonb_build_object('journal', $3::jsonb) where id::text = $1 and user_id = $2`,
+            [me.character.heroId, user.id, JSON.stringify(withJournal(kept, share))],
+          );
+        }
       }
       return { state: next, entries, nextPlayer: turnPassed && game.mode === 'multi' ? currentPlayer(next).id : null };
     });

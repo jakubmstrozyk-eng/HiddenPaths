@@ -6,6 +6,7 @@ import {
 import { DIFFICULTIES, dangerLevel } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
+import { traitBonus } from './journal';
 import type { Rng } from './rng';
 
 /** A timed bonus or penalty. `attribute: 'all'` applies to every base attribute. */
@@ -80,6 +81,9 @@ export interface ActorState {
   conditions: Condition[];
   /** Tamed beasts that follow the hero (missing in games saved before companions existed). */
   companions?: Companion[];
+  /** The hero journal (character traits, Inspiration), and being down in the dungeon. */
+  journal?: import('./journal').GameJournal;
+  delve?: unknown;
   character: {
     race: RaceId;
     attributes: Record<Attribute, number>;
@@ -146,7 +150,7 @@ export function testModifier(world: WorldView, actor: ActorState, attribute: Att
   const danger = dangerLevel(world.ringAt(actor.position), world.maxRing, settings);
   return settings.testModifier - 10 * danger + fatiguePenalty(actor.actionsSinceCamp)
     + effectBonus(actor, world.round, attribute, vs) + itemBonus(actor, attribute, vs) + cardBonus(world, actor, attribute)
-    + (actor.counters.nature ? NATURE_BONUS : 0) + extra;
+    + (actor.counters.nature ? NATURE_BONUS : 0) + traitBonus(actor.position >= 0 ? world.terrainAt(actor.position) : '', actor, attribute) + extra;
 }
 
 /** Close to Nature: the Elder's meditation at camp gives +10 to the next attribute test. */
@@ -158,7 +162,13 @@ export const NATURE_BONUS = 10;
  * once more.
  */
 export function heroTest(world: WorldView, actor: ActorState, attribute: Attribute, rng: Rng, extra = 0, vs?: string): TestResult {
-  const modifier = testModifier(world, actor, attribute, extra, vs);
+  // Prudent (the journal): the first test of every trip down the dungeon is easy.
+  let prudent = 0;
+  if (actor.delve && !actor.counters['journal:prudent'] && actor.journal?.summary.traits.includes('prudent')) {
+    actor.counters['journal:prudent'] = 1;
+    prudent = 10;
+  }
+  const modifier = testModifier(world, actor, attribute, extra + prudent, vs);
   const value = actor.character.attributes[attribute];
   let result = test(rng, value, modifier);
   if (actor.counters.nature) delete actor.counters.nature;
@@ -166,6 +176,11 @@ export function heroTest(world: WorldView, actor: ActorState, attribute: Attribu
   // Wisdom of Ages: every failed Intelligence test is thrown once more (Jacob, 2026-11-25).
   if (!result.success && attribute === 'int' && cards.includes('elder-wisdom')) {
     result = { ...test(rng, value, modifier), rerolled: 'elder-wisdom', first: result.roll };
+  }
+  // Inspiration from the journal: one failed test is thrown again (Jacob, 2026-11-27: "jedno przerzucenie").
+  if (!result.success && (actor.journal?.inspiration ?? 0) > 0) {
+    actor.journal!.inspiration--;
+    result = { ...test(rng, value, modifier), rerolled: 'inspiration', first: result.roll };
   }
   return result;
 }

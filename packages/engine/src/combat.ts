@@ -69,6 +69,8 @@ export interface CombatState {
   studied?: boolean;
   /** Strategist: the kind of foe studied; the +10 counts against every foe of that kind (Jacob, 2026-11-26). */
   studiedKind?: string;
+  /** The hero journal's say, fixed as the fight starts: a bestiary note's +5 and the careful's −5 on the first test, the bold's −5 to flee. */
+  journal?: { lore: number; careful: number; flee: number; used?: boolean };
   /** Poisoned Arrow: shots taken this fight (2 a fight). */
   arrows?: number;
   /** Blinding Light was used in this fight (once a fight). */
@@ -350,6 +352,13 @@ export function combatTurn(
   /** The hero's own Combat modifiers against a foe: Scalp, Strategist's study and the mist's −10. */
   const comMod = (enemy: string) => scalpBonus(actor, enemy) + (combat.studiedKind === enemy ? 10 : 0) + (mistOn() ? MIST.own : 0);
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
+  /** The journal on the hero's first test of the fight: a bestiary note's +5, and on an attack the careful's −5. */
+  const firstTest = (attack: boolean) => {
+    const j = combat.journal;
+    if (!j || j.used) return 0;
+    j.used = true;
+    return j.lore + (attack ? j.careful : 0);
+  };
   const weapon = heroWeapon(actor);
   const rune = actor.character.equipment.rune;
 
@@ -366,7 +375,7 @@ export function combatTurn(
   if (aim !== undefined && !(['head', 'arms', 'torso', 'legs'] as const).includes(aim)) throw new EngineError('combat.aim', 'Aim at the head, arms, torso or legs.');
   const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string; wound?: boolean; tear?: boolean } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
-    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0) + comMod(target.enemy);
+    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0) + comMod(target.enemy) + firstTest(true);
     const result = heroTest(world, actor, 'com', rng, mod, enemy.kind);
     const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}), ...(opts.scroll ? { scroll: opts.scroll } : {}) };
     if (!result.success) {
@@ -472,7 +481,7 @@ export function combatTurn(
         if (!alive().length) break;
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
-        const hero = heroTest(world, actor, 'dex', rng, focus + harried + vigilance);
+        const hero = heroTest(world, actor, 'dex', rng, focus + harried + vigilance + firstTest(false) + (combat.journal?.flee ?? 0));
         const foe = test(rng, ENEMIES[fastest.enemy]!.dex, foeMod(fastest, 'dex'));
         fled = hero.success && (!foe.success || hero.roll <= foe.roll);
         events.push({ type: 'flee', success: fled, hero, foe });

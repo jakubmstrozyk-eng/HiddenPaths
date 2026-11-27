@@ -9,6 +9,7 @@ import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, ro
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
 import { gainXp, log, respawn, reveal, worldView } from './progress';
+import { beginJournal, canWriteJournal, combatJournal, journalOf, noteLog, payVows, startJournal, writeJournal } from './journal';
 import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
@@ -59,6 +60,8 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
       pendingEvent: null,
       combat: null,
       hasStone: false,
+      // The hero journal comes along from earlier games (Jacob, 2026-11-27).
+      journal: startJournal(p.character.journal, character.level, character.xp, character.gold),
     };
   });
   // Initiative: higher Dexterity acts first; seat order breaks ties.
@@ -69,7 +72,9 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
   const eventDeck = rng.shuffle(ALL_EVENT_IDS);
   // The dungeon has its own rng, so the rest of a seeded game plays out as it did before dungeons.
   const dungeon = placeDungeon(map, config, new Rng(seedFromString(`${seed}:dungeon`)));
-  return { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [], logSeq: 0, ...(dungeon ? { dungeon } : {}) };
+  const state: GameState = { seed, rng: rng.state, config, map, players, turnOrder, turnIndex: 0, round: 1, eventDeck, winner: null, version: 0, log: [], logSeq: 0, ...(dungeon ? { dungeon } : {}) };
+  for (const p of state.players) beginJournal(state, p);
+  return state;
 }
 
 export function currentPlayer(state: GameState): PlayerState {
@@ -286,8 +291,10 @@ function busy(player: PlayerState) {
  * so the server can keep the old version until the new one is saved.
  */
 export function applyAction(prev: GameState, playerId: string, action: Action): GameState {
+  if (action?.type === 'journal') return journalAction(prev, playerId, action);
   if (prev.winner) throw new EngineError('game.over', 'The game is over.');
   const state = structuredClone(prev);
+  const fromSeq = state.logSeq;
   const rng = new Rng(state.rng);
   const player = currentPlayer(state);
   if (player.id !== playerId) throw new EngineError('turn.notYours', 'It is not your turn.');
@@ -340,10 +347,16 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
         log(state, { type: 'card', player: player.id, card: 'mystic-researcher', ok: true, amount: 1 });
       }
       refreshCards(player);
-      const healed = Math.min(2, player.character.maxVitality - player.character.vitality);
+      // A camp under the stars (a chapter's lesson): once a game it heals 4 instead of 2.
+      const j = journalOf(player);
+      const stars = j.summary.lessons.stars && !j.starsUsed;
+      if (stars) j.starsUsed = true;
+      const healed = Math.min(stars ? 4 : 2, player.character.maxVitality - player.character.vitality);
       player.character.vitality += healed;
       player.actionsSinceCamp = 0;
       log(state, { type: 'camped', player: player.id, cell: player.position, healed });
+      // The campfire: the journal opens for an entry (Jacob, 2026-11-27: at every camp, if the player wants).
+      j.open = true;
       // Companions rest too.
       for (const pet of player.companions ?? []) pet.vitality = Math.min(pet.maxVitality, pet.vitality + 2);
       endTurn(state, player, rng);
@@ -434,6 +447,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   }
 
   afterAction(state, player);
+  chronicle(state, fromSeq);
   // The state keeps a short recent log for the app; the server stores the full history.
   if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
   state.rng = rng.state;
@@ -452,6 +466,8 @@ function walkDungeon(state: GameState, player: PlayerState, to: number | 'exit')
     log(state, { type: 'leftDungeon', player: player.id });
     return;
   }
+  // A new trip down: the Prudent's easy first test is ready again.
+  if (!player.delve) delete player.counters['journal:prudent'];
   const card = enterRoom(state, player, to);
   log(state, { type: 'room', player: player.id, room: to, ...(card !== null ? { card } : {}) });
   if (card !== null) startEvent(state, player, card);
@@ -459,6 +475,8 @@ function walkDungeon(state: GameState, player: PlayerState, to: number | 'exit')
 
 function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove) {
   if (!player.combat) throw new EngineError('combat.none', 'You are not in a fight.');
+  // The journal's say in this fight, fixed when it starts: bestiary notes and character traits.
+  if (!player.combat.journal) player.combat.journal = combatJournal(player, player.combat.foes.map((f) => f.enemy));
   const { events, result } = combatTurn(worldView(state), player, player.combat, move, rng);
   if (result !== 'ongoing' && result !== 'won') rememberBoss(state, player);
   // Jacob's rule (2026-11-23): a fight takes the rest of the round, so the hero is left with no Speed or Stamina.
@@ -674,6 +692,7 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
 export function timeoutTurn(prev: GameState): GameState {
   if (prev.winner) return prev;
   const state = structuredClone(prev);
+  const fromSeq = state.logSeq;
   const rng = new Rng(state.rng);
   const player = currentPlayer(state);
   // In the dungeon an absent hero backs out of an unfinished room, so no room is cleared by the clock.
@@ -709,7 +728,31 @@ export function timeoutTurn(prev: GameState): GameState {
   if (canEat(state, player)) eat(state, player);
   afterAction(state, player);
   endTurn(state, player, rng);
+  chronicle(state, fromSeq);
   state.rng = rng.state;
+  state.version++;
+  return state;
+}
+
+/** Reads what an action wrote to the log into the heroes' journals, and pays the vows it kept. */
+function chronicle(state: GameState, fromSeq: number) {
+  let seq = fromSeq;
+  for (let pass = 0; pass < 3 && state.logSeq > seq; pass++) {
+    const added = Math.min(state.logSeq - seq, state.log.length);
+    seq = state.logSeq;
+    const kept = noteLog(state, state.log.slice(-added));
+    payVows(kept, (e) => log(state, e), (p, xp) => gainXp(state, p, xp));
+  }
+}
+
+/** The campfire: an entry in the journal, or closing it unwritten. Any player may write, even out of turn. */
+function journalAction(prev: GameState, playerId: string, action: Extract<Action, { type: 'journal' }>): GameState {
+  const state = structuredClone(prev);
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) throw new EngineError('game.player', 'No such player.');
+  if (action.entry && !canWriteJournal(player)) throw new EngineError('journal.nothing', 'Nothing new to write yet.');
+  writeJournal(state, player, action.entry, (e) => log(state, e));
+  if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
   state.version++;
   return state;
 }

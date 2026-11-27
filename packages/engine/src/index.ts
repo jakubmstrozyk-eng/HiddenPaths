@@ -21,3 +21,5 @@ export * from './missions';
 export * from './dungeon';
 export * from './tiles';
 export * from './puzzles';
+export * from './journal';
+export { servicePrice } from './towns';

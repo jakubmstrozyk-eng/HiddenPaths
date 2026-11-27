@@ -8,6 +8,7 @@ import { EngineError } from './errors';
 import { combatXp, heroArmour, startCombat, VIGILANCE } from './combat';
 import { neighbours } from './mapgen';
 import { makePuzzle, scorePuzzle, type PuzzleAnswer } from './puzzles';
+import { cardTestBonus, fightGold, traitOptions } from './journal';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
@@ -42,7 +43,10 @@ export function eventOptions(state: GameState, player: PlayerState): { option: E
   if (!player.pendingEvent || player.pendingEvent.puzzle) return [];
   const card = EVENT_BY_ID[player.pendingEvent.card]!;
   const step = card.steps[player.pendingEvent.step]!;
-  return step.options.map((option, index) => ({ option, index, affordable: canPay(player, option) }));
+  const own = step.options.map((option, index) => ({ option, index, affordable: canPay(player, option) }));
+  // Character traits from the journal add their own choices to the start of some cards.
+  if (player.pendingEvent.step !== 'start') return own;
+  return [...own, ...traitOptions(player, card.id, step.options.length).map((o) => ({ ...o, affordable: canPay(player, o.option) }))];
 }
 
 function canPay(player: PlayerState, option: EventOption): boolean {
@@ -105,6 +109,9 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
     }
   }
   runOutcomes(state, player, rng, combat.onWin, combat.card);
+  // The journal: the ruthless take 1 gold more from beaten people, the merciful 1 less.
+  const gold = fightGold(player, combat.foes.filter((f) => !f.tamed).map((f) => f.enemy));
+  if (gold) change(state, player, 'gold', gold);
   if (combat.card !== undefined && !player.pendingEvent && !player.combat) log(state, { type: 'eventEnded', player: player.id, card: combat.card });
 }
 
@@ -269,7 +276,9 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         const bonus = o.raceBonus && o.raceBonus.race === c.race ? o.raceBonus.amount : 0;
         // Vigilance: +10 to the Guardian's Dexterity tests in the sudden moments events bring.
         const vigilance = o.attribute === 'dex' && c.cards.includes('guardian-vigilance') ? VIGILANCE : 0;
-        const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus + vigilance);
+        // The journal: a person met before (+10), and the curious, the prudent and the schemer on cards.
+        const journal = cardTestBonus(player, card, o.attribute);
+        const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus + vigilance + journal);
         log(state, { type: 'check', player: player.id, attribute: o.attribute, result });
         runOutcomes(state, player, rng, (result.success ? o.pass : o.fail) ?? [], card);
         break;
@@ -328,7 +337,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         // The helper test comes first: a pass gives the puzzle's cue (a letter, slower hands, a wider zone).
         let helped: boolean | null = null;
         if (o.puzzle.helper) {
-          const result = heroTest(world, player, o.puzzle.helper.attribute, rng, o.puzzle.helper.modifier ?? 0);
+          const result = heroTest(world, player, o.puzzle.helper.attribute, rng, (o.puzzle.helper.modifier ?? 0) + cardTestBonus(player, card, o.puzzle.helper.attribute));
           log(state, { type: 'check', player: player.id, attribute: o.puzzle.helper.attribute, result });
           helped = result.success;
         }
