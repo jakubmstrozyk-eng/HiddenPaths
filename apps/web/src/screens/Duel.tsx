@@ -478,7 +478,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 </button>
               ))}
             </div>
-            <SkillHand profession={c.profession} owned={c.cards} actor={me} playable={cardMoves} onPlay={playCard} inFight compact />
+            <SkillHand profession={c.profession} owned={c.cards} actor={me} playable={cardMoves} onPlay={playCard} inFight compact dock />
           </>
         )}
         {busy && <p className="duel-hint">{waitingForTap ? t('tapDie') : ' '}</p>}
