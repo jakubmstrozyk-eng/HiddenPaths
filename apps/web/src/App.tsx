@@ -4,6 +4,7 @@ import type { Locale } from '@hp/content';
 import { careerOf, createGame, growthOf, heroCharacter, journalShare, type GameConfig, type GameState, type Hero } from '@hp/engine';
 import { api, getSession, serverAvailable, setSession, type Me } from './api';
 import { DarkMatter } from './DarkMatter';
+import { InkFx } from './InkFx';
 import { LocaleContext, useT, type UiKey } from './i18n';
 import { SetupScreen } from './screens/Setup';
 import { CreateHeroScreen, HeroPickScreen, HeroesScreen } from './screens/Heroes';
@@ -177,7 +178,8 @@ export function App() {
   return (
     <LocaleContext.Provider value={locale}>
       <MotionConfig reducedMotion="user">
-        <DarkMatter />
+        <DarkMatter calm={screen.name === 'game' || screen.name === 'online'} dim={screen.name !== 'menu'} />
+        <InkFx />
         <button className="lang" onClick={changeLocale}>
           {locale === 'pl' ? 'EN' : 'PL'}
         </button>
@@ -327,9 +329,9 @@ function Opened({ tile, children }: { tile?: UiKey; children: React.ReactNode })
     >
       <motion.div
         className="opened-inner"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25, duration: 0.3 }}
+        initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
+        transition={{ delay: 0.25, duration: 0.45 }}
       >
         {children}
       </motion.div>
@@ -366,15 +368,27 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, 
       ];
   return (
     <motion.main className="menu" exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-      <motion.h1
-        className="title"
-        initial={{ opacity: 0, letterSpacing: '0.6em' }}
-        animate={{ opacity: 1, letterSpacing: '0.18em' }}
-        transition={{ duration: 1.2, ease: 'easeOut' }}
+      <Title text="Hidden Paths" />
+      <motion.svg
+        className="title-rule"
+        viewBox="0 0 320 20"
+        aria-hidden="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.6 }}
       >
-        Hidden Paths
-      </motion.h1>
-      <p className="tagline">{t('tagline')}</p>
+        <motion.path d="M4 10 H138" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: 'easeOut' }} />
+        <motion.path d="M316 10 H182" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: 'easeOut' }} />
+        <path className="gem" d="M160 2 L168 10 L160 18 L152 10 Z M146 10 h3 M171 10 h3" />
+      </motion.svg>
+      <motion.p
+        className="tagline"
+        initial={{ opacity: 0, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, filter: 'blur(0px)' }}
+        transition={{ delay: 1.4, duration: 1 }}
+      >
+        {t('tagline')}
+      </motion.p>
       <div className="tiles">
         {tiles.map((tile, i) => (
           <motion.button
@@ -383,17 +397,47 @@ function MainMenu({ online, me, hasSave, onNew, onContinue, onMulti, onAccount, 
             className="tile"
             disabled={!tile.onClick}
             onClick={tile.onClick}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 + i * 0.08 }}
+            initial={{ opacity: 0, scale: 0.86, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            transition={{ delay: 1.5 + i * 0.1, duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
             whileHover={tile.onClick ? { scale: 1.04 } : undefined}
-            whileTap={tile.onClick ? { scale: 0.97 } : undefined}
+            whileTap={tile.onClick ? { scale: 0.96 } : undefined}
           >
-            <span>{t(tile.key)}</span>
+            <span className="ink-fill" aria-hidden="true"><i /></span>
+            <span className="tile-label">{t(tile.key)}</span>
             {tile.note && <small>{tile.note}</small>}
           </motion.button>
         ))}
       </div>
     </motion.main>
+  );
+}
+
+/**
+ * The game's name condenses out of the dark matter letter by letter, in a scattered order,
+ * and a letter touched by the pointer dissolves back into smoke for a moment.
+ */
+function Title({ text }: { text: string }) {
+  const order = (i: number) => (i * 7 + 3) % text.length;
+  return (
+    <h1 className="title" aria-label={text}>
+      <span className="title-ink" aria-hidden="true">
+        {[...text].map((ch, i) =>
+          ch === ' ' ? (
+            <span key={i} className="title-gap" />
+          ) : (
+            <motion.span
+              key={i}
+              className="title-letter"
+              initial={{ opacity: 0, filter: 'blur(16px)', y: 10, scale: 1.35 }}
+              animate={{ opacity: 1, filter: 'blur(0px)', y: 0, scale: 1 }}
+              transition={{ delay: 0.15 + order(i) * 0.07, duration: 0.9, ease: [0.2, 0.8, 0.2, 1] }}
+            >
+              <span className="glyph">{ch}</span>
+            </motion.span>
+          ),
+        )}
+      </span>
+    </h1>
   );
 }

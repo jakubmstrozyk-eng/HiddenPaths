@@ -1,12 +1,15 @@
 :root {
-  --display: 'Cinzel', Georgia, serif;
+  /* Fantasy faces, both SIL Open Font License, both with full Polish diacritics:
+     Uncial Antiqua for the game's name, Metamorphous for headings and menu labels. */
+  --title: 'Uncial Antiqua', 'Metamorphous', Georgia, serif;
+  --display: 'Metamorphous', 'Cinzel', Georgia, serif;
   --num: Inter, system-ui, sans-serif;
   --ink: #f4f2ff;
-  --muted: #9a94b8;
+  --muted: #a6a6a6;
   --line: rgba(255, 255, 255, 0.14);
   --glow: #8f7bff;
   --tile: #ffffff;
-  --panel: rgba(10, 8, 20, 0.72);
+  --panel: rgba(8, 8, 8, 0.74);
   color-scheme: dark;
 }
 
@@ -17,6 +20,7 @@ body {
   color: var(--ink);
   font-family: Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  font-synthesis-weight: none;
   overflow-x: hidden;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -29,33 +33,108 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   background: transparent; border: 1px solid var(--line); border-radius: 0; padding: 6px 10px; font-size: 12px;
 }
 
-/* Main menu: black void, outlined square tiles with white labels that light up white, like a fragment being entered */
+/* Main menu: black void of dark matter. The name condenses out of it; tiles fill with light spreading from the pointer. */
 .menu {
   position: relative; z-index: 1; min-height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 48px 16px; gap: 12px; text-align: center;
+  padding: 48px 16px; gap: 10px; text-align: center;
 }
 .title {
-  font-family: var(--display); font-weight: 700; text-transform: uppercase;
-  font-size: clamp(32px, 9vw, 72px); margin: 0;
-  text-shadow: 0 0 24px rgba(143, 123, 255, 0.55);
+  font-family: var(--title); font-weight: 400;
+  font-size: clamp(42px, 11vw, 96px); line-height: 1.05; margin: 0;
+  letter-spacing: 0.02em;
 }
-.tagline { color: var(--muted); margin: 0 0 24px; }
-.tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 512px; }
+.title-ink {
+  display: inline-flex; flex-wrap: wrap; justify-content: center;
+  text-shadow: 0 0 2px #fff, 0 0 22px rgba(255, 255, 255, 0.35), 0 4px 30px #000;
+}
+.title-letter { display: inline-block; }
+.title-gap { display: inline-block; width: 0.32em; }
+.title .glyph { display: inline-block; transition: filter 0.9s ease, opacity 0.9s ease, transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.title .glyph:hover { filter: blur(6px); opacity: 0.15; transform: translateY(-8px) scale(1.15); transition-duration: 0.25s; }
+.title-rule { width: min(320px, 80vw); height: 20px; overflow: visible; }
+.title-rule path { fill: none; stroke: rgba(255, 255, 255, 0.7); stroke-width: 1.2; }
+.title-rule .gem { stroke: #fff; animation: gem-breathe 4s ease-in-out infinite; transform-origin: 160px 10px; }
+@keyframes gem-breathe { 50% { opacity: 0.45; transform: rotate(45deg) scale(0.8); } }
+.tagline { font-family: var(--display); color: rgba(255, 255, 255, 0.72); margin: 0 0 22px; font-size: 17px; letter-spacing: 0.04em; }
+.tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; max-width: 540px; }
+
+/* Ink radius: a registered property so the spreading light can be transitioned. */
+@property --ink { syntax: '<length>'; inherits: true; initial-value: 0px; }
 .tile {
-  width: 160px; aspect-ratio: 1; background: rgba(10, 8, 20, 0.35); color: #fff;
+  position: relative; overflow: hidden; isolation: isolate;
+  width: 160px; aspect-ratio: 1; background: rgba(0, 0, 0, 0.55); color: #fff;
   border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  font-weight: 700; font-size: 17px; padding: 12px;
-  box-shadow: 0 0 0 rgba(255, 255, 255, 0), inset 0 0 0 rgba(255, 255, 255, 0);
-  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.35s ease, border-color 0.3s ease;
+  font-family: var(--display); font-weight: 400; font-size: 19px; line-height: 1.15; padding: 12px;
+  box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  --ink: 0px;
+  transition: color 0.4s ease 0.15s, box-shadow 0.6s ease, border-color 0.3s ease, --ink 1s cubic-bezier(0.35, 0.6, 0.2, 1);
 }
-.tile small { font-weight: 400; font-size: 12px; opacity: 0.7; }
-.tile:hover:not(:disabled), .tile:focus-visible:not(:disabled), .tile:active:not(:disabled) {
-  background: var(--tile); color: #0a0814; border-color: var(--tile); outline: none;
-  box-shadow: 0 0 36px rgba(255, 255, 255, 0.45), 0 0 90px rgba(143, 123, 255, 0.25);
+/* Corner notches, like the clasps of an old binding. */
+.tile::before, .tile::after {
+  content: ''; position: absolute; width: 10px; height: 10px; border: 0 solid #fff; z-index: 2; transition: inset 0.3s ease;
 }
-.tile:disabled { border-color: rgba(255, 255, 255, 0.25); color: rgba(255, 255, 255, 0.5); background: transparent; }
+.tile::before { top: 5px; left: 5px; border-top-width: 1.5px; border-left-width: 1.5px; }
+.tile::after { bottom: 5px; right: 5px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+.tile:disabled::before, .tile:disabled::after { border-color: rgba(255, 255, 255, 0.25); }
+.tile .tile-label, .tile small { position: relative; z-index: 1; }
+.tile small { font-family: var(--num); font-weight: 400; font-size: 12px; opacity: 0.7; }
+/* The light that floods the tile: a circle growing from the pointer with an eaten, smoky edge. */
+.tile .ink-fill { position: absolute; inset: 0; z-index: 0; filter: url(#ink-edge); pointer-events: none; }
+.tile .ink-fill i {
+  position: absolute; inset: -14px; background: #fff;
+  clip-path: circle(var(--ink) at calc(var(--mx, 50%) + 14px) calc(var(--my, 50%) + 14px));
+}
+.tile:hover:not(:disabled), .tile:focus-visible:not(:disabled) {
+  --ink: 260px; color: #000; border-color: #fff; outline: none;
+  box-shadow: 0 0 36px rgba(255, 255, 255, 0.35), 0 0 90px rgba(255, 255, 255, 0.12);
+}
+.tile:hover:not(:disabled)::before, .tile:hover:not(:disabled)::after,
+.tile:focus-visible:not(:disabled)::before, .tile:focus-visible:not(:disabled)::after { border-color: #000; inset: auto; }
+.tile:hover:not(:disabled)::before, .tile:focus-visible:not(:disabled)::before { top: 9px; left: 9px; }
+.tile:hover:not(:disabled)::after, .tile:focus-visible:not(:disabled)::after { bottom: 9px; right: 9px; }
+/* A locked tile is still under dark matter: smoke creeps over it. */
+.tile:disabled { border-color: rgba(255, 255, 255, 0.22); color: rgba(255, 255, 255, 0.5); background: rgba(0, 0, 0, 0.6); }
+.tile:disabled .ink-fill { filter: none; }
+.tile:disabled .ink-fill i {
+  inset: -30%; clip-path: none;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.07), transparent 70%) 20% 30% / 70% 70% no-repeat,
+              radial-gradient(closest-side, rgba(255, 255, 255, 0.05), transparent 70%) 80% 70% / 60% 60% no-repeat;
+  animation: smoke-creep 11s ease-in-out infinite alternate;
+}
+@keyframes smoke-creep { to { transform: translate(14%, -10%) rotate(25deg); } }
+
+/* Every press throws a splash of matter; difference blending keeps it dark on white and white on dark. */
+.ink-defs { position: absolute; width: 0; height: 0; }
+.ink-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; mix-blend-mode: difference; }
+.ink-splash { position: absolute; transform: translate(-50%, -50%); overflow: visible; }
+.ink-splash circle { fill: #fff; }
+.ink-ring { fill: none !important; stroke: #fff; stroke-width: 3; transform: scale(0.2); animation: ink-ring 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.ink-drop { animation: ink-drop 0.65s cubic-bezier(0.15, 0.8, 0.25, 1) forwards; }
+@keyframes ink-ring { 60% { opacity: 0.9; } to { transform: scale(1); opacity: 0; stroke-width: 0.5; } }
+@keyframes ink-drop { from { transform: translate(0, 0) scale(1.4); opacity: 1; } 70% { opacity: 0.8; } to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
+
+/* Hover ink on everyday buttons: a soft patch of light that spreads from the pointer. */
+.ghost, .choice:not(.active):not(:disabled), .lang, .primary:not(:disabled), .back-arrow, .act-btn:not(.depleted), .hero-card.hero-new {
+  --ink: 0px;
+  background-image: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--ink-tone, rgba(255, 255, 255, 0.13)) 0, var(--ink-tone, rgba(255, 255, 255, 0.13)) var(--ink), transparent calc(var(--ink) + 18px));
+  transition: --ink 0.55s cubic-bezier(0.3, 0.7, 0.2, 1), background-color 0.2s, color 0.2s, transform 0.15s, border-color 0.2s;
+}
+.primary:not(:disabled) { --ink-tone: rgba(0, 0, 0, 0.12); }
+.ghost:hover, .choice:not(.active):not(:disabled):hover, .lang:hover, .primary:not(:disabled):hover,
+.back-arrow:hover, .act-btn:not(.depleted):hover { --ink: 320px; }
+.ghost:hover, .lang:hover { border-color: rgba(255, 255, 255, 0.55); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .ghost, .choice, .lang, .primary { transition-property: color, background-color, border-color; }
+  .tile:hover:not(:disabled) .ink-fill i, .tile:focus-visible:not(:disabled) .ink-fill i { clip-path: none; }
+  .title-rule .gem, .tile:disabled .ink-fill i { animation: none; }
+}
+@media (max-width: 420px) {
+  .tiles { gap: 12px; }
+  .tile { width: calc(50vw - 24px); max-width: 160px; font-size: 17px; }
+}
 
 /* A screen opened from a tile */
 .opened { position: relative; z-index: 2; min-height: 100%; }
@@ -1527,3 +1606,10 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .attr .attr-hint { font-size: 11px; line-height: 1.3; color: var(--muted); font-weight: 400; }
 .attrs { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 @media (max-width: 560px) { .panel:has(> .back-arrow), .panel:has(.actions > .back-arrow) { padding-top: 70px; } }
+
+/* "Create a hero" fills with light from the pointer, like a menu tile. */
+.hero-card.hero-new { --ink-tone: #fff; transition: --ink 0.9s cubic-bezier(0.35, 0.6, 0.2, 1), color 0.4s ease 0.15s, box-shadow 0.4s; }
+.hero-card.hero-new:hover, .hero-card.hero-new:focus-visible {
+  --ink: 640px; background-color: transparent;
+  background-image: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), #fff 0, #fff var(--ink), transparent calc(var(--ink) + 18px));
+}
