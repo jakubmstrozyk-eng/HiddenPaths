@@ -1,3 +1,4 @@
+import { BackArrow } from '../BackArrow';
 import { useState } from 'react';
 import { PROFESSIONS, RACES } from '@hp/content';
 import { currentPlayer, type GameState } from '@hp/engine';
@@ -60,7 +61,7 @@ export function SavesScreen({ onBack, onOpen, onNew }: { onBack: () => void; onO
         </div>
       )}
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
         <button className="primary" onClick={onNew}>{t('newGame')}</button>
       </div>
     </div>

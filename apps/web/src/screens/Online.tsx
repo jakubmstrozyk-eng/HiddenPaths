@@ -1,3 +1,4 @@
+import { BackArrow } from '../BackArrow';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { currentPlayer, type Action, type GameState } from '@hp/engine';
 import { api, ApiError, type GameSummary, type GameView, type Me } from '../api';
@@ -48,7 +49,7 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
       )}
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
       </div>
     </div>
   );
@@ -117,7 +118,7 @@ export function GamesScreen({ onBack, onOpen, onNew }: { onBack: () => void; onO
       </div>
       {error && <p className="error">{error} <button className="ghost small" onClick={load}>{t('retry')}</button></p>}
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
         <button className="primary" disabled={open >= 3} onClick={onNew}>{t('newGame')}</button>
       </div>
     </div>
@@ -145,7 +146,7 @@ export function MultiplayerScreen({ onBack, onCreate, onJoin, initialCode = '' }
         <button className="primary" disabled={code.trim().length !== 6}>{t('join')}</button>
       </form>
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
       </div>
     </div>
   );
@@ -177,7 +178,7 @@ export function AccountScreen({ me, onBack, onChange, onSignOut }: { me: Me; onB
       </form>
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button className="ghost" onClick={onBack}>{t('back')}</button>
+        <BackArrow onClick={onBack} />
         <button className="ghost" onClick={onSignOut}>{t('signOut')}</button>
       </div>
     </div>
@@ -234,7 +235,7 @@ export function OnlineGame({ id, me, onMenu, onNew }: { id: string; me: Me; onMe
       <div className="panel">
         <p className="muted">{error ?? t('loading')}</p>
         {error && <button className="ghost" onClick={() => void load()}>{t('retry')}</button>}
-        <div className="actions"><button className="ghost" onClick={onMenu}>{t('back')}</button></div>
+        <div className="actions"><BackArrow onClick={onMenu} /></div>
       </div>
     );
   }
@@ -308,7 +309,7 @@ function Lobby({ view, me, onMenu, onStarted }: { view: GameView; me: Me; onMenu
       <p className="muted">{t('turnsInfo')}</p>
       {error && <p className="error">{error}</p>}
       <div className="actions">
-        <button className="ghost" onClick={onMenu}>{t('back')}</button>
+        <BackArrow onClick={onMenu} />
         {isHost ? (
           <button className="primary" disabled={view.players.length < 2} onClick={start} title={view.players.length < 2 ? t('needTwo') : undefined}>
             {t('startGame')}

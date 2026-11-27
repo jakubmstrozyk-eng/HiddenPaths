@@ -114,7 +114,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--glow); outl
   image-rendering: pixelated; background: #0b0814;
   transition: transform 0.35s cubic-bezier(.3, 1.4, .5, 1), box-shadow 0.35s, filter 0.35s;
 }
-.terrain-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; shape-rendering: crispEdges; }
+.terrain-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; shape-rendering: geometricPrecision; }
 .frag.seen:not(.here-tile) .terrain-art { filter: saturate(0.85) brightness(0.88); }
 /* The fragment the hero stands on is lifted off the board and lit. */
 .frag.here-tile {
@@ -772,30 +772,12 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .keep-pick.on { opacity: 1; border-color: #ffe27a; transform: translateY(-3px); }
 .keep-new { position: absolute; bottom: 4px; right: 4px; background: #3a8a6a; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; text-transform: uppercase; }
 /* The body map of armour: six spots of the hit-location k6, tinted weak (red) to strong (steel blue) */
-.armour-body { display: block; overflow: visible; }
-.armour-body .zone path { stroke-width: 1.6; transition: fill 0.2s, stroke 0.2s, filter 0.2s; }
-.armour-body .zone.bare path, .armour-legend i.bare { fill: rgba(255, 107, 107, 0.22); stroke: #ff6b6b; }
-.armour-body .zone.light path, .armour-legend i.light { fill: rgba(255, 211, 77, 0.28); stroke: #ffd34d; }
-.armour-body .zone.mid path, .armour-legend i.mid { fill: rgba(201, 209, 220, 0.35); stroke: #dfe6f0; }
-.armour-body .zone.heavy path, .armour-legend i.heavy { fill: rgba(143, 211, 255, 0.45); stroke: #8fd3ff; }
-.armour-body text { text-anchor: middle; dominant-baseline: middle; pointer-events: none; font-family: var(--body, inherit); }
-.armour-body .zone-armour { font-size: 12px; font-weight: 700; fill: #fff; }
-.armour-body .zone-roll { font-size: 7px; fill: rgba(255, 255, 255, 0.6); }
-.armour-body.pickable .zone { cursor: pointer; }
-.armour-body.pickable .zone:hover path, .armour-body.pickable .zone:focus-visible path { stroke: #fff; filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.7)); outline: none; }
-.armour-body .zone:focus { outline: none; }
-.armour-body .zone.aim path { stroke: #fff; stroke-width: 2.6; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
-.armour-body .zone.hit path { fill: #fff; stroke: #fff; animation: zone-hit 0.9s ease-out; }
-.armour-body .zone.hit text { fill: #0a0814; }
-@keyframes zone-hit { 0% { filter: drop-shadow(0 0 0 #fff); } 30% { filter: drop-shadow(0 0 10px #fff); } 100% { filter: drop-shadow(0 0 3px #fff); } }
 .armour-legend { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
 .armour-legend i { display: inline-block; width: 10px; height: 10px; border: 1px solid; margin-left: 6px; }
 .armour-legend i:first-child { margin-left: 0; }
 .doll-figure { gap: 6px; }
-.doll-figure .doll-pair { display: flex; align-items: center; gap: 10px; }
 
 /* In a fight: each side's armour by its portrait, and the aim picker before an attack */
-.duel-body { display: flex; align-items: center; gap: 6px; }
 .aim-pick { display: grid; justify-items: center; gap: 4px; margin-top: 4px; }
 .aim-pick small { color: var(--muted); font-size: 11px; max-width: 200px; text-align: center; }
 .aim-pick b { font-size: 12px; }
@@ -1502,3 +1484,46 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
 .afflictions.top .afflictions-head { display: inline; margin-right: 2px; }
 @media (min-width: 901px) { .afflictions.top { display: none; } }
 @media (max-width: 900px) { .afflictions.aff-side { display: none; } }
+
+/* One figure: the sprite in its armour, with each hit-location spot's armour pinned beside the body part. */
+.armoured { position: relative; display: inline-block; flex: none; }
+.armoured-sprite { position: absolute; top: 0; display: block; }
+.armoured-sprite > svg { display: block; }
+.armoured-marks { position: absolute; inset: 0; overflow: visible; }
+.armoured-marks text { text-anchor: middle; dominant-baseline: central; pointer-events: none; font-family: var(--body, inherit); }
+.armoured .spot-area { fill: transparent; stroke: transparent; stroke-width: 0.25; transition: fill 0.2s, stroke 0.2s; }
+.armoured .spot-lead { stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; }
+.armoured .spot-dot { fill: rgba(255, 255, 255, 0.55); }
+.armoured .spot-badge { stroke-width: 1.5; fill: rgba(10, 8, 20, 0.88); }
+.armoured .spot-value { font-weight: 700; fill: #fff; }
+.armoured .spot-roll { fill: rgba(255, 255, 255, 0.55); text-anchor: inherit; }
+.armoured .spot.bare .spot-badge { stroke: #ff6b6b; }
+.armoured .spot.bare .spot-value { fill: #ffb0b0; }
+.armoured .spot.light .spot-badge { stroke: #ffd34d; }
+.armoured .spot.mid .spot-badge { stroke: #dfe6f0; }
+.armoured .spot.heavy .spot-badge { stroke: #8fd3ff; fill: rgba(30, 60, 90, 0.9); }
+.armoured.pickable .spot { cursor: pointer; }
+.armoured.pickable .spot:hover .spot-area, .armoured.pickable .spot:focus-visible .spot-area { fill: rgba(255, 255, 255, 0.18); stroke: rgba(255, 255, 255, 0.8); }
+.armoured.pickable .spot:hover .spot-lead { stroke: rgba(255, 255, 255, 0.7); }
+.armoured .spot:focus { outline: none; }
+.armoured .spot.aim .spot-area { fill: rgba(255, 255, 255, 0.2); stroke: #fff; stroke-dasharray: 0.6 0.4; }
+.armoured .spot.aim .spot-lead { stroke: #fff; }
+.armoured .spot.aim .spot-badge { stroke: #fff; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.9)); }
+.armoured .spot.hit .spot-area { animation: spot-hit 0.9s ease-out; }
+.armoured .spot.hit .spot-badge { fill: #fff; animation: spot-hit-badge 0.9s ease-out; }
+.armoured .spot.hit .spot-value { fill: #0a0814; }
+@keyframes spot-hit { 0% { fill: rgba(255, 255, 255, 0.85); stroke: #fff; } 100% { fill: rgba(255, 80, 80, 0.25); stroke: #ff6b6b; } }
+@keyframes spot-hit-badge { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.armoured .spot.hit .spot-badge { transform-box: fill-box; transform-origin: center; }
+.armour-legend em { font-style: normal; margin-left: 4px; }
+.jr-write-now { display: block; width: 100%; margin: 8px 0 4px; }
+.back-arrow {
+  position: fixed; top: 12px; left: 12px; z-index: 40; width: 44px; height: 44px; padding: 0;
+  display: grid; place-items: center; background: rgba(10, 8, 20, 0.7); border: 1px solid var(--line); color: var(--text, #fff);
+}
+.back-arrow:hover, .back-arrow:focus-visible { border-color: #fff; background: rgba(255, 255, 255, 0.08); }
+.actions .primary { margin-left: auto; }
+.attr .attr-name { display: grid; gap: 2px; }
+.attr .attr-hint { font-size: 11px; line-height: 1.3; color: var(--muted); font-weight: 400; }
+.attrs { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+@media (max-width: 560px) { .panel:has(> .back-arrow), .panel:has(.actions > .back-arrow) { padding-top: 70px; } }

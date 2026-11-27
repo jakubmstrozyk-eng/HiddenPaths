@@ -8,11 +8,12 @@ import {
 import { useT, type UiKey } from '../i18n';
 import { Icon } from '../Icons';
 import { diceStyle, diceVars, DieFace } from '../DiceFace';
-import { ArmourBody, spotName } from '../ArmourBody';
+import { spotName } from '../ArmourBody';
+import { FoeFigure, HeroFigure } from '../ArmouredFigure';
 import { buzz, clack, ShakeToThrow, Verdict } from '../Throw';
 import { HitFx, hitKind } from '../HitFx';
 import { hurtSound } from '../Feedback';
-import { PixelFoe, PixelHero } from '../PixelHero';
+import { PixelFoe } from '../PixelHero';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
 
@@ -334,10 +335,13 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 : { x: 0 }}
               transition={{ duration: heroBlow ? 0.45 : 0.4 }}
             >
-              <PixelHero race={c.race} profession={c.profession} look={c.look} size={72} gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }} />
+              <HeroFigure
+                race={c.race} profession={c.profession} look={c.look} size={combat.foes.length > 1 ? 84 : 96}
+                gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }}
+                armour={heroArmour(me)} hit={spotHit(HERO)} title={locale === 'pl' ? 'Twój pancerz' : 'Your armour'}
+              />
             </motion.div>
             <b>{c.name}</b>
-            <span className="duel-body"><ArmourBody armour={heroArmour(me)} size={combat.foes.length > 1 ? 70 : 90} hit={spotHit(HERO)} title={locale === 'pl' ? 'Twój pancerz' : 'Your armour'} /></span>
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
             <small><Icon name="vitality" size={12} /> {heroVit}/{c.maxVitality}</small>
             <small><Icon name="sword" size={12} /> {itemName(weapon.id, locale)} S{signed(strengthStep(c.attributes.str) + weapon.power)}+k6</small>
@@ -396,7 +400,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                   {aimFoe && (
                     <div className="aim-pick">
                       <b>{locale === 'pl' ? 'Celujesz w' : 'Aiming at'}: {aim ? spotName(aim, undefined, locale) : (locale === 'pl' ? 'najsłabsze miejsce' : 'the weakest spot')}</b>
-                      <ArmourBody armour={aimArmour} size={124} aim={aim} onPick={(s) => setAim(aim === s ? null : s)} showRolls title={foeName(aimFoe.uid, locale)} />
+                      <FoeFigure kind={ENEMIES[aimFoe.enemy]!.kind} armour={aimArmour} size={110} aim={aim} onPick={(s) => setAim(aim === s ? null : s)} showRolls title={foeName(aimFoe.uid, locale)} />
                       <small>{locale === 'pl'
                         ? 'Dotknij miejsca. Liczy się, gdy trafisz o ponad 20; inaczej miejsce wylosuje k6. Obrażenia: siła broni + k6 − pancerz.'
                         : 'Tap a spot. It counts when you hit by more than 20; otherwise a k6 picks it. Damage: weapon strength + k6 − armour.'}</small>
@@ -423,10 +427,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 >
                   {active === f.uid && !down && <span className="foe-flag attack">{locale === 'pl' ? 'Atakuje!' : 'Attacking!'}</span>}
                   {chosen?.uid === f.uid && !down && active !== f.uid && alive.length > 1 && <span className="foe-flag target">◎ {locale === 'pl' ? 'Twój cel' : 'Your target'}</span>}
-                  <span className="duel-body">
-                    <PixelFoe kind={enemy.kind} size={combat.foes.length > 1 ? 48 : 72} />
-                    <ArmourBody armour={enemy.armour} size={combat.foes.length > 1 ? 66 : 90} hit={spotHit(f.uid)} aim={chosen?.uid === f.uid && !busy ? aim : null} />
-                  </span>
+                  <FoeFigure kind={enemy.kind} armour={enemy.armour} size={combat.foes.length > 1 ? 64 : 96} hit={spotHit(f.uid)} aim={chosen?.uid === f.uid && !busy ? aim : null} title={foeName(f.uid, locale)} />
                   <b>{foeName(f.uid, locale)}</b>
                   <span className="bar"><motion.span animate={{ width: `${(vit / f.maxVitality) * 100}%` }} /></span>
                   <small><Icon name="vitality" size={12} /> {vit}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
