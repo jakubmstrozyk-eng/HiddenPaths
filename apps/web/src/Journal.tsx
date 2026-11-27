@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  AXIS_LIMIT, AXIS_NAMES, BESTIARY_NOTES, ENEMIES, EVENT_BY_ID, JOURNAL_AXES, JOURNAL_COVERS, JOURNAL_PEOPLE, JOURNAL_PROMPTS, LESSON_NAMES, LESSONS, MISSIONS,
+  AXIS_LIMIT, AXIS_NAMES, MAX_VOWS, BESTIARY_NOTES, ENEMIES, EVENT_BY_ID, JOURNAL_AXES, JOURNAL_COVERS, JOURNAL_PEOPLE, JOURNAL_PROMPTS, LESSON_NAMES, LESSONS, MISSIONS,
   PERSON_MARKS, TERRAINS, TRAIT_AT, TRAITS, VOWS, type Locale, type PersonMark, type Text,
 } from '@hp/content';
 import {
-  campfireOffer, inspirationCap, notableCount, journalOf,
+  activeVows, campfireOffer, inspirationCap, notableCount, journalOf,
   type GameState, type JournalEntry, type JournalFact, type JournalSummary, type JournalWrite, type PlayerState, type Vow,
 } from '@hp/engine';
 import { useT } from './i18n';
@@ -188,8 +188,14 @@ export function Campfire({ game, me, leaving, onWrite, onSkip }: {
 
         {offer.vows.length > 0 && (
           <section className="jr-page">
-            <h3>{pl ? 'Postanowienie' : 'A vow'}</h3>
-            {j.vow && j.vow.have < j.vow.need && <p className="jr-muted">{pl ? 'Nowe postanowienie zastąpi obecne' : 'A new vow replaces the current one'}: {tx(VOWS.find((v) => v.kind === j.vow!.kind)!.text)} ({j.vow.have}/{j.vow.need})</p>}
+            <h3>{pl ? 'Postanowienie' : 'A vow'} <small className="jr-vow-count">{activeVows(j).length}/{MAX_VOWS}</small></h3>
+            {activeVows(j).map((v) => (
+              <p key={v.kind} className={`jr-muted ${offer.replaces === v.kind ? 'jr-replaced' : ''}`}>
+                {offer.replaces === v.kind ? (pl ? 'Nowe zastąpi: ' : 'A new one replaces: ') : (pl ? 'Trwa: ' : 'Open: ')}
+                {tx(VOWS.find((d) => d.kind === v.kind)!.text)} ({v.have}/{v.need})
+              </p>
+            ))}
+            <p className="jr-muted">{pl ? `Najwyżej ${MAX_VOWS} postanowienia jednocześnie.` : `At most ${MAX_VOWS} vows at once.`}</p>
             <div className="jr-opts">
               {offer.vows.map((k) => (
                 <button key={k} className={`jr-opt ${vow === k ? 'on' : ''}`} aria-pressed={vow === k} onClick={() => setVow(vow === k ? undefined : k)}>
@@ -198,6 +204,12 @@ export function Campfire({ game, me, leaving, onWrite, onSkip }: {
               ))}
             </div>
             <p className="jr-muted">{pl ? 'Spełnione: +2 Punkty Doświadczenia i Natchnienie.' : 'Kept: +2 Experience Points and Inspiration.'}</p>
+          </section>
+        )}
+        {offer.vows.length === 0 && activeVows(j).length >= MAX_VOWS && (
+          <section className="jr-page">
+            <h3>{pl ? 'Postanowienia' : 'Vows'} <small className="jr-vow-count">{MAX_VOWS}/{MAX_VOWS}</small></h3>
+            <p className="jr-muted">{pl ? `Masz już ${MAX_VOWS} postanowienia. Nowe złożysz, gdy spełnisz któreś z nich albo następnego dnia (zastąpi najstarsze).` : `You already hold ${MAX_VOWS} vows. Make a new one once you keep one, or on a later day (it replaces the oldest).`}</p>
           </section>
         )}
 
@@ -227,13 +239,15 @@ export function Campfire({ game, me, leaving, onWrite, onSkip }: {
 
 type Tab = 'chronicle' | 'character' | 'people' | 'bestiary' | 'vow' | 'chapters';
 
-/** The book: every page the hero has written, the character, people, foes, the vow and the chapters. */
-export function JournalBook({ hero, summary, entries, inspiration, vow, level, onClose, note, onWrite }: {
+/** The book: every page the hero has written, the character, people, foes, the vows and the chapters. */
+export function JournalBook({ hero, summary, entries, inspiration, vows, level, onClose, note, onWrite, campNote }: {
   hero: { name: string; race: PlayerState['character']['race']; profession: PlayerState['character']['profession']; look?: PlayerState['character']['look'] };
-  summary: JournalSummary; entries: JournalEntry[]; inspiration: number; vow: Vow | null; level: number;
+  summary: JournalSummary; entries: JournalEntry[]; inspiration: number; vows: Vow[]; level: number;
   onClose: () => void; note?: string;
-  /** Opens a new entry now, during play (Jacob, 2026-11-27: not only at a camp). */
+  /** Opens a new entry: only at camp (Jacob, 2026-11-27). */
   onWrite?: () => void;
+  /** Shown in play when no entry can be written here. */
+  campNote?: boolean;
 }) {
   const { t, tx, locale } = useT();
   const pl = locale === 'pl';
@@ -244,10 +258,9 @@ export function JournalBook({ hero, summary, entries, inspiration, vow, level, o
     { id: 'character', name: pl ? 'Charakter' : 'Character' },
     { id: 'people', name: pl ? 'Znajomi i wrogowie' : 'Friends and foes' },
     { id: 'bestiary', name: pl ? 'Bestiariusz' : 'Bestiary' },
-    { id: 'vow', name: pl ? 'Postanowienie' : 'Vow' },
+    { id: 'vow', name: pl ? `Postanowienia ${vows.length}/${MAX_VOWS}` : `Vows ${vows.length}/${MAX_VOWS}` },
     { id: 'chapters', name: pl ? 'Rozdziały' : 'Chapters' },
   ];
-  const vowDef = vow ? VOWS.find((v) => v.kind === vow.kind) : null;
   return (
     <div className="overlay sheet-overlay" onClick={onClose}>
       <motion.aside className={`sheet jr-book cover-${JOURNAL_COVERS.indexOf(cover)}`} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 300, damping: 32 }} onClick={(e) => e.stopPropagation()}>
@@ -269,6 +282,7 @@ export function JournalBook({ hero, summary, entries, inspiration, vow, level, o
           {tabs.map((x) => <button key={x.id} role="tab" aria-selected={tab === x.id} className={tab === x.id ? 'on' : ''} onClick={() => setTab(x.id)}>{x.name}</button>)}
         </nav>
         {onWrite && <button className="primary jr-write-now" onClick={onWrite}>✒ {pl ? 'Napisz nowy wpis' : 'Write a new entry'}</button>}
+        {!onWrite && campNote && <p className="jr-muted jr-camp-only">🔥 {pl ? 'Wpisy dodasz tylko w obozowisku. Rozbij obóz, by zapisać, co się wydarzyło.' : 'Entries are written only at camp. Make camp to write down what happened.'}</p>}
         {note && <p className="jr-muted">{note}</p>}
 
         {tab === 'chronicle' && (
@@ -342,13 +356,21 @@ export function JournalBook({ hero, summary, entries, inspiration, vow, level, o
         )}
 
         {tab === 'vow' && (
-          vow && vowDef ? (
-            <div className="jr-vow">
-              <p className="jr-q">„{tx(vowDef.text)}”</p>
-              <div className="jr-bar"><i style={{ width: `${(vow.have / vow.need) * 100}%` }} /></div>
-              <small>{vow.have}/{vow.need} · {vow.have >= vow.need ? (pl ? 'spełnione' : 'kept') : (pl ? 'spełnione da +2 Punkty Doświadczenia i Natchnienie' : 'keeping it gives +2 Experience Points and Inspiration')}</small>
-            </div>
-          ) : <p className="jr-muted">{pl ? 'Brak postanowienia. Złożysz je przy ognisku.' : 'No vow. Make one by the fire.'}</p>
+          <>
+            {vows.map((vow) => {
+              const def = VOWS.find((v) => v.kind === vow.kind);
+              return def ? (
+                <div key={vow.kind} className="jr-vow">
+                  <p className="jr-q">„{tx(def.text)}”</p>
+                  <div className="jr-bar"><i style={{ width: `${(vow.have / vow.need) * 100}%` }} /></div>
+                  <small>{vow.have}/{vow.need} · {pl ? 'spełnione da +2 Punkty Doświadczenia i Natchnienie' : 'keeping it gives +2 Experience Points and Inspiration'}</small>
+                </div>
+              ) : null;
+            })}
+            <p className="jr-muted">{vows.length
+              ? (pl ? `Najwyżej ${MAX_VOWS} postanowienia jednocześnie (${vows.length}/${MAX_VOWS}).` : `At most ${MAX_VOWS} vows at once (${vows.length}/${MAX_VOWS}).`)
+              : (pl ? `Brak postanowień. Złożysz je przy ognisku (najwyżej ${MAX_VOWS} jednocześnie).` : `No vows. Make them by the fire (at most ${MAX_VOWS} at once).`)}</p>
+          </>
         )}
 
         {tab === 'chapters' && (
@@ -372,14 +394,13 @@ export function JournalChip({ me, onOpen }: { me: PlayerState; onOpen: () => voi
   const pl = locale === 'pl';
   const j = me.journal;
   if (!j) return null;
-  const vow = j.vow && j.vow.have < j.vow.need ? VOWS.find((v) => v.kind === j.vow!.kind) : null;
   const pending = notableCount(j);
   return (
     <button className="jr-chip ghost small" onClick={onOpen} title={pl ? 'Dziennik' : 'Journal'}>
       <span aria-hidden="true">📖</span>
       <span className={j.inspiration ? 'lit' : ''} title={pl ? 'Natchnienie: jedno przerzucenie nieudanego testu' : 'Inspiration: one failed test thrown again'}>✒{j.inspiration}</span>
-      {vow && <span className="jr-chip-vow">{vow.text[locale]} {j.vow!.have}/{j.vow!.need}</span>}
-      {!vow && pending > 0 && <small>{pl ? `${pending} nowe` : `${pending} new`}</small>}
+      {j.open && <small className="jr-chip-camp">{pl ? 'wpis przy ognisku' : 'entry by the fire'}</small>}
+      {!j.open && pending > 0 && <small>{pl ? `${pending} nowe` : `${pending} new`}</small>}
     </button>
   );
 }

@@ -1,6 +1,6 @@
 import {
   ATTRIBUTE_LESSON, ATTRIBUTE_LESSON_MAX, ATTRIBUTES, AXIS_LIMIT, BESTIARY_NOTES, CHAPTER_ENTRIES, ENEMIES, ENTRY_EVENTS, JOURNAL_AXES, JOURNAL_PROMPTS,
-  LORE_BONUS, PERSON_OF_CARD, RETURN_BONUS, STORY_BONUS, TRAIT_AT, TRAIT_OF, TRAIT_OPTIONS, VOW_XP, VOWS,
+  LORE_BONUS, MAX_VOWS, PERSON_OF_CARD, RETURN_BONUS, STORY_BONUS, TRAIT_AT, TRAIT_OF, TRAIT_OPTIONS, VOW_XP, VOWS,
   type Attribute, type EventOption, type JournalAxis, type LessonId, type PersonMark, type PromptTopic, type TraitId, type VowKind,
 } from '@hp/content';
 import type { CombatResult } from './combat';
@@ -65,7 +65,10 @@ export interface HeroJournal {
   entries: JournalEntry[];
   /** Inspiration: a free second throw of one failed test. */
   inspiration: number;
-  vow: Vow | null;
+  /** The vows not yet kept: at most MAX_VOWS. */
+  vows?: Vow[];
+  /** One vow, as journals were kept before a hero could hold two. */
+  vow?: Vow | null;
   /** A dream written down: the next game marks a hidden place. */
   omen?: boolean;
 }
@@ -89,7 +92,8 @@ export interface GameJournal {
   summary: JournalSummary;
   written: JournalEntry[];
   inspiration: number;
-  vow: Vow | null;
+  /** The vows not yet kept: at most MAX_VOWS. */
+  vows: Vow[];
   omen: boolean;
   facts: JournalFact[];
   /** New things since the last rewarded entry; an entry pays only from ENTRY_EVENTS on. */
@@ -100,7 +104,7 @@ export interface GameJournal {
   met: string[];
   xpAt: number;
   goldAt: number;
-  /** Set at camp: the app opens the campfire. */
+  /** Set at camp, and only there can an entry be written (Jacob, 2026-11-27); the hero's next action puts the fire out. */
   open: boolean;
   starsUsed?: boolean;
   /** The foes of the fight going on, for the chronicle. */
@@ -163,12 +167,12 @@ export const inspirationCap = (level: number) => (level >= 5 ? 2 : 1);
 /** The journal a hero brings into a new game. */
 export function startJournal(kept: HeroJournal | undefined, level: number, xp: number, gold: number): GameJournal {
   const entries = Array.isArray(kept?.entries) ? kept!.entries : [];
-  const vow = kept?.vow && VOWS.some((v) => v.kind === kept.vow!.kind) ? { ...kept.vow } : null;
+  const vows = heroVows(kept);
   return {
     summary: summarize(entries),
     written: [],
     inspiration: Math.max(0, Math.min(inspirationCap(level), Math.floor(kept?.inspiration ?? 0))),
-    vow,
+    vows,
     omen: !!kept?.omen,
     facts: [],
     notable: 0,
@@ -181,10 +185,25 @@ export function startJournal(kept: HeroJournal | undefined, level: number, xp: n
   };
 }
 
+/** The vows a hero brings: still open, known, and at most MAX_VOWS (older journals held a single `vow`). */
+export function heroVows(kept: HeroJournal | undefined): Vow[] {
+  const list = Array.isArray(kept?.vows) ? kept!.vows : kept?.vow ? [kept.vow] : [];
+  return list.filter((v) => v && VOWS.some((d) => d.kind === v.kind) && v.have < v.need).slice(-MAX_VOWS).map((v) => ({ ...v }));
+}
+
+/** The vows still to keep. */
+export const activeVows = (j: Pick<GameJournal, 'vows'>): Vow[] => (j.vows ?? []).filter((v) => v.have < v.need);
+
 /** A game's journal, for heroes from saves made before the journal existed. */
 export function journalOf(player: PlayerState): GameJournal {
   if (!player.journal) player.journal = startJournal(undefined, player.character.level, player.character.xp, player.character.gold);
-  return player.journal;
+  // Saves from before a hero could hold two vows.
+  const j = player.journal as GameJournal & { vow?: Vow | null };
+  if (!Array.isArray(j.vows)) {
+    j.vows = j.vow && j.vow.have < j.vow.need ? [j.vow] : [];
+    delete j.vow;
+  }
+  return j;
 }
 
 export const hasTrait = (player: Pick<PlayerState, 'journal'>, trait: TraitId) => !!player.journal?.summary.traits.includes(trait);
@@ -240,11 +259,15 @@ export const notableCount = (j: GameJournal) => j.notable + Math.floor(j.explore
 
 const SETTLEMENTS = new Set(['village', 'inn', 'city']);
 
-/** Moves the vow on; a kept vow pays its XP and an Inspiration. Returns the XP to give. */
-function advanceVow(j: GameJournal, kind: VowKind, by = 1): boolean {
-  if (!j.vow || j.vow.kind !== kind || j.vow.have >= j.vow.need) return false;
-  j.vow.have = Math.min(j.vow.need, j.vow.have + by);
-  return j.vow.have >= j.vow.need;
+/** Moves the vows of that kind on. Returns how many were just kept (they pay XP and an Inspiration). */
+function advanceVow(j: GameJournal, kind: VowKind, by = 1): number {
+  let kept = 0;
+  for (const v of activeVows(j)) {
+    if (v.kind !== kind) continue;
+    v.have = Math.min(v.need, v.have + by);
+    if (v.have >= v.need) kept++;
+  }
+  return kept;
 }
 
 /**
@@ -258,7 +281,7 @@ export function noteLog(state: GameState, entries: LogEntry[]): { player: Player
     const player = state.players.find((p) => p.id === e.player);
     if (!player) continue;
     const j = journalOf(player);
-    const vow = (kind: VowKind, by = 1) => { if (advanceVow(j, kind, by)) kept.push({ player, kind }); };
+    const vow = (kind: VowKind, by = 1) => { for (let n = advanceVow(j, kind, by); n > 0; n--) kept.push({ player, kind }); };
     switch (e.type) {
       case 'revealed':
         addFact(j, { k: 'explore', n: 1 });
@@ -343,6 +366,8 @@ export interface CampfireOffer {
   need: number;
   prompt?: { id: string; about?: string };
   vows: VowKind[];
+  /** With MAX_VOWS already made, a new vow takes the place of this one (the oldest from an earlier day or game). */
+  replaces?: VowKind;
   note?: { enemy: string; options: string[]; truth: string };
   dream: boolean;
   people: string[];
@@ -375,10 +400,20 @@ function pickPrompt(j: GameJournal): CampfireOffer['prompt'] {
   return undefined;
 }
 
-/** A new vow can be made when there is none, the old one is kept, it came from another game, or a full day has passed. */
+/** A vow made on an earlier day (or in another game) may be given up for a new one. */
+const staleVow = (state: GameState, v: Vow) => v.game !== state.seed || state.round > v.round;
+
+/** The vow a new one would replace: none while a place is free, else the oldest stale one (undefined: no new vow now). */
+export function vowSlot(state: GameState, j: GameJournal): { free: true } | { free: false; replaces?: Vow } {
+  const active = activeVows(j);
+  if (active.length < MAX_VOWS) return { free: true };
+  return { free: false, replaces: active.find((v) => staleVow(state, v)) };
+}
+
+/** A new vow can be made while fewer than MAX_VOWS are open, or one of them is from an earlier day or game. */
 export function canVow(state: GameState, j: GameJournal): boolean {
-  const v = j.vow;
-  return !v || v.have >= v.need || v.game !== state.seed || state.round > v.round;
+  const slot = vowSlot(state, j);
+  return slot.free || !!slot.replaces;
 }
 
 const NOTE_STATS = ['dex', 'str', 'wil', 'int', 'com'] as const;
@@ -397,7 +432,10 @@ function mostTested(tests: Partial<Record<Attribute, number>>, summary: JournalS
 export function campfireOffer(state: GameState, player: PlayerState): CampfireOffer {
   const j = journalOf(player);
   const notable = notableCount(j);
-  const vows = canVow(state, j) ? offerRng(state, player, 'vow').shuffle(VOWS.map((v) => v.kind).filter((k) => k !== j.vow?.kind || (j.vow.have >= j.vow.need))).slice(0, 3) : [];
+  const slot = vowSlot(state, j);
+  const replaces = !slot.free ? slot.replaces : undefined;
+  const held = activeVows(j).filter((v) => v !== replaces).map((v) => v.kind);
+  const vows = canVow(state, j) ? offerRng(state, player, 'vow').shuffle(VOWS.map((v) => v.kind).filter((k) => !held.includes(k))).slice(0, 3) : [];
   const fought = j.facts.flatMap((f) => (f.k === 'fight' ? f.foes : [])).find((foe) => !j.summary.bestiary[foe] && !!ENEMIES[foe]);
   let note: CampfireOffer['note'];
   if (fought) {
@@ -416,6 +454,7 @@ export function campfireOffer(state: GameState, player: PlayerState): CampfireOf
     need: ENTRY_EVENTS,
     prompt: pickPrompt(j),
     vows,
+    ...(vows.length && replaces ? { replaces: replaces.kind } : {}),
     ...(note ? { note } : {}),
     dream: j.facts.some((f) => f.k === 'cond'),
     people: [...j.met],
@@ -436,11 +475,11 @@ export interface JournalWrite {
   lesson?: LessonId;
 }
 
-/** Whether the player can write now: something happened since the last entry, or they have just camped. */
+/** Whether the player can write now: only at camp (Jacob, 2026-11-27); anywhere else the journal is for reading. */
 export function canWriteJournal(player: PlayerState): boolean {
   const j = player.journal;
   if (!j || player.combat || player.pendingEvent) return false;
-  return j.open || j.facts.length > 0;
+  return j.open;
 }
 
 const clean = (s: unknown, limit: number) => (typeof s === 'string' ? s.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, limit) : '');
@@ -452,7 +491,7 @@ export function writeJournal(state: GameState, player: PlayerState, write: Journ
     j.open = false;
     return;
   }
-  if (!canWriteJournal(player)) throw new EngineError('journal.nothing', 'Nothing new to write yet.');
+  if (!canWriteJournal(player)) throw new EngineError('journal.camp', 'The journal is written only at camp.');
   const offer = campfireOffer(state, player);
   const prompt = offer.prompt ? JOURNAL_PROMPTS.find((p) => p.id === offer.prompt!.id) : undefined;
   if (write.answer !== undefined && (!prompt || !Number.isInteger(write.answer) || !prompt.answers[write.answer])) throw new EngineError('journal.answer', 'That answer is not offered.');
@@ -499,13 +538,15 @@ export function writeJournal(state: GameState, player: PlayerState, write: Journ
     entry.chapter = { title, lesson, ...(lesson === 'attribute' ? { attribute: offer.chapter.attribute } : {}) };
   }
   if (write.vow) {
+    const slot = vowSlot(state, j);
+    const gone = !slot.free ? slot.replaces : undefined;
     // True to his word: abandoning a vow not kept costs the Inspiration.
-    if (j.vow && j.vow.have < j.vow.need && hasTrait(player, 'true') && j.inspiration > 0) {
+    if (gone && hasTrait(player, 'true') && j.inspiration > 0) {
       j.inspiration--;
       log({ type: 'journal', player: player.id, what: 'vowBroken' });
     }
     const def = VOWS.find((v) => v.kind === write.vow)!;
-    j.vow = { kind: def.kind, need: def.need, have: 0, game: state.seed, round: state.round };
+    j.vows = [...activeVows(j).filter((v) => v !== gone), { kind: def.kind, need: def.need, have: 0, game: state.seed, round: state.round }].slice(-MAX_VOWS);
     entry.vow = def.kind;
   }
   j.written.push(entry);
@@ -541,7 +582,10 @@ export function payVows(kept: { player: PlayerState; kind: VowKind }[], log: (e:
     const xp = vowXp(player);
     gainXp(player, xp);
     gainInspiration(player);
-    addFact(journalOf(player), { k: 'vow', kind });
+    const j = journalOf(player);
+    addFact(j, { k: 'vow', kind });
+    // A kept vow leaves its place free for a new one.
+    j.vows = activeVows(j);
     log({ type: 'journal', player: player.id, what: 'vowKept', vow: kind, xp });
   }
 }
@@ -550,7 +594,7 @@ export function payVows(kept: { player: PlayerState; kind: VowKind }[], log: (e:
 export function journalShare(player: PlayerState): HeroJournal | null {
   const j = player.journal;
   if (!j) return null;
-  return { entries: j.written, inspiration: j.inspiration, vow: j.vow, ...(j.omen ? { omen: true } : {}) };
+  return { entries: j.written, inspiration: j.inspiration, vows: activeVows(j), ...(j.omen ? { omen: true } : {}) };
 }
 
 /** A game's share written into the hero's journal: entries by id, the rest from the game that wrote last. */
@@ -559,7 +603,7 @@ export function withJournal(kept: HeroJournal | undefined, share: HeroJournal): 
   const ids = new Set(entries.map((e) => e.id));
   for (const e of share.entries) if (!ids.has(e.id)) entries.push(e);
   if (entries.length > MAX_JOURNAL_ENTRIES) entries.splice(0, entries.length - MAX_JOURNAL_ENTRIES);
-  return { entries, inspiration: share.inspiration, vow: share.vow, ...(share.omen ? { omen: true } : {}) };
+  return { entries, inspiration: share.inspiration, vows: heroVows(share), ...(share.omen ? { omen: true } : {}) };
 }
 
 /* ---- What the journal does in play ---- */

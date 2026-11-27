@@ -1,5 +1,6 @@
 import { CardArt, castCard } from './CardArt';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { PROFESSIONS, type ActionCard, type ProfessionId } from '@hp/content';
 import { CARDS_PER_GAME, isSpent, MAX_CARDS, usesLeft, type ActorState } from '@hp/engine';
@@ -44,8 +45,13 @@ function statusOf(card: string, actor: Pick<ActorState, 'counters'>, playable: s
 /**
  * The hero's skill cards, held like a hand of real cards. Tap one to look at it closely; a card
  * that can be played right now glows and its close-up has a button to play it.
+ *
+ * Docked, the hand is pinned to the bottom of the screen with the cards peeking up from below
+ * (Jacob, 2026-11-27, like a hand in a card game on a phone). With a mouse the hand rises while the
+ * pointer is over it; on a touch screen the first tap raises it and the next tap on a card opens it.
+ * Only a CSS transform moves, and nothing animates while the hand is still.
  */
-export function SkillHand({ profession, owned, actor, playable = [], onPlay, inFight = false, compact = false }: {
+export function SkillHand({ profession, owned, actor, playable = [], onPlay, inFight = false, compact = false, dock = false }: {
   profession: ProfessionId;
   owned: string[];
   actor: Pick<ActorState, 'counters'>;
@@ -53,23 +59,50 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
   onPlay?: (card: string) => void;
   inFight?: boolean;
   compact?: boolean;
+  /** Pinned to the bottom of the screen, peeking up. */
+  dock?: boolean;
 }) {
   const { t, tx } = useT();
   const cards = PROFESSIONS[profession].cards.filter((card) => owned.includes(card.id));
   const [open, setOpen] = useState<ActionCard | null>(null);
+  // Raised by a tap on a touch screen; a mouse raises it by hovering, with no state at all.
+  const [up, setUp] = useState(false);
+  const pointer = useRef('mouse');
 
   if (!cards.length) return null;
   const mid = (cards.length - 1) / 2;
   const status = (card: string) => statusOf(card, actor, onPlay ? playable : [], inFight);
   const uses = (card: string) => (CARDS_PER_GAME[card] ? `${usesLeft(actor, card)}/${CARDS_PER_GAME[card]}` : null);
   const openStatus = open ? status(open.id) : null;
+  const playableNow = cards.filter((card) => status(card.id) === 'play').length;
+  const hand = (
+    <div
+      className={`hand ${compact ? 'compact' : ''}`}
+      aria-label={t('skillCards')}
+      onPointerDownCapture={(e) => { pointer.current = e.pointerType; }}
+      onClickCapture={(e) => {
+        // On a touch screen the first tap only draws the hand up from the bottom of the screen.
+        if (dock && !up && pointer.current !== 'mouse') { e.stopPropagation(); e.preventDefault(); setUp(true); }
+      }}
+    >
+      {cards.map((card, i) => (
+        <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * (dock ? 6 : 7)} lift={Math.abs(i - mid) * (dock ? 5 : 6)} idle={!!card.combat && !inFight && !MAP_PLAY.includes(card.id) && status(card.id) !== 'play'} onOpen={() => setOpen(card)} />
+      ))}
+    </div>
+  );
   return (
     <>
-      <div className={`hand ${compact ? 'compact' : ''}`} aria-label={t('skillCards')}>
-        {cards.map((card, i) => (
-          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} idle={!!card.combat && !inFight && !MAP_PLAY.includes(card.id) && status(card.id) !== 'play'} onOpen={() => setOpen(card)} />
-        ))}
-      </div>
+      {dock
+        ? createPortal(
+          <div className={`hand-dock ${up && !open ? 'up' : ''} ${open ? 'zooming' : ''} ${inFight ? 'fight' : ''}`}>
+            {up && <div className="hand-dock-shade" onClick={() => setUp(false)} />}
+            {!up && playableNow > 0 && <span className="hand-dock-badge" aria-hidden="true">{playableNow}</span>}
+            {hand}
+          </div>,
+          document.body,
+        )
+        : hand}
+      {dock && inFight && <div className="hand-dock-spacer" />}
       <AnimatePresence>
         {open && (
           <motion.div className="overlay card-zoom" key="zoom" onClick={() => setOpen(null)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -84,7 +117,7 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
               <CardFace card={open} profession={profession} uses={uses(open.id)} large />
               {openStatus === 'play' ? (
                 <div className="card-zoom-actions">
-                  <button className="primary with-icon" onClick={() => { const id = open.id; castCard(id, tx(open.name)); setOpen(null); onPlay!(id); }}>
+                  <button className="primary with-icon" onClick={() => { const id = open.id; castCard(id, tx(open.name)); setOpen(null); setUp(false); onPlay!(id); }}>
                     <Icon name={open.combat ? 'sword' : 'cards'} />{t('playCard')}
                   </button>
                   <button className="ghost" onClick={() => setOpen(null)}>{t('close')}</button>

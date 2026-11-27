@@ -157,6 +157,9 @@ export const VOWS: VowDef[] = [
 /** XP for a kept vow (Jacob, 2026-11-27: "+2 PD za realizację postanowienia tak"). */
 export const VOW_XP = 2;
 
+/** At most this many vows at once (Jacob, 2026-11-27: "max. 2 postanowienia jednocześnie"). */
+export const MAX_VOWS = 2;
+
 /** People met on event cards: the journal remembers them, and they may cross the hero's path again. */
 export interface JournalPerson { id: string; name: Text; cards: number[] }
 export const JOURNAL_PEOPLE: JournalPerson[] = [
