@@ -17,6 +17,14 @@ describe('heroes', () => {
     expect(() => validateHero({ ...hero, mode: 'both' as never })).toThrow();
   });
 
+  it('dice keep their finish, engraving and box, and odd ones are refused', () => {
+    const dice = { d6: 'ruby', d10: 'gold', d100: 'void', finish: 'pearl', engrave: 'runes', box: 'leather' } as const;
+    expect(validateHero({ ...hero, dice: { ...dice, junk: 1 } as never }).dice).toEqual(dice);
+    expect(() => validateHero({ ...hero, dice: { ...dice, finish: 'chrome' as never } })).toThrow();
+    expect(() => validateHero({ ...hero, dice: { ...dice, engrave: 'neon' as never } })).toThrow();
+    expect(() => validateHero({ ...hero, dice: { ...dice, box: 'cardboard' } })).toThrow();
+  });
+
   it('single-player heroes play solo games only, multiplayer heroes multiplayer only', () => {
     expect(heroFits({ mode: 'solo' }, false)).toBe(true);
     expect(heroFits({ mode: 'solo' }, true)).toBe(false);

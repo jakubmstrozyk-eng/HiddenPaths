@@ -4,7 +4,7 @@ import { useT } from './i18n';
 import type { Attribute, DiceLook } from '@hp/content';
 import { attrName } from './outcomeText';
 import type { DiceRoll } from './logText';
-import { diceVars } from './DiceFace';
+import { RealDie, paintFace } from './RealDie';
 import { buzz, clack, ShakeToThrow, Verdict } from './Throw';
 
 /** Longest a throw may tumble before every die is laid down. */
@@ -33,13 +33,13 @@ interface Body {
 
 /** The dice of a throw, one entry per die: a d100 test is two d10s (tens and units). */
 function diceOfRolls(rolls: DiceRoll[], dice?: DiceLook) {
-  const out: { group: number; sides: number; tens: boolean; final: string; style?: React.CSSProperties; label: string }[] = [];
+  const out: { group: number; sides: number; tens: boolean; final: string; kind: 'd6' | 'd10' | 'd100'; label: string }[] = [];
   rolls.forEach((r, i) => {
     if (r.kind === 'd100') {
-      out.push({ group: i, sides: 10, tens: true, final: r.value === 100 ? '00' : String(Math.floor(r.value / 10) * 10).padStart(2, '0'), style: diceVars(dice, 'd100'), label: r.label });
-      out.push({ group: i, sides: 10, tens: false, final: String(r.value % 10), style: diceVars(dice, 'd10'), label: r.label });
+      out.push({ group: i, sides: 10, tens: true, final: r.value === 100 ? '00' : String(Math.floor(r.value / 10) * 10).padStart(2, '0'), kind: 'd100' as const, label: r.label });
+      out.push({ group: i, sides: 10, tens: false, final: String(r.value % 10), kind: 'd10' as const, label: r.label });
     } else {
-      out.push({ group: i, sides: r.sides, tens: false, final: String(r.value), style: r.sides === 10 ? diceVars(dice, 'd10') : r.sides <= 6 ? diceVars(dice, 'd6') : undefined, label: r.label });
+      out.push({ group: i, sides: r.sides, tens: false, final: String(r.value), kind: (r.sides === 10 ? 'd10' : 'd6') as 'd10' | 'd6', label: r.label });
     }
   });
   return out;
@@ -75,7 +75,8 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
   const felt = useRef<HTMLDivElement>(null);
   const els = useRef<(HTMLSpanElement | null)[]>([]);
   const shadows = useRef<(HTMLSpanElement | null)[]>([]);
-  const faces = useRef<(HTMLSpanElement | null)[]>([]);
+  const faces = useRef<(SVGGElement | null)[]>([]);
+  const dieSize = typeof window !== 'undefined' && window.innerWidth <= 560 ? 50 : 60;
   const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   // The throw itself: a small physics loop that moves the dice straight in the page, frame by frame.
@@ -100,8 +101,7 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
       sh.style.opacity = String(Math.max(0.15, 0.55 - b.z / 400));
     };
     const showFace = (b: Body, i: number, face: string) => {
-      const f = faces.current[i];
-      if (f && f.textContent !== face) f.textContent = face;
+      paintFace(faces.current[i] ?? null, face);
       b.lastFlick = performance.now();
     };
 
@@ -274,16 +274,14 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
       aria-live="polite"
     >
       <TrayHead rolls={rolls} heading={heading ?? null} base={base} locale={locale} landed={landed} />
-      <div className={`dice-box ${thrown ? 'thrown' : ''}`} onClick={(e) => { e.stopPropagation(); if (!thrown) { fling.current = { x: 0, y: 0 }; setThrown(true); } else if (landed) onDone(); }}>
+      <div className={`dice-box box-${dice?.box ?? 'oak'} ${thrown ? 'thrown' : ''}`} onClick={(e) => { e.stopPropagation(); if (!thrown) { fling.current = { x: 0, y: 0 }; setThrown(true); } else if (landed) onDone(); }}>
         <div className="dice-box-felt" ref={felt}>
           {thrown && parts.map((p, i) => (
             <span key={`s${i}`} className="box-shadow" ref={(el) => { shadows.current[i] = el; }} />
           ))}
           {thrown && parts.map((p, i) => (
             <span key={i} className="box-die" ref={(el) => { els.current[i] = el; }}>
-              <span className={`die d${p.sides} ${p.tens ? 'tens' : ''}`} style={p.style}>
-                <span ref={(el) => { faces.current[i] = el; }}>{reduce ? p.final : '?'}</span>
-              </span>
+              <RealDie sides={p.sides} tens={p.tens} dice={dice} kind={p.kind} size={dieSize} face={reduce ? p.final : '?'} faceRef={(g) => { faces.current[i] = g; }} />
               {landed && shown.length > 1 && <small className="box-die-tag">{p.label}</small>}
             </span>
           ))}
@@ -298,7 +296,7 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
         >
           {(shaking) => (
             <span className="dice-row hand-row">
-              {parts.map((p, i) => <HeldDie key={i} sides={p.sides} tens={p.tens} shaking={shaking} style={p.style} />)}
+              {parts.map((p, i) => <HeldDie key={i} sides={p.sides} tens={p.tens} shaking={shaking} dice={dice} kind={p.kind} size={dieSize} />)}
             </span>
           )}
         </ShakeToThrow>
@@ -330,14 +328,14 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
 }
 
 /** A die still in the hand: it shows "?" and spins with a flicker of faces while shaken. */
-function HeldDie({ sides, tens, shaking, style }: { sides: number; tens?: boolean; shaking: boolean; style?: React.CSSProperties }) {
+function HeldDie({ sides, tens, shaking, dice, kind, size }: { sides: number; tens?: boolean; shaking: boolean; dice?: DiceLook; kind: 'd6' | 'd10' | 'd100'; size: number }) {
   const [face, setFace] = useState('?');
   useEffect(() => {
     if (!shaking) return setFace('?');
     const timer = setInterval(() => setFace(randomFace(sides, !!tens)), 90);
     return () => clearInterval(timer);
   }, [shaking, sides, tens]);
-  return <span className={`die d${sides} ${tens ? 'tens' : ''} ${shaking ? 'shaking' : ''}`} style={style}>{face}</span>;
+  return <span className={`held-die ${shaking ? 'shaking' : ''}`}><RealDie sides={sides} tens={tens} dice={dice} kind={kind} size={size} face={face} /></span>;
 }
 
 /**
