@@ -194,7 +194,7 @@ export function foeStatuses(combat: CombatState, foe: Foe, live: LiveFlags, loca
       duration: second ? (pl ? 'ostatnia runda' : 'last round') : (pl ? 'ta i następna runda' : 'this round and the next'),
     });
   }
-  if ((foe.blindUntil ?? 0) >= live.turn) {
+  if (foe.blindUntil !== undefined && foe.blindUntil >= live.turn) {
     out.push({
       key: 'blind', icon: '◌', tone: 'debuff', mark: 'blind',
       name: pl ? 'Oślepiony' : 'Blinded',
