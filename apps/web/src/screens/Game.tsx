@@ -404,6 +404,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         </div>
       </header>
 
+      {myTurn && !game.winner && meal.left > 0 && (
+        <MealDue left={meal.left} food={c.food} hungerRounds={me.roundsWithoutFood + 1} canEat={canEat && quiet} onEat={eat} />
+      )}
       <Afflictions game={game} me={me} compact className="top" />
 
       <div className="play-area">
@@ -831,7 +834,7 @@ function FoodBar({ food, meals, eaten, label, canEat, urgent, onEat }: {
   const shown = Math.min(food, 12);
   const days = meals === 0 ? null : Math.floor(food / Math.max(1, meals));
   return (
-    <span className={`stat movebar food food-stat ${left > 0 && food < left ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuenow={food}>
+    <span className={`stat movebar food food-stat ${left > 0 ? 'due' : ''} ${left > 0 && food < left ? 'warn' : ''}`} role="meter" aria-label={label} aria-valuemin={0} aria-valuenow={food}>
       <small>{label} · {meals === 0 ? (pl ? 'dziś bez posiłku' : 'no meal today') : `${meals}/${pl ? 'runda' : 'round'}`}</small>
       <b><Icon name="food" size={14} /> {food}{days !== null ? <em className="food-days">{pl ? ` · na ${days} ${days === 1 ? 'rundę' : 'rund'}` : ` · ${days} ${days === 1 ? 'round' : 'rounds'}`}</em> : null}</b>
       <span className="pips" aria-hidden="true">
@@ -851,6 +854,34 @@ function FoodBar({ food, meals, eaten, label, canEat, urgent, onEat }: {
         <span className="eat-hungry">{pl ? 'brak jedzenia!' : 'no food!'}</span>
       ) : null}
     </span>
+  );
+}
+
+/**
+ * From the first moment of each round the meal is due (Jacob, 2026-11-27): a strip under the bar says so,
+ * with the bread to eat it, until the hero has eaten. Without food it warns of hunger instead.
+ */
+function MealDue({ left, food, hungerRounds, canEat, onEat }: { left: number; food: number; hungerRounds: number; canEat: boolean; onEat: () => void }) {
+  const { tx } = useT();
+  const none = food === 0;
+  const portions = Math.min(left, food);
+  return (
+    <div className={`meal-due ${none ? 'none' : ''}`} role="status">
+      <Icon name="food" size={18} />
+      <p>
+        <b>{none ? tx({ pl: 'Brak jedzenia!', en: 'No food!' }) : tx({ pl: 'Musisz zjeść posiłek', en: 'You must eat' })}</b>
+        <small>
+          {none
+            ? tx({ pl: `Ta runda będzie ${hungerRounds}. rundą głodu. Kup lub zdobądź pożywienie.`, en: `This will be hungry round ${hungerRounds}. Buy or find food.` })
+            : tx({ pl: `Ta runda wymaga ${left} porcji (masz ${food}).`, en: `This round needs ${left} food (you have ${food}).` })}
+        </small>
+      </p>
+      {!none && (
+        <button className="eat-btn due" onClick={onEat} disabled={!canEat}>
+          <Icon name="food" size={14} />{tx({ pl: 'Zjedz', en: 'Eat' })} −{portions}
+        </button>
+      )}
+    </div>
   );
 }
 
