@@ -77,10 +77,13 @@ export interface CombatState {
   blindUsed?: boolean;
   /** Veil of Mist: the combat turn the mist was let out on; it lasts that turn and the next. */
   mist?: number;
+  /** Witch's drain: Stamina taken by the spell's blows this fight. The hero falls under her power once it reaches
+   *  their full Stamina, not the Stamina left over from moving (Jacob, 2026-11-27: one hit must not end the fight). */
+  drained?: number;
 }
 
 export type CombatMove =
-  /** `aim`: the spot the hero goes for; it is hit when the Combat test passes by more than 20. */
+  /** `aim`: the spot the hero goes for; it is hit when the Combat test passes by 20 or more. */
   | { move: 'attack'; target: string; aim?: ArmourSlot }
   | { move: 'parry' }
   | { move: 'focus' }
@@ -96,10 +99,14 @@ export type CombatEvent =
     type: 'strike'; by: string; target: string; result: TestResult; location?: ArmourSlot; damage?: number;
     /** The k6 for the hit location (1 head, 2 left arm, 3 right arm, 4 torso, 5 left leg, 6 right leg); absent when the striker chose the spot. */
     locationRoll?: number;
-    /** The striker chose where to hit: the test passed by more than 20. */
+    /** The striker chose where to hit: the test passed by 20 or more. */
     aimed?: boolean;
     /** The k6 added to the weapon's strength, and the armour on the spot hit that took it off. */
     damageRoll?: number; armour?: number;
+    /** The strength of the blow before the k6: S plus the weapon and every bonus. */
+    strength?: number;
+    /** The damage was halved after armour (a spirit hit without magic, or a blow through the Barrier). */
+    halved?: boolean;
     parry?: TestResult; parried?: boolean;
     /** The skill card behind the hero's strike. */
     card?: string;
@@ -150,7 +157,9 @@ export type CombatEvent =
   /** Fangs: the opposed Strength test after a bite; `torn` adds +4 damage. */
   | { type: 'tear'; uid: string; hero: TestResult; foe: TestResult; torn: boolean }
   /** A held beast's blow at another foe (Master of Beasts). */
-  | { type: 'held'; uid: string };
+  | { type: 'held'; uid: string }
+  /** Drain (the witch): a blow that landed takes 1 Stamina; `left` is what the hero still has against the spell. */
+  | { type: 'drain'; uid: string; left: number; of: number };
 
 export type CombatResult = 'ongoing' | 'won' | 'lost' | 'fled' | 'hidden' | 'enthralled';
 
@@ -298,11 +307,11 @@ export const weakestSpot = (armour: Partial<Record<ArmourSlot, number>>): Armour
   (['torso', 'head', 'arms', 'legs'] as ArmourSlot[]).reduce((best, s) => ((armour[s] ?? 0) < (armour[best] ?? 0) ? s : best), 'torso');
 
 /**
- * Where a hit lands: a strike that passed by more than 20 goes where the striker aims
+ * Where a hit lands: a strike that passed by 20 or more goes where the striker aims
  * (the weakest spot when nothing was chosen), otherwise a k6 decides.
  */
 function hitLocation(rng: Rng, margin: number, armour: Partial<Record<ArmourSlot, number>>, aim?: ArmourSlot): { location: ArmourSlot; locationRoll?: number; aimed?: boolean } {
-  if (margin > AIM_MARGIN) return { location: aim ?? weakestSpot(armour), aimed: true };
+  if (margin >= AIM_MARGIN) return { location: aim ?? weakestSpot(armour), aimed: true };
   const locationRoll = rng.die(6);
   return { location: HIT_LOCATIONS[locationRoll - 1]!, locationRoll };
 }
@@ -408,13 +417,15 @@ export function combatTurn(
     const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
     // A scroll's magic is not a blade: weapon runes and weapon bonuses do not add to it.
     const damageRoll = damageDie(rng, !magic && (!!weapon.penetrating || rune === 'piercing'));
-    let damage = magic
-      ? strengthStep(attrs.str) + (opts.power ?? 0) + damageRoll - armour
-      : strengthStep(attrs.str) + (opts.power ?? weapon.power) + damageRoll
+    const strength = magic
+      ? strengthStep(attrs.str) + (opts.power ?? 0)
+      : strengthStep(attrs.str) + (opts.power ?? weapon.power)
         + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
-        + critical + precise + (opts.bonus ?? 0) + (tear?.type === 'tear' && tear.torn ? 4 : 0) - armour;
+        + critical + precise + (opts.bonus ?? 0) + (tear?.type === 'tear' && tear.torn ? 4 : 0);
+    let damage = strength + damageRoll - armour;
     // Spirits are hurt in full only by magic or runes.
-    if (enemy.traits.includes('ethereal') && !rune && !magic) damage = Math.floor(damage / 2);
+    const halved = enemy.traits.includes('ethereal') && !rune && !magic;
+    if (halved) damage = Math.floor(damage / 2);
     damage = Math.max(0, damage);
     target.vitality -= damage;
     target.hits++;
@@ -425,7 +436,7 @@ export function combatTurn(
     if (opts.tear && target.bleed === undefined) target.bleed = 0;
     // Filleting, and every second hit with the Shark Blade, open a deep wound.
     if (target.wound === undefined && (opts.wound || (!magic && !opts.card && cards.includes('gourmet-shark-blade') && target.hits % 2 === 0))) target.wound = 0;
-    events.push({ ...base, ...spot, damage, damageRoll, armour, ...(dodge ? { dodge } : {}) });
+    events.push({ ...base, ...spot, damage, damageRoll, armour, strength, ...(halved ? { halved } : {}), ...(dodge ? { dodge } : {}) });
     if (tear) events.push(tear);
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     // Lightning: a foe that is hit tests Strength; a failure leaves it stunned for a round.
@@ -761,7 +772,8 @@ export function combatTurn(
     const spot = hitLocation(rng, result.margin, armour);
     const { location } = spot;
     const damageRoll = damageDie(rng, enemy.traits.includes('penetrating'));
-    let damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0) + damageRoll - armour[location]);
+    const strength = strengthStep(enemy.str) + enemy.weapon.power + (sting ? 1 : 0);
+    let damage = Math.max(0, strength + damageRoll - armour[location]);
     // Barrier: the blow must break through on a Strength test, and then deals half; either way the barrier is gone.
     let barrier: TestResult | undefined;
     if (combat.barrier) {
@@ -774,7 +786,7 @@ export function combatTurn(
       damage = Math.floor(damage / 2);
     }
     actor.character.vitality -= damage;
-    events.push({ type: 'strike', by: foe.uid, target: HERO, result, ...spot, damage, damageRoll, armour: armour[location], ...(barrier ? { barrier } : {}) });
+    events.push({ type: 'strike', by: foe.uid, target: HERO, result, ...spot, damage, damageRoll, armour: armour[location], strength, ...(barrier ? { barrier, halved: true } : {}) });
     if (enemy.traits.includes('poison') || sting) {
       addCondition(actor, 'poison', { pl: 'Zatrucie', en: 'Poisoned' }, 'str', 1);
       events.push({ type: 'poisoned', who: HERO, condition: 'poison' });
@@ -786,9 +798,14 @@ export function combatTurn(
     if (enemy.traits.includes('stun') && !heroTest(world, actor, 'wil', rng, focus).success) {
       combat.heroStunned = true;
     }
+    // Drain: a blow that lands takes 1 Stamina; the hero is lost to the spell only at their full Stamina.
     if (enemy.traits.includes('drain')) {
       actor.staminaLeft = Math.max(0, actor.staminaLeft - 1);
-      if (actor.staminaLeft === 0) enthralled = true;
+      const of = Math.max(1, actor.character.stamina ?? 3);
+      combat.drained = (combat.drained ?? 0) + 1;
+      const left = Math.max(0, of - combat.drained);
+      events.push({ type: 'drain', uid: foe.uid, left, of });
+      if (left === 0) enthralled = true;
     }
   };
 
@@ -800,9 +817,11 @@ export function combatTurn(
       events.push({ type: 'strike', by: foe.uid, target: pet.uid, result });
       return;
     }
-    const damage = Math.max(0, strengthStep(enemy.str) + enemy.weapon.power + damageDie(rng, enemy.traits.includes('penetrating')));
+    const strength = strengthStep(enemy.str) + enemy.weapon.power;
+    const damageRoll = damageDie(rng, enemy.traits.includes('penetrating'));
+    const damage = Math.max(0, strength + damageRoll);
     pet.vitality -= damage;
-    events.push({ type: 'strike', by: foe.uid, target: pet.uid, result, damage });
+    events.push({ type: 'strike', by: foe.uid, target: pet.uid, result, damage, damageRoll, strength });
     if (pet.vitality <= 0) events.push({ type: 'companionDown', uid: pet.uid });
   };
 
@@ -817,9 +836,10 @@ export function combatTurn(
     const spot = hitLocation(rng, result.margin, foe.armour);
     const damageRoll = damageDie(rng, false);
     const armour = foe.armour[spot.location] ?? 0;
-    const damage = Math.max(0, strengthStep(beast.str + bonus) + beast.weapon.power + damageRoll - armour);
+    const strength = strengthStep(beast.str + bonus) + beast.weapon.power;
+    const damage = Math.max(0, strength + damageRoll - armour);
     target.vitality -= damage;
-    events.push({ type: 'strike', by, target: target.uid, result, ...spot, damage, damageRoll, armour });
+    events.push({ type: 'strike', by, target: target.uid, result, ...spot, damage, damageRoll, armour, strength });
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
   };
 
