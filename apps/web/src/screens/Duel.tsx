@@ -16,6 +16,7 @@ import { hurtSound } from '../Feedback';
 import { FoeArt } from '../HeroArt';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
+import { foeStatuses, heroStatuses, StatusChips, StatusDetail, StatusFigure, type LiveFlags } from '../CombatStatus';
 
 /**
  * A fight shown one throw at a time. The player picks a move; an attack or a flight first shows
@@ -24,12 +25,16 @@ import { SkillHand } from '../SkillCards';
  * left, the foes on the right, each roll and each blow on its own.
  */
 
-type Step =
+/** A hero-wide state a step turns on or off (`off` counts from the step after), for the statuses during playback. */
+type Fx = { on?: string; off?: string };
+
+type Step = (
   | { kind: 'roll'; who: string; test: UiKey; result: TestResult; vs?: string; card?: string }
   | { kind: 'hit'; who: string; target: string; damage: number; location?: ArmourSlot; roll?: number; damageRoll?: number; armour?: number; card?: string }
   /** Where a blow lands: the k6 for the spot, or the striker's own pick after a hit by more than 20. */
   | { kind: 'spot'; who: string; target: string; slot: ArmourSlot; roll?: number; margin: number }
-  | { kind: 'note'; who: string; text: string };
+  | { kind: 'note'; who: string; text: string }
+) & { fx?: Fx };
 
 const HERO = 'hero';
 /** Cards that act at once in a fight, with no throw for the player to make. */
@@ -53,6 +58,8 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
   const { t, locale } = T;
   const pl = locale === 'pl';
   const out: Step[] = [];
+  /** The last foe's test against a sprung trap: the trap is gone after it. */
+  let lastTrap = -1;
   for (const e of entries) {
     if (e.type !== 'combat') continue;
     const ev = e.event;
@@ -62,7 +69,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         out.push({ kind: 'roll', who: ev.by, test, result: ev.result, vs: ev.target, card: ev.by === HERO ? ev.card ?? ev.scroll : undefined });
         if (ev.parry) out.push({ kind: 'roll', who: HERO, test: 'parry', result: ev.parry, vs: ev.by });
         if (ev.dodge) out.push({ kind: 'roll', who: ev.target, test: 'foeDodge', result: ev.dodge });
-        if (ev.barrier) out.push({ kind: 'roll', who: ev.by, test: 'foeBreak', result: ev.barrier });
+        if (ev.barrier) out.push({ kind: 'roll', who: ev.by, test: 'foeBreak', result: ev.barrier, fx: { off: 'barrier' } });
         if (ev.parried) out.push({ kind: 'note', who: HERO, text: t('parried') });
         else if (ev.dodged) out.push({ kind: 'note', who: ev.target, text: pl ? 'Unik!' : 'Dodged!' });
         else if (ev.blocked && ev.card === 'guardian-stance') out.push({ kind: 'note', who: HERO, text: pl ? 'Tarcza blokuje cios!' : 'The shield blocks the blow!' });
@@ -78,7 +85,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         if (ev.foe) out.push({ kind: 'roll', who: 'foe', test: 'foeChase', result: ev.foe });
         out.push({ kind: 'note', who: HERO, text: ev.success ? t('fled') : `${t('flee')}: ${t('failure')}` });
         break;
-      case 'focus': out.push({ kind: 'note', who: HERO, text: `${t('focus')}: +10` }); break;
+      case 'focus': out.push({ kind: 'note', who: HERO, text: `${t('focus')}: +10`, fx: { on: 'focus' } }); break;
       case 'stunned': out.push({ kind: 'note', who: ev.who, text: pl ? 'Ogłuszony!' : 'Stunned!' }); break;
       case 'drink': out.push({ kind: 'note', who: HERO, text: itemName(ev.item, locale) }); break;
       case 'reload': out.push({ kind: 'note', who: HERO, text: pl ? 'Ładujesz kuszę' : 'Reloading' }); break;
@@ -89,12 +96,17 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
         out.push({ kind: 'roll', who: ev.uid, test: 'foeTrap', result: ev.result });
         if (ev.damage) out.push({ kind: 'hit', who: 'trap', target: ev.uid, damage: ev.damage });
         if (!ev.result.success) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Unieruchomiony na rundę!' : 'Held fast for a round!' });
+        lastTrap = out.length - 1;
         break;
       case 'barrier':
         out.push({ kind: 'roll', who: HERO, test: 'testIntBarrier', result: ev.result, card: 'mystic-barrier' });
-        out.push({ kind: 'note', who: HERO, text: ev.result.success ? (pl ? 'Bariera stoi!' : 'The barrier stands!') : (pl ? 'Bariera się rozpada' : 'The barrier fails') });
+        out.push({ kind: 'note', who: HERO, text: ev.result.success ? (pl ? 'Bariera stoi!' : 'The barrier stands!') : (pl ? 'Bariera się rozpada' : 'The barrier fails'), ...(ev.result.success ? { fx: { on: 'barrier' } } : {}) });
         break;
-      case 'card': out.push({ kind: 'note', who: HERO, text: combatLine(e, T) ?? cardName(ev.card, locale) }); break;
+      case 'card': {
+        const on = ev.card === 'trapper-trap' ? 'trap' : ev.card === 'wraith-mist' ? 'mist' : undefined;
+        out.push({ kind: 'note', who: HERO, text: combatLine(e, T) ?? cardName(ev.card, locale), ...(on ? { fx: { on } } : {}) });
+        break;
+      }
       case 'stance': out.push({ kind: 'note', who: HERO, text: pl ? 'Postawa obronna: blokujesz ciosy tej rundy' : 'Defensive stance: you block this round\'s blows' }); break;
       case 'disarm':
         out.push({ kind: 'roll', who: ev.uid, test: 'foeKeepWeapon', result: ev.result });
@@ -157,6 +169,7 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
     }
   }
+  if (lastTrap >= 0) out[lastTrap] = { ...out[lastTrap]!, fx: { ...out[lastTrap]!.fx, off: 'trap' } };
   return out;
 }
 
@@ -186,6 +199,8 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     try { localStorage.setItem(PACE_KEY, next); } catch { /* ignore */ }
   };
   /** The throw waiting for the player's tap: an attack, a flight, or a card that tests (Heavy Swing, Barrier...). */
+  /** The buff or debuff opened in words, as "owner:key". */
+  const [openFx, setOpenFx] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<'attack' | 'flee' | { card: string } | { scroll: string } | null>(null);
 
   // Playback of the round: which step is showing and whether its die has landed.
@@ -302,6 +317,36 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
     ? { slot: (step.kind === 'spot' ? step.slot : step.location)!, roll: step.roll }
     : null);
 
+  // Buffs and debuffs as they stand at this point of the playback: a barrier shows from the throw
+  // that raised it until the blow that broke it, a trap from the round it was set until it springs.
+  const fxAt = (key: string, final: boolean) => {
+    if (!busy) return final;
+    for (let i = Math.min(at, steps.length - 1); i >= 0; i--) {
+      const fx = steps[i]!.fx;
+      if (fx?.on === key) return true;
+      if (fx?.off === key) return i === at;
+    }
+    for (let i = at + 1; i < steps.length; i++) {
+      const fx = steps[i]!.fx;
+      if (fx?.on === key) return false;
+      if (fx?.off === key) return true;
+    }
+    return final;
+  };
+  const turnNow = busy ? combat.turn - 1 : combat.turn;
+  const mistNow = combat.mist !== undefined && turnNow - combat.mist >= 0 && turnNow - combat.mist <= 1;
+  const live: LiveFlags = {
+    barrier: fxAt('barrier', !!combat.barrier),
+    trap: fxAt('trap', !!combat.trap),
+    focus: fxAt('focus', combat.focus),
+    mist: fxAt('mist', mistNow),
+    turn: turnNow,
+  };
+  const heroFx = heroStatuses(game, me, combat, live, locale);
+  const foeFx = Object.fromEntries(combat.foes.map((f) => [f.uid, foeStatuses(combat, f, live, locale)]));
+  const openOwner = openFx?.split(':')[0];
+  const openStatus = openOwner ? (openOwner === HERO ? heroFx : foeFx[openOwner] ?? []).find((s) => `${openOwner}:${s.key}` === openFx) : undefined;
+
   return (
     <div className="overlay combat">
       {heroHurt && (
@@ -335,16 +380,19 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 : { x: 0 }}
               transition={{ duration: heroBlow ? 0.45 : 0.4 }}
             >
-              <HeroFigure
-                race={c.race} profession={c.profession} look={c.look} size={combat.foes.length > 1 ? 84 : 96}
-                gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }}
-                armour={heroArmour(me)} hit={spotHit(HERO)} title={locale === 'pl' ? 'Twój pancerz' : 'Your armour'}
-              />
+              <StatusFigure list={heroFx}>
+                <HeroFigure
+                  race={c.race} profession={c.profession} look={c.look} size={combat.foes.length > 1 ? 84 : 96}
+                  gear={{ ...heroArmour(me), shield: c.equipment.shield, weapon: weapon.id }}
+                  armour={heroArmour(me)} hit={spotHit(HERO)} title={locale === 'pl' ? 'Twój pancerz' : 'Your armour'}
+                />
+              </StatusFigure>
             </motion.div>
             <b>{c.name}</b>
             <span className="bar hero-bar"><motion.span animate={{ width: `${(heroVit / c.maxVitality) * 100}%` }} /></span>
             <small><Icon name="vitality" size={12} /> {heroVit}/{c.maxVitality}</small>
             <small><Icon name="sword" size={12} /> {itemName(weapon.id, locale)} S{signed(strengthStep(c.attributes.str) + weapon.power)}+k6</small>
+            <StatusChips list={heroFx} owner={HERO} open={openFx} onOpen={setOpenFx} />
             {hitFx && step?.kind === 'hit' && step.target === HERO && <HitFx key={`fx-${at}`} kind={hitFx} />}
             <AnimatePresence>{step?.kind === 'hit' && step.target === HERO && <DamagePop key={at} step={step} />}</AnimatePresence>
             {pets.length > 0 && (
@@ -427,31 +475,25 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                 >
                   {active === f.uid && !down && <span className="foe-flag attack">{locale === 'pl' ? 'Atakuje!' : 'Attacking!'}</span>}
                   {chosen?.uid === f.uid && !down && active !== f.uid && alive.length > 1 && <span className="foe-flag target">◎ {locale === 'pl' ? 'Twój cel' : 'Your target'}</span>}
-                  <FoeFigure kind={enemy.kind} armour={enemy.armour} size={combat.foes.length > 1 ? 64 : 96} hit={spotHit(f.uid)} aim={chosen?.uid === f.uid && !busy ? aim : null} title={foeName(f.uid, locale)} />
+                  <StatusFigure list={foeFx[f.uid] ?? []}>
+                    <FoeFigure kind={enemy.kind} armour={enemy.armour} size={combat.foes.length > 1 ? 64 : 96} hit={spotHit(f.uid)} aim={chosen?.uid === f.uid && !busy ? aim : null} title={foeName(f.uid, locale)} />
+                  </StatusFigure>
                   <b>{foeName(f.uid, locale)}</b>
                   <span className="bar"><motion.span animate={{ width: `${(vit / f.maxVitality) * 100}%` }} /></span>
                   <small><Icon name="vitality" size={12} /> {vit}/{f.maxVitality} · {t('com')} {enemy.com} · {t('foeHits')} {foeDamage(f.enemy).join('–')}</small>
                   {(petFx ?? hitFx) && step?.kind === 'hit' && step.target === f.uid && <HitFx key={`fx-${at}`} kind={(petFx ?? hitFx)!} />}
-                  {f.disarmed && !down && <span className="foe-flag unarmed">{locale === 'pl' ? 'Bez broni' : 'Unarmed'}</span>}
                   {f.tamed && <span className="foe-flag tamed">{locale === 'pl' ? 'Oswojony' : 'Tamed'}</span>}
-                  {!down && !f.tamed && (
-                    <span className="foe-states">
-                      {f.wound !== undefined && <i className="state wound">{locale === 'pl' ? `Rana ${f.wound}/3` : `Wound ${f.wound}/3`}</i>}
-                      {f.poisoned && <i className="state poison">{locale === 'pl' ? 'Zatruty' : 'Poisoned'}</i>}
-                      {f.bleed !== undefined && <i className="state wound">{locale === 'pl' ? `Krwawi ${f.bleed}/3` : `Bleeding ${f.bleed}/3`}</i>}
-                      {combat.studiedKind === f.enemy && <i className="state held">{locale === 'pl' ? 'Przeanalizowany +10' : 'Studied +10'}</i>}
-                      {f.burning !== undefined && <i className="state fire">{locale === 'pl' ? 'Płonie' : 'Burning'}</i>}
-                      {f.vined && <i className="state vines">{locale === 'pl' ? 'Pnącza' : 'Vines'}</i>}
-                      {!!f.controlled && <i className="state held">{locale === 'pl' ? `Ujarzmiony ${f.controlled}/3` : `Mastered ${f.controlled}/3`}</i>}
-                      {(f.blindUntil ?? 0) >= combat.turn && <i className="state blind">{locale === 'pl' ? 'Oślepiony' : 'Blinded'}</i>}
-                    </span>
-                  )}
+                  {!down && <StatusChips list={foeFx[f.uid] ?? []} owner={f.uid} open={openFx} onOpen={setOpenFx} />}
                   <AnimatePresence>{step?.kind === 'hit' && step.target === f.uid && <DamagePop key={at} step={step} />}</AnimatePresence>
                 </motion.button>
               );
             })}
           </div>
         </div>
+
+        {openStatus && openOwner && (
+          <StatusDetail status={openStatus} who={openOwner === HERO ? c.name : foeName(openOwner, locale)} onClose={() => setOpenFx(null)} />
+        )}
 
         {!busy && !prompt && (
           <>
