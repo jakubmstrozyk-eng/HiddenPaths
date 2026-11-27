@@ -657,6 +657,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           actor={me}
           playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
           onPlay={(card) => (card === 'trapper-tannery' ? setTannery(true) : act({ type: 'card', card }))}
+          dock
         />
         <GoalsPanel game={game} me={me} />
         </div>
