@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { pulseDarkMatter } from './DarkMatter';
 
 type Splash = { id: number; x: number; y: number; big: boolean; drops: { a: number; d: number; r: number }[] };
 
@@ -12,7 +11,7 @@ const INKY = 'button, .tile, a';
  * Global interface dynamics around the dark matter motif:
  * - every button remembers where the pointer is (--mx/--my) so its hover ink spreads from there;
  * - every press throws a small splash of matter (drawn with difference blending, so it is dark on white and white on dark)
- *   and blows a ring open in the void behind the menus.
+ *   (nothing runs between presses, so it costs nothing at rest).
  */
 export function InkFx() {
   const [splashes, setSplashes] = useState<Splash[]>([]);
@@ -29,11 +28,8 @@ export function InkFx() {
     const press = (e: PointerEvent) => {
       track(e);
       const el = (e.target as Element | null)?.closest?.(INKY) as HTMLElement | null;
-      // A press on the bare void still stirs the matter.
-      if (!el) return void pulseDarkMatter(e.clientX, e.clientY, 0.8);
-      if ((el as HTMLButtonElement).disabled) return;
+      if (!el || (el as HTMLButtonElement).disabled) return;
       const big = el.classList.contains('tile');
-      pulseDarkMatter(e.clientX, e.clientY, big ? 1.3 : 0.6);
       if (still) return;
       const id = nextId++;
       const drops = Array.from({ length: big ? 9 : 6 }, () => ({
@@ -60,9 +56,7 @@ export function InkFx() {
       <svg className="ink-defs" aria-hidden="true" width="0" height="0">
         <defs>
           <filter id="ink-edge" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" result="n">
-              <animate attributeName="baseFrequency" dur="9s" values="0.035;0.05;0.035" repeatCount="indefinite" />
-            </feTurbulence>
+            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="n" />
             <feDisplacementMap in="SourceGraphic" in2="n" scale="14" xChannelSelector="R" yChannelSelector="G" />
           </filter>
         </defs>

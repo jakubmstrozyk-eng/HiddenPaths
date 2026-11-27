@@ -178,7 +178,7 @@ export function App() {
   return (
     <LocaleContext.Provider value={locale}>
       <MotionConfig reducedMotion="user">
-        <DarkMatter calm={screen.name === 'game' || screen.name === 'online'} dim={screen.name !== 'menu'} />
+        <DarkMatter still={screen.name !== 'menu'} />
         <InkFx />
         <button className="lang" onClick={changeLocale}>
           {locale === 'pl' ? 'EN' : 'PL'}
