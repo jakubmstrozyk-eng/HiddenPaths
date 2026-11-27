@@ -63,6 +63,8 @@ export function outcomeText(outcomes: Outcome[] | undefined, locale: Locale): st
       case 'death': out.push(pl ? 'śmierć' : 'death'); break;
       case 'puzzle': out.push(`${pl ? 'mini-gra' : 'mini-game'}: ${PUZZLE_NAME[o.puzzle.kind][locale]}`); break;
       case 'ifRace': out.push(outcomeText(o.then, locale)); break;
+      case 'loseItem': out.push(o.item ? `${pl ? 'tracisz' : 'you lose'}: ${itemName(o.item, locale)}` : (pl ? 'tracisz skradzioną rzecz' : 'you lose the stolen thing')); break;
+      case 'bookRead': out.push(pl ? 'udana lektura' : 'a good reading'); break;
     }
   }
   return [...new Set(out)].join(' · ');
@@ -81,6 +83,18 @@ export const PUZZLE_NAME: Record<Extract<Outcome, { do: 'puzzle' }>['puzzle']['k
   lock: { pl: 'Szyfr run', en: 'Rune code' },
   higherLower: { pl: 'Wyżej czy niżej', en: 'Higher or lower' },
   dig: { pl: 'Ryzyko', en: 'Push your luck' },
+  sequence: { pl: 'Melodia', en: 'Tune' },
+  escape: { pl: 'Ucieczka', en: 'Escape' },
+  differences: { pl: 'Różnice', en: 'Differences' },
+  tug: { pl: 'Siłowanie', en: 'Tug of strength' },
+  pairs: { pl: 'Pary', en: 'Pairs' },
+  hold: { pl: 'Skupienie', en: 'Focus' },
+  missing: { pl: 'Czego brakuje?', en: 'What is missing?' },
+  scale: { pl: 'Waga', en: 'Scales' },
+  stars: { pl: 'Gwiazdy', en: 'Stars' },
+  bluff: { pl: 'Blef', en: 'Bluff' },
+  catch: { pl: 'Łapanie', en: 'Catching' },
+  slider: { pl: 'Przesuwanka', en: 'Sliding puzzle' },
 };
 
 const RUNE_NAME: Record<'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing', Text> = {
@@ -92,8 +106,7 @@ const RUNE_NAME: Record<'venom' | 'sharp' | 'precise' | 'stunning' | 'piercing',
 export function puzzleBest(p: Extract<Outcome, { do: 'puzzle' }>['puzzle']): Outcome[] {
   switch (p.kind) {
     case 'riddle': return [...p.win, ...p.fast];
-    case 'cups': case 'lock': return p.win;
-    case 'traps': return p.win;
+    case 'cups': case 'lock': case 'traps': case 'escape': case 'tug': case 'missing': case 'scale': case 'slider': return p.win;
     case 'chests': return p.treasure;
     case 'dig': return p.bottom ?? [{ do: 'randomItem' }];
     default: return p.byScore[p.byScore.length - 1] ?? [];
@@ -103,7 +116,9 @@ export function puzzleBest(p: Extract<Outcome, { do: 'puzzle' }>['puzzle']): Out
 /** What failing a puzzle costs, if anything. */
 export function puzzleWorst(p: Extract<Outcome, { do: 'puzzle' }>['puzzle']): Outcome[] {
   switch (p.kind) {
-    case 'riddle': case 'cups': case 'lock': return p.lose;
+    case 'riddle': case 'cups': case 'lock': case 'tug': case 'scale': case 'slider': return p.lose;
+    case 'escape': return [...(p.burn ?? []), ...p.lose];
+    case 'missing': return [...p.lose, { do: 'loseItem', item: '' }];
     case 'traps': return p.hit;
     case 'chests': return p.blast;
     case 'dig': return p.bust;

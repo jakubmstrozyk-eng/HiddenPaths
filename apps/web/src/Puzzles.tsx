@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { RIDDLES, type Outcome } from '@hp/content';
+import { RIDDLE_POOLS, type Outcome } from '@hp/content';
 import {
   claimHolds, digResult, lockHint, trapWalk,
   type ChestClaim, type ChestContent, type PlayerState, type PuzzleAnswer, type PuzzleData, type PuzzleState,
@@ -9,22 +9,23 @@ import { DieFace, diceStyle } from './DiceFace';
 import { puzzleSound } from './Feedback';
 import { outcomeText } from './outcomeText';
 import { useT } from './i18n';
+import { Bluff, Catch, Differences, Escape, Hold, Missing, Pairs, Scale, Sequence, Slider, Stars, StatNote, Tug } from './Puzzles2';
 
 /**
  * The mini-games on event cards. Each one plays on the card itself and ends by sending its answer
  * once; the engine checks it and plays the card's result.
  */
 
-type Done = (answer: PuzzleAnswer) => void;
-interface Props<K extends PuzzleData['kind']> {
+export type Done = (answer: PuzzleAnswer) => void;
+export interface Props<K extends PuzzleData['kind']> {
   data: Extract<PuzzleData, { kind: K }>;
   state: PuzzleState;
   me: PlayerState;
   done: Done;
 }
 
-const reduced = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-const shuffled = <T,>(items: T[]) => {
+export const reduced = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+export const shuffled = <T,>(items: T[]) => {
   const a = [...items];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -34,7 +35,7 @@ const shuffled = <T,>(items: T[]) => {
 };
 
 /** Counts down while `running`; calls `onEnd` once at zero. Returns the share of time left. */
-function useCountdown(seconds: number, running: boolean, onEnd: () => void, resetKey: unknown = 0) {
+export function useCountdown(seconds: number, running: boolean, onEnd: () => void, resetKey: unknown = 0) {
   const [left, setLeft] = useState(seconds);
   const end = useRef(onEnd);
   end.current = onEnd;
@@ -57,7 +58,7 @@ function useCountdown(seconds: number, running: boolean, onEnd: () => void, rese
   return { left, share: left / seconds };
 }
 
-function Hourglass({ share, left }: { share: number; left: number }) {
+export function Hourglass({ share, left }: { share: number; left: number }) {
   return (
     <div className={`pz-time ${share < 0.25 ? 'low' : ''}`} role="timer" aria-label={`${Math.ceil(left)} s`}>
       <span style={{ width: `${Math.max(0, share) * 100}%` }} />
@@ -67,7 +68,7 @@ function Hourglass({ share, left }: { share: number; left: number }) {
 }
 
 /** Sends the answer once, after a short pause so the player sees how it went. */
-function useFinish(done: Done) {
+export function useFinish(done: Done) {
   const sent = useRef(false);
   return useCallback((answer: PuzzleAnswer, delay = 900) => {
     if (sent.current) return;
@@ -76,7 +77,7 @@ function useFinish(done: Done) {
   }, [done]);
 }
 
-function HelperNote({ state, yes, no }: { state: PuzzleState; yes: string; no: string }) {
+export function HelperNote({ state, yes, no }: { state: PuzzleState; yes: string; no: string }) {
   if (state.helped === null) return null;
   return <p className={`pz-helper ${state.helped ? 'ok' : ''}`}>{state.helped ? `✦ ${yes}` : no}</p>;
 }
@@ -86,7 +87,8 @@ function HelperNote({ state, yes, no }: { state: PuzzleState; yes: string; no: s
 function Riddle({ data, state, done }: Props<'riddle'>) {
   const { tx, locale } = useT();
   const pl = locale === 'pl';
-  const riddle = RIDDLES[data.riddle]!;
+  const riddle = RIDDLE_POOLS[data.pool ?? 'riddles'][data.riddle]!;
+  const satyr = (data.pool ?? 'riddles') === 'riddles';
   const answer = tx(riddle.answer);
   const p = state.puzzle.kind === 'riddle' ? state.puzzle : null;
   // Scattered once, when the satyr starts: a fresh order on every tick would make the tiles jump.
@@ -120,7 +122,7 @@ function Riddle({ data, state, done }: Props<'riddle'>) {
   return (
     <div className="pz pz-riddle">
       <blockquote className="pz-verse">„{tx(riddle.question)}”</blockquote>
-      <HelperNote state={state} yes={pl ? 'Inteligencja: satyr zdradza pierwszą literę.' : 'Intelligence: the satyr gives away the first letter.'} no={pl ? 'Satyr nie zdradza żadnej litery.' : 'The satyr gives nothing away.'} />
+      <HelperNote state={state} yes={pl ? 'Podpowiedź: pierwsza litera jest już na miejscu.' : 'A hint: the first letter is already in place.'} no={pl ? 'Bez podpowiedzi.' : 'No hint.'} />
       <Hourglass {...time} />
       <div className={`pz-slots ${verdict === true ? 'right' : verdict === false ? 'wrong' : ''}`}>
         {slots.map((s, i) => (
@@ -137,7 +139,7 @@ function Riddle({ data, state, done }: Props<'riddle'>) {
       {verdict === null ? (
         <button className="pz-go" disabled={slots.includes(null)} onClick={submit}>{pl ? 'Odpowiadam' : 'Answer'}</button>
       ) : (
-        <p className={`pz-verdict ${verdict ? 'ok' : ''}`}>{verdict ? (pl ? 'Satyr klaszcze w kopytka!' : 'The satyr claps his hooves!') : `${pl ? 'Satyr chichocze. Odpowiedź: ' : 'The satyr giggles. The answer: '}${answer}`}</p>
+        <p className={`pz-verdict ${verdict ? 'ok' : ''}`}>{verdict ? (satyr ? (pl ? 'Dobrze! Kamień zagadki pęka z hukiem.' : 'Right! The riddle is broken.') : (pl ? 'Słowo układa się w zdanie. Lektura udana!' : 'The word falls into place. A good reading!')) : `${pl ? 'Pudło. Odpowiedź: ' : 'Wrong. The answer: '}${answer}`}</p>
       )}
     </div>
   );
@@ -148,7 +150,7 @@ function Riddle({ data, state, done }: Props<'riddle'>) {
 function Quiz({ data, state, done }: Props<'quiz'>) {
   const { tx, locale } = useT();
   const pl = locale === 'pl';
-  const seconds = state.puzzle.kind === 'quiz' ? state.puzzle.seconds : 15;
+  const seconds = data.seconds ?? (state.puzzle.kind === 'quiz' ? state.puzzle.seconds : 15);
   const [at, setAt] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
   const [picked, setPicked] = useState<number | null | undefined>(undefined);
@@ -232,6 +234,23 @@ function BlankCard() {
   );
 }
 
+function TreeArt({ lady }: { lady: boolean }) {
+  return (
+    <svg viewBox="0 0 60 84" aria-hidden="true">
+      {lady && (
+        <g>
+          <path d="M42 80 L46 50 Q48 40 54 44 L58 80 Z" fill="#e8f0ff" opacity="0.85" />
+          <circle cx="51" cy="40" r="5" fill="#f2e6ff" opacity="0.9" />
+        </g>
+      )}
+      <rect x="25" y="46" width="10" height="36" fill="#5a3a1e" stroke="#1a120c" strokeWidth="1.5" />
+      <circle cx="30" cy="30" r="22" fill="#2f6a34" stroke="#12301a" strokeWidth="2" />
+      <circle cx="20" cy="38" r="12" fill="#3a7a3e" />
+      <circle cx="40" cy="22" r="11" fill="#4a8a46" />
+    </svg>
+  );
+}
+
 function Cups({ data, state, done }: Props<'cups'>) {
   const { locale } = useT();
   const pl = locale === 'pl';
@@ -241,7 +260,8 @@ function Cups({ data, state, done }: Props<'cups'>) {
   const [swap, setSwap] = useState(-1);
   const [pick, setPick] = useState<number | null>(null);
   const finish = useFinish(done);
-  const speed = reduced() ? 250 : state.helped ? 720 : 430;
+  const speed = reduced() ? 250 : data.speedMs ?? (state.helped ? 720 : 430);
+  const trees = state.puzzle.kind === 'cups' && state.puzzle.theme === 'trees';
   useEffect(() => {
     if (phase === 'show') {
       const id = setTimeout(() => setPhase('shuffle'), 1600);
@@ -274,9 +294,11 @@ function Cups({ data, state, done }: Props<'cups'>) {
     <div className="pz pz-cups">
       <HelperNote state={state} yes={pl ? 'Zręczność: Twoje oko nadąża za rękami Myrmida.' : 'Dexterity: your eye keeps up with the Myrmid\'s hands.'} no={pl ? 'Myrmid tasuje szybko.' : 'The Myrmid shuffles fast.'} />
       <p className="pz-hint">
-        {phase === 'show' ? (pl ? 'Zapamiętaj Królową…' : 'Mark the Queen…') : phase === 'shuffle' ? (pl ? `Tasowanie… ${swap + 1}/${data.swaps.length}` : `Shuffling… ${swap + 1}/${data.swaps.length}`) : phase === 'pick' ? (pl ? 'Gdzie jest Królowa?' : 'Where is the Queen?') : pick !== null && slotOf[queen] === pick ? (pl ? 'Trafiłeś! Myrmid ze złością oddaje monetę.' : 'Got her! The Myrmid grudgingly hands over the coin.') : (pl ? 'Pudło. Myrmid zgarnia stawkę.' : 'Wrong. The Myrmid takes the stake.')}
+        {trees
+          ? (phase === 'show' ? (pl ? 'Zapamiętaj, za którym drzewem stoi…' : 'Mark the tree she hides behind…') : phase === 'shuffle' ? (pl ? `Drzewa się przesuwają… ${swap + 1}/${data.swaps.length}` : `The trees move… ${swap + 1}/${data.swaps.length}`) : phase === 'pick' ? (pl ? 'Za którym drzewem jest?' : 'Behind which tree is she?') : pick !== null && slotOf[queen] === pick ? (pl ? 'Znalazłeś ją! Zostawia Ci podarunek i znika.' : 'You found her! She leaves you a gift and fades.') : (pl ? 'Pusto… a za Tobą rozlega się upiorny krzyk!' : 'Nothing… and a ghastly shriek rises behind you!'))
+          : (phase === 'show' ? (pl ? 'Zapamiętaj Królową…' : 'Mark the Queen…') : phase === 'shuffle' ? (pl ? `Tasowanie… ${swap + 1}/${data.swaps.length}` : `Shuffling… ${swap + 1}/${data.swaps.length}`) : phase === 'pick' ? (pl ? 'Gdzie jest Królowa?' : 'Where is the Queen?') : pick !== null && slotOf[queen] === pick ? (pl ? 'Trafiłeś! Myrmid ze złością oddaje monetę.' : 'Got her! The Myrmid grudgingly hands over the coin.') : (pl ? 'Pudło. Myrmid zgarnia stawkę.' : 'Wrong. The Myrmid takes the stake.'))}
       </p>
-      <div className="pz-table">
+      <div className={`pz-table ${trees ? 'trees' : ''}`}>
         {[0, 1, 2].map((card) => {
           const moving = phase === 'shuffle' && lastSwap && (lastSwap[0] === slotOf[card] || lastSwap[1] === slotOf[card]);
           const up = moving && lastSwap![0] === slotOf[card];
@@ -291,7 +313,9 @@ function Cups({ data, state, done }: Props<'cups'>) {
               disabled={phase !== 'pick'}
               aria-label={pl ? `Karta ${slotOf[card]! + 1}` : `Card ${slotOf[card]! + 1}`}
             >
-              {phase === 'show' || phase === 'reveal' ? (card === queen ? <QueenCard face /> : <BlankCard />) : <QueenCard face={false} />}
+              {trees
+                ? <TreeArt lady={(phase === 'show' || phase === 'reveal') && card === queen} />
+                : phase === 'show' || phase === 'reveal' ? (card === queen ? <QueenCard face /> : <BlankCard />) : <QueenCard face={false} />}
             </motion.button>
           );
         })}
@@ -306,6 +330,7 @@ function Timing({ data, state, done }: Props<'forge' | 'climb'>) {
   const { locale } = useT();
   const pl = locale === 'pl';
   const climb = data.kind === 'climb';
+  const theme = state.puzzle.kind === 'climb' ? state.puzzle.theme ?? 'branch' : 'branch';
   const strikes = data.zones.length;
   const [strike, setStrike] = useState(0);
   const [hits, setHits] = useState<boolean[]>([]);
@@ -355,7 +380,10 @@ function Timing({ data, state, done }: Props<'forge' | 'climb'>) {
       <HelperNote state={state}
         yes={climb ? (pl ? 'Zręczność: pewniejsze chwyty, szersza strefa.' : 'Dexterity: surer holds, a wider zone.') : (pl ? 'Siła: mocne ramię, szersza strefa.' : 'Strength: a strong arm, a wider zone.')}
         no={pl ? 'Strefa jest wąska, celuj dokładnie.' : 'The zone is narrow: aim well.'} />
-      <p className="pz-hint">{climb ? (pl ? 'Łap gałąź, gdy znacznik jest w jasnej strefie.' : 'Grab the branch while the marker is in the bright zone.') : (pl ? 'Uderz, gdy znacznik przelatuje przez rozżarzoną stal.' : 'Strike while the marker crosses the glowing steel.')}</p>
+      <p className="pz-hint">{!climb ? (pl ? 'Uderz, gdy znacznik przelatuje przez rozżarzoną stal.' : 'Strike while the marker crosses the glowing steel.')
+        : theme === 'ledge' ? (pl ? 'Grunt się osuwa! Łap półkę skalną, gdy znacznik jest w jasnej strefie.' : 'The ground slides! Grab a ledge while the marker is in the bright zone.')
+        : theme === 'leap' ? (pl ? ['Rozbieg…', 'Wybicie!', 'Lądowanie!'][Math.min(strike, 2)] + ' Kliknij, gdy znacznik jest w jasnej strefie.' : ['Run-up…', 'Take-off!', 'Landing!'][Math.min(strike, 2)] + ' Tap while the marker is in the bright zone.')
+        : (pl ? 'Łap gałąź, gdy znacznik jest w jasnej strefie.' : 'Grab the branch while the marker is in the bright zone.')}</p>
       <div className={`pz-bar ${flash === true ? 'hit' : flash === false ? 'miss' : ''}`} onPointerDown={hit}>
         <span className="pz-zone" style={{ left: `${(zone - data.width / 2) * 100}%`, width: `${data.width * 100}%` }} />
         <span className="pz-marker" style={{ left: `${pos * 100}%` }} />
@@ -364,7 +392,7 @@ function Timing({ data, state, done }: Props<'forge' | 'climb'>) {
       <div className="pz-strikes">
         {Array.from({ length: strikes }, (_, i) => <span key={i} className={hits[i] === true ? 'ok' : hits[i] === false ? 'no' : i === strike ? 'now' : ''}>{climb ? '▲' : '⚒'}</span>)}
       </div>
-      <button className="pz-go" onClick={hit} disabled={!running}>{climb ? (pl ? 'Chwyt!' : 'Grab!') : (pl ? 'Uderz!' : 'Strike!')}</button>
+      <button className="pz-go" onClick={hit} disabled={!running}>{!climb ? (pl ? 'Uderz!' : 'Strike!') : theme === 'leap' ? (pl ? 'Hop!' : 'Jump!') : (pl ? 'Chwyt!' : 'Grab!')}</button>
     </div>
   );
 }
@@ -648,6 +676,30 @@ function HigherLower({ data, state, me, done }: Props<'higherLower'>) {
 
 // ---------- Dig ----------
 
+const DIG_TEXT: Record<'tomb' | 'hut' | 'bridge', Record<'hint' | 'helped' | 'unhelped' | 'curse' | 'warn' | 'next' | 'bust' | 'go' | 'stop', [string, string]>> = {
+  tomb: {
+    hint: ['Każda warstwa kryje coś cennego, ale gdzieś czai się klątwa. Zabierz łup, zanim będzie za późno.', 'Every layer hides something precious, but a curse lurks somewhere. Take the loot before it is too late.'],
+    helped: ['Siła: pierwsza klątwa tylko Cię zrani, łup zostaje.', 'Strength: the first curse only wounds you; the loot stays.'], unhelped: ['Klątwa zabierze wszystko.', 'A curse will take everything.'],
+    curse: ['☠ Klątwa!', '☠ A curse!'], warn: ['⚠ czujesz chłód… klątwa?', '⚠ a chill… a curse?'], next: ['? kolejna warstwa', '? next layer'],
+    bust: ['Łup obraca się w proch, a z bandaży wstaje mumia!', 'The loot crumbles to dust as the mummy rises from its wrappings!'],
+    go: ['Sięgam głębiej', 'Reach deeper'], stop: ['Zabieram łup', 'Take the loot'],
+  },
+  hut: {
+    hint: ['Przeszukujesz półkę po półce, ale stary strop ledwo się trzyma. Wyjdź, zanim runie.', 'You search shelf by shelf, but the old roof barely holds. Get out before it falls.'],
+    helped: ['Zręczność: pierwszy spadający strop tylko Cię drasnie.', 'Dexterity: the first falling beam only grazes you.'], unhelped: ['Gdy strop runie, łup zostanie pod gruzem.', 'If the roof falls, the loot stays under the rubble.'],
+    curse: ['🪵 Strop się wali!', '🪵 The roof caves in!'], warn: ['⚠ strop trzeszczy nad tą półką', '⚠ the roof creaks above this shelf'], next: ['? kolejna półka', '? next shelf'],
+    bust: ['Belki spadają Ci na głowę, a łup ginie pod gruzem!', 'Beams crash on your head and the loot is lost in the rubble!'],
+    go: ['Szukam dalej', 'Search on'], stop: ['Wychodzę z łupem', 'Leave with the loot'],
+  },
+  bridge: {
+    hint: ['Każdy krok po kościach to monety, a na końcu skrzynia. Któreś przęsło jest kruche. Zawróć, kiedy zechcesz.', 'Every step on the bones brings coins, and a chest waits at the end. One span is brittle. Turn back whenever you like.'],
+    helped: ['Siła: gdy przęsło pęknie, raz utrzymasz się na rękach.', 'Strength: when a span breaks, you can hang on once.'], unhelped: ['Pęknięte przęsło strąci Cię w przepaść.', 'A broken span drops you into the gorge.'],
+    curse: ['💀 Przęsło pęka!', '💀 The span breaks!'], warn: ['⚠ kość przed Tobą cicho trzeszczy', '⚠ the bone ahead cracks softly'], next: ['? kolejny krok', '? next step'],
+    bust: ['Kości pękają pod Tobą, a monety lecą w przepaść!', 'The bones snap beneath you and the coins fall into the gorge!'],
+    go: ['Krok dalej', 'Step on'], stop: ['Wracam z monetami', 'Go back with the coins'],
+  },
+};
+
 function Dig({ data, state, done }: Props<'dig'>) {
   const { locale } = useT();
   const pl = locale === 'pl';
@@ -669,22 +721,25 @@ function Dig({ data, state, done }: Props<'dig'>) {
     finish({ dug }, 200);
   };
   const loot = res.loot as Outcome[];
+  const theme = state.puzzle.kind === 'dig' ? state.puzzle.theme ?? 'tomb' : 'tomb';
+  const T = DIG_TEXT[theme];
+  const warn = !over && (data.warned ?? []).includes(dug);
   return (
-    <div className="pz pz-dig">
-      <p className="pz-hint">{pl ? 'Każda warstwa kryje coś cennego, ale gdzieś czai się klątwa. Zabierz łup, zanim będzie za późno.' : 'Every layer hides something precious, but a curse lurks somewhere. Take the loot before it is too late.'}</p>
-      <HelperNote state={state} yes={pl ? 'Siła: pierwsza klątwa tylko Cię zrani, łup zostaje.' : 'Strength: the first curse only wounds you; the loot stays.'} no={pl ? 'Klątwa zabierze wszystko.' : 'A curse will take everything.'} />
+    <div className={`pz pz-dig t-${theme}`}>
+      <p className="pz-hint">{T.hint[pl ? 0 : 1]}</p>
+      <HelperNote state={state} yes={T.helped[pl ? 0 : 1]} no={T.unhelped[pl ? 0 : 1]} />
       <div className="pz-layers">
         {data.layers.map((l, i) => (
-          <div key={i} className={`pz-layer ${i < dug ? (l === 'curse' ? 'curse' : 'found') : ''}`}>
-            {i < dug ? (l === 'curse' ? (pl ? '☠ Klątwa!' : '☠ A curse!') : outcomeText(l, locale)) : i === dug && !over ? (pl ? '? kolejna warstwa' : '? next layer') : ''}
+          <div key={i} className={`pz-layer ${i < dug ? (l === 'curse' ? 'curse' : 'found') : ''} ${i === dug && warn ? 'warn' : ''}`}>
+            {i < dug ? (l === 'curse' ? T.curse[pl ? 0 : 1] : outcomeText(l, locale)) : i === dug && !over ? (warn ? T.warn[pl ? 0 : 1] : T.next[pl ? 0 : 1]) : ''}
           </div>
         ))}
       </div>
-      <p className="pz-note">{res.bust ? (pl ? 'Łup obraca się w proch, a z bandaży wstaje mumia!' : 'The loot crumbles to dust as the mummy rises from its wrappings!') : loot.length ? `${pl ? 'Twój łup: ' : 'Your loot: '}${outcomeText(loot, locale)}` : (pl ? 'Na razie nic nie masz.' : 'Nothing yet.')}</p>
+      <p className="pz-note">{res.bust ? T.bust[pl ? 0 : 1] : loot.length ? `${pl ? 'Twój łup: ' : 'Your loot: '}${outcomeText(loot, locale)}` : (pl ? 'Na razie nic nie masz.' : 'Nothing yet.')}</p>
       {!over && (
         <div className="pz-hl-buttons">
-          <button className="pz-go" onClick={deeper}>{pl ? 'Sięgam głębiej' : 'Reach deeper'}</button>
-          <button className="pz-stop" onClick={leave}>{pl ? 'Zabieram łup' : 'Take the loot'}</button>
+          <button className="pz-go" onClick={deeper}>{T.go[pl ? 0 : 1]}</button>
+          <button className="pz-stop" onClick={leave}>{T.stop[pl ? 0 : 1]}</button>
         </div>
       )}
     </div>
@@ -693,6 +748,15 @@ function Dig({ data, state, done }: Props<'dig'>) {
 
 /** The mini-game of a card, by kind. */
 export function PuzzleView({ state, me, done }: { state: PuzzleState; me: PlayerState; done: Done }) {
+  return (
+    <>
+      <StatNote state={state} />
+      <PuzzleGame state={state} me={me} done={done} />
+    </>
+  );
+}
+
+function PuzzleGame({ state, me, done }: { state: PuzzleState; me: PlayerState; done: Done }) {
   const d = state.data;
   const common = { state, me, done };
   switch (d.kind) {
@@ -705,6 +769,18 @@ export function PuzzleView({ state, me, done }: { state: PuzzleState; me: Player
     case 'lock': return <Lock data={d} {...common} />;
     case 'higherLower': return <HigherLower data={d} {...common} />;
     case 'dig': return <Dig data={d} {...common} />;
+    case 'sequence': return <Sequence data={d} {...common} />;
+    case 'escape': return <Escape data={d} {...common} />;
+    case 'differences': return <Differences data={d} {...common} />;
+    case 'tug': return <Tug data={d} {...common} />;
+    case 'pairs': return <Pairs data={d} {...common} />;
+    case 'hold': return <Hold data={d} {...common} />;
+    case 'missing': return <Missing data={d} {...common} />;
+    case 'scale': return <Scale data={d} {...common} />;
+    case 'stars': return <Stars data={d} {...common} />;
+    case 'bluff': return <Bluff data={d} {...common} />;
+    case 'catch': return <Catch data={d} {...common} />;
+    case 'slider': return <Slider data={d} {...common} />;
   }
 }
 

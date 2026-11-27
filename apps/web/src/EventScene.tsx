@@ -392,6 +392,54 @@ const ACTORS = {
     </g>
   ),
   pendulum: <g><path d="M0 -90 L0 -20" stroke="#5a5e68" strokeWidth={2} /><path d="M-18 -22 Q0 -4 18 -22 Z" fill="#c0c8d4" stroke={O} strokeWidth={1.4} /></g>,
+  bard: Person({ robe: '#5a3a8a', head: 'hat', trim: '#ffd166' }),
+  lute: (
+    <g transform="rotate(-30)">
+      <path d="M2 -26 L4 -48" stroke="#6a4a2a" strokeWidth={3} />
+      <ellipse cx={0} cy={-20} rx={8} ry={10} fill="#c8803a" stroke={O} strokeWidth={1.4} />
+      <circle cx={0} cy={-20} r={2.5} fill={O} />
+    </g>
+  ),
+  pack: (
+    <g>
+      <path d="M-14 0 L-16 -24 Q0 -34 16 -24 L14 0 Z" fill="#8a5a30" stroke={O} strokeWidth={1.6} />
+      <path d="M-16 -22 Q0 -14 16 -22" fill="none" stroke={O} strokeWidth={1.4} />
+      <rect x={-4} y={-18} width={8} height={6} fill="#e0b25c" stroke={O} strokeWidth={1} />
+      <circle cx={20} cy={-30} r={3} fill="#ffd34d" stroke="#8a5a00" className="sc-float" />
+    </g>
+  ),
+  boneBridge: (
+    <g>
+      <path d="M-110 -10 L-110 18 L-80 18 L-80 -10 Z M80 -10 L80 18 L110 18 L110 -10 Z" fill="#3a3430" />
+      <path d="M-80 -10 Q0 10 80 -10" fill="none" stroke="#3a2a1a" strokeWidth={1.5} />
+      {Array.from({ length: 9 }, (_, i) => -64 + i * 16).map((x) => <g key={x} transform={`translate(${x} ${-6 + Math.abs(x) * -0.06 + 6})`}><rect x={-7} y={-2} width={14} height={4} rx={2} fill="#efe6cc" stroke={O} strokeWidth={0.8} /><circle cx={-7} cy={0} r={2.4} fill="#efe6cc" stroke={O} strokeWidth={0.6} /><circle cx={7} cy={0} r={2.4} fill="#efe6cc" stroke={O} strokeWidth={0.6} /></g>)}
+      {[-40, 8, 40].map((x) => <circle key={x} cx={x} cy={-6} r={2} fill="#ffd34d" className="fx-twinkle" />)}
+    </g>
+  ),
+  scales: (
+    <g>
+      <path d="M0 0 V-40 M-10 0 H10" stroke="#c8a060" strokeWidth={2.5} />
+      <g className="sc-sway"><path d="M-22 -40 H22" stroke="#e0b25c" strokeWidth={2.5} />
+        <path d="M-22 -40 L-28 -26 H-16 Z M22 -40 L16 -26 H28 Z" fill="none" stroke="#e0b25c" strokeWidth={1.4} />
+        {[-24, -20, 20, 24].map((x) => <circle key={x} cx={x} cy={-28} r={2.2} fill="#ffd34d" stroke="#8a5a00" strokeWidth={0.6} />)}</g>
+    </g>
+  ),
+  constellation: (
+    <g stroke="#9fe8ff" strokeWidth={0.8} opacity={0.85}>
+      <polyline points="-60,10 -30,-10 0,8 30,-14 60,6" fill="none" className="fx-twinkle" />
+      {[[-60, 10], [-30, -10], [0, 8], [30, -14], [60, 6]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r={2.2} fill="#fff" className="fx-twinkle" style={{ animationDelay: `${i * 0.3}s` }} />)}
+    </g>
+  ),
+  dice: <g>{[-8, 8].map((x, i) => <g key={x} transform={`translate(${x} -6) rotate(${i ? 14 : -10})`}><rect x={-5} y={-5} width={10} height={10} rx={2} fill="#f4ecd8" stroke={O} strokeWidth={1} /><circle cx={-2} cy={-2} r={1} fill={O} /><circle cx={2} cy={2} r={1} fill={O} /></g>)}</g>,
+  fireflies: <g>{Array.from({ length: 16 }, (_, i) => <g key={i} className="sc-float" style={{ animationDelay: `${(i * 0.23) % 2}s` }}><circle cx={((i * 53) % 220) - 110} cy={-((i * 29) % 60)} r={4} fill="#d8ff7a" opacity={0.25} /><circle cx={((i * 53) % 220) - 110} cy={-((i * 29) % 60)} r={1.4} fill="#f0ffb0" className="fx-twinkle" style={{ animationDelay: `${i * 0.17}s` }} /></g>)}</g>,
+  fresco: (
+    <g>
+      <rect x={-36} y={-66} width={72} height={66} fill="#8a8070" stroke={O} strokeWidth={1.6} />
+      {[0, 1, 2].map((r) => [0, 1, 2].map((c) => <rect key={`${r}${c}`} x={-32 + c * 22} y={-62 + r * 20} width={20} height={18} fill={['#d8c8a0', '#c8b890', '#e0d0a8'][(r + c) % 3]} stroke="#6b4a24" strokeWidth={0.8} transform={(r * 3 + c) % 4 === 1 ? `rotate(4 ${-22 + c * 22} ${-53 + r * 20})` : undefined} />))}
+      <circle cx={0} cy={-46} r={8} fill="#ffd166" opacity={0.85} />
+      <path d="M-32 -12 L-14 -26 L0 -16 L16 -30 L32 -18 V-4 H-32 Z" fill="#5a7a9a" opacity={0.85} />
+    </g>
+  ),
 } satisfies Record<string, ReactNode>;
 type Actor = keyof typeof ACTORS;
 
@@ -472,7 +520,7 @@ const SCENES: Record<number, SceneDef & { steps?: Record<string, Partial<SceneDe
   6: { sky: 'day', actors: [P('flower', 270, { anim: 'sway', s: 1.4 }), P('flower', 310, { anim: 'sway', s: 0.9 })] },
   7: { sky: 'void', land: 'core', fx: ['void', 'quake'], actors: [P('darkBlob', 290, { anim: 'pulse', s: 1.2 })] },
   8: { sky: 'hell', fx: ['embers'], actors: [P('sunborn', 240, { flip: true, anim: 'bob' }), P('demonSmall', 300, { flip: true, anim: 'shake' }), P('imp', 350, { flip: true, anim: 'shake' })] },
-  9: { sky: 'void', fx: ['void'], actors: [P('portal', 280, { anim: 'pulse', s: 1.3 })] },
+  9: { sky: 'void', fx: ['void'], actors: [P('portal', 280, { anim: 'pulse', s: 1.3 })], steps: { aim: { fx: ['void', 'sparkle'] } } },
   10: { sky: 'storm', fx: ['rain', 'lightning', 'wind'], actors: [P('tree', 320, { anim: 'sway' })] },
   11: { sky: 'storm', land: 'mountains', fx: ['quake'], actors: [P('rocks', 270, { y: 70, anim: 'shake' }), P('rocks', 320, { y: 88, s: 0.8, anim: 'shake' }), P('rocks', 220, { s: 0.6, anim: 'shake' })] },
   12: { sky: 'dusk', actors: [P('wagon', 300, { flip: true }), P('bandit', 240, { anim: 'shake' }), P('bandit', 360, { flip: true, anim: 'shake' })] },
@@ -506,7 +554,7 @@ const SCENES: Record<number, SceneDef & { steps?: Record<string, Partial<SceneDe
   30: { sky: 'hell', fx: ['quake'], actors: [P('minotaur', 290, { flip: true, anim: 'shake', s: 1.2 })] },
   31: { sky: 'dusk', fx: ['fog'], actors: [P('hut', 290)] },
   33: { sky: 'day', land: 'mountains', fx: ['sparkle'], actors: [P('waterfall', 290)] },
-  34: { sky: 'dusk', actors: [P('tower', 290)] },
+  34: { sky: 'dusk', actors: [P('tower', 290)], steps: { top: { sky: 'night', fx: ['stars', 'sparkle'], actors: [P('tower', 290, { s: 1.4, y: 140 }), P('treasure', 290, { y: 70, anim: 'pulse' })] } } },
   35: { sky: 'hell', fx: ['fire', 'embers'], actors: [] },
   36: { sky: 'gold', land: 'fields', fx: ['sparkle'], actors: [P('stone', 280, { anim: 'pulse' })] },
   37: { sky: 'day', actors: [P('stump', 280), P('flintborn', 320, { flip: true, anim: 'bob' })] },
@@ -521,6 +569,17 @@ const SCENES: Record<number, SceneDef & { steps?: Record<string, Partial<SceneDe
   48: { sky: 'day', fx: ['sparkle'], actors: [P('spikes', 220), P('spikes', 300), P('spikes', 370, { s: 0.8 })] },
   49: { sky: 'hell', fx: ['wind'], actors: [P('manticore', 290, { flip: true, anim: 'bob' })] },
   50: { sky: 'dusk', fx: ['sparkle'], actors: [P('chests', 290, { s: 1.4 })] },
+  51: { sky: 'dusk', actors: [P('pack', 250), P('imp', 300, { flip: true, anim: 'shake' })] },
+  52: { sky: 'dusk', land: 'mountains', fx: ['fog'], actors: [P('boneBridge', 280, { y: 100 }), P('treasure', 372, { y: 100, s: 0.7, anim: 'pulse' })] },
+  53: { sky: 'dusk', fx: ['sparkle'], actors: [P('stump', 300), P('bard', 300, { y: 102, flip: true, anim: 'bob' }), P('lute', 290, { y: 96 })] },
+  54: { sky: 'dusk', actors: [P('scales', 260, { s: 1.2 }), P('keeper', 320, { flip: true, anim: 'bob' })] },
+  55: { sky: 'night', fx: ['stars'], actors: [P('constellation', 270, { y: 34, s: 1.1 })] },
+  56: { sky: 'night', fx: ['stars'], actors: [P('campfire', 290), P('dice', 260), P('nomadSit', 330, { flip: true, anim: 'bob' })] },
+  57: { sky: 'night', land: 'forest', actors: [P('fireflies', 280, { y: 96 })] },
+  58: { sky: 'day', land: 'monument', fx: ['sparkle'], actors: [P('fresco', 280)] },
+  900: { sky: 'dusk', fx: ['sparkle'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },
+  901: { sky: 'night', fx: ['sparkle', 'stars'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },
+  902: { sky: 'dusk', land: 'mountains', fx: ['sparkle'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },
 };
 
 /** Dungeon rooms: by the kind of room (the last two digits of the card), on the dungeon's own stone. */

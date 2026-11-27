@@ -1,4 +1,4 @@
-import { ATTRIBUTES, BOOK_READINGS, ITEMS, TERRAINS } from '@hp/content';
+import { ATTRIBUTES, ITEMS, TERRAINS, bookReading } from '@hp/content';
 import { cardPool, createCharacter, keepCards, spendPoints } from './character';
 import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, cook, eatMeal, levitating, playCard, playableCards, refreshCards, trimMeals } from './cards';
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
@@ -559,24 +559,16 @@ function readScroll(state: GameState, player: PlayerState, rng: Rng, item: strin
   log(state, { type: 'scroll', player: player.id, item, amount: selfSpell(player, scroll) });
 }
 
-/** Reading a book: one Intelligence test a round; the 3rd good reading teaches its lesson. */
+/** Reading a book, once a round: a word from the book to spell from scattered letters; the 3rd good reading teaches its lesson. */
 function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
   const item = ITEMS[id];
   if (item?.kind !== 'book' || !player.inventory.items.includes(id)) throw new EngineError('item.missing', 'You have no such book.');
   const key = readKey(state, id);
   if (player.counters[key]) throw new EngineError('book.once', 'You can read this book once a round.');
   player.counters[key] = 1;
-  const result = heroTest(worldView(state), player, 'int', rng);
-  log(state, { type: 'check', player: player.id, attribute: 'int', result });
-  if (!result.success) return;
-  const count = (player.counters[`book:${id}`] ?? 0) + 1;
-  player.counters[`book:${id}`] = count;
-  if (count < BOOK_READINGS) return;
-  player.inventory.items.splice(player.inventory.items.indexOf(id), 1);
-  for (const lesson of item.teaches) {
-    if (lesson.target === 'mine') runOutcomes(state, player, rng, [{ do: 'skill', skill: 'mine', amount: lesson.amount }]);
-    else runOutcomes(state, player, rng, [{ do: 'permanent', target: lesson.target, amount: lesson.amount }]);
-  }
+  const reading = bookReading(id);
+  if (!reading) return;
+  runOutcomes(state, player, rng, [{ do: 'puzzle', puzzle: reading.puzzle }], reading.card);
 }
 
 /** Death, the Stone of Beginnings, the Fountain of rebirth and the win conditions. */
