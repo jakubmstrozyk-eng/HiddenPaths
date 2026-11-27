@@ -12,6 +12,7 @@ import { heroGamesInPlay, HERO_GAMES } from '../saves';
 import { DieFace, diceStyle } from '../DiceFace';
 import type { HeroStore } from '../heroStore';
 import { useT } from '../i18n';
+import { DiceWorkshop } from '../DiceWorkshop';
 import { PixelHero } from '../PixelHero';
 import { WorldMap } from '../WorldMap';
 import { Choice } from './Setup';
@@ -436,35 +437,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
         </>
       )}
 
-      {step === 'dice' && (
-        <>
-          <h2>{t('dice')}</h2>
-          <p className="muted">{t('diceNote')}</p>
-          {(['d6', 'd10', 'd100'] as const).map((kind) => (
-            <div key={kind} className="dice-pick">
-              <motion.div key={dice[kind]} initial={{ rotate: -40, scale: 0.6 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 14 }}>
-                <DieFace kind={kind} value={kind === 'd6' ? 5 : kind === 'd10' ? 7 : 4} style={diceStyle(dice[kind])} size={72} />
-              </motion.div>
-              <div>
-                <h3>{kind === 'd6' ? 'k6' : kind === 'd10' ? 'k10' : 'k100'}</h3>
-                <div className="swatches">
-                  {DICE_STYLES.map((s) => (
-                    <button
-                      key={s.id}
-                      className={`swatch ${dice[kind] === s.id ? 'active' : ''}`}
-                      style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }}
-                      title={tx(s.name)}
-                      aria-label={tx(s.name)}
-                      aria-pressed={dice[kind] === s.id}
-                      onClick={() => setDice({ ...dice, [kind]: s.id })}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
+      {step === 'dice' && <DiceWorkshop dice={dice} onChange={setDice} />}
 
       {step === 'name' && (
         <>

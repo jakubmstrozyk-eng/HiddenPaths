@@ -1,5 +1,5 @@
 import { DEFAULT_DICE, DEFAULT_LOOK, type Attributes, type DiceLook, type HeroLook, type ProfessionId, type RaceId } from '@hp/content';
-import { cleanLook, MISSIONS_KEPT, validateCharacter, type CharacterInput, type HeroGrowth } from './character';
+import { cleanDice, cleanLook, MISSIONS_KEPT, validateCharacter, type CharacterInput, type HeroGrowth } from './character';
 import { EngineError } from './errors';
 import type { GameCareer } from './missions';
 import type { HeroJournal } from './journal';
@@ -60,7 +60,7 @@ export function validateHero(input: NewHero): NewHero {
     profession: input.profession,
     bonus: { ...input.bonus },
     look: cleanLook({ ...DEFAULT_LOOK, ...input.look }),
-    dice: { ...DEFAULT_DICE, ...input.dice },
+    dice: cleanDice({ ...DEFAULT_DICE, ...input.dice }),
   };
   validateCharacter({ ...heroCharacter(hero as Hero, PLACEHOLDER_MISSIONS) });
   return hero;

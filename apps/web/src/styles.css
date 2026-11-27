@@ -1664,3 +1664,95 @@ button.danger { border-color: #ff5a3a; color: #ff8a70; }
   .dice-tray.box-tray { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(4, 2, 10, 0.94); }
 }
 @media (prefers-reduced-motion: reduce) { .dice-box { transform: none; } }
+
+/* ── Dice box styles, chosen with the hero's dice. Each sets the walls, the lining and the metal. ── */
+.dice-box {
+  --w-top: #b27a40; --w-right: #6a3f1c; --w-bottom: #4a2a10; --w-left: #7c4c22;
+  --lining-1: #23704a; --lining-2: #124a30; --lining-3: #0c3522; --stitch: rgba(240, 214, 150, 0.28);
+  --m-hi: #f4d98a; --m-mid: #a8781e; --m-lo: #6a4a12; --rim: #2a1608; --trim: #c9a25a;
+  --grain: 0.13;
+  border-color: var(--w-top) var(--w-right) var(--w-bottom) var(--w-left);
+  background: var(--lining-3);
+  box-shadow: 0 0 0 3px var(--rim), 0 0 0 5px var(--trim), 0 0 0 7px var(--rim), 0 30px 50px rgba(0, 0, 0, 0.75);
+}
+.dice-box::after {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, var(--grain)) 0 1px, transparent 1px 7px, rgba(255, 230, 190, 0.06) 7px 8px, transparent 8px 19px),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, calc(var(--grain) * 0.8)) 0 1px, transparent 1px 9px);
+}
+.dice-box::before {
+  background:
+    radial-gradient(circle at 12px 12px, #fff3c0 0 2px, var(--m-lo) 2.5px 3.5px, transparent 4px) 0 0 / 26px 26px no-repeat,
+    radial-gradient(circle at 14px 12px, #fff3c0 0 2px, var(--m-lo) 2.5px 3.5px, transparent 4px) 100% 0 / 26px 26px no-repeat,
+    radial-gradient(circle at 12px 14px, #fff3c0 0 2px, var(--m-lo) 2.5px 3.5px, transparent 4px) 0 100% / 26px 26px no-repeat,
+    radial-gradient(circle at 14px 14px, #fff3c0 0 2px, var(--m-lo) 2.5px 3.5px, transparent 4px) 100% 100% / 26px 26px no-repeat,
+    linear-gradient(135deg, var(--m-hi), var(--m-mid) 60%, var(--m-lo)) 0 0 / 26px 26px no-repeat,
+    linear-gradient(225deg, var(--m-hi), var(--m-mid) 60%, var(--m-lo)) 100% 0 / 26px 26px no-repeat,
+    linear-gradient(45deg, var(--m-mid), var(--m-lo) 70%) 0 100% / 26px 26px no-repeat,
+    linear-gradient(315deg, var(--m-mid), var(--m-lo) 70%) 100% 100% / 26px 26px no-repeat;
+}
+.dice-box-felt {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.09), transparent 62%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.035) 0.6px, transparent 1.2px) 0 0 / 4px 4px,
+    radial-gradient(circle, rgba(0, 0, 0, 0.12) 0.6px, transparent 1.2px) 2px 2px / 4px 4px,
+    radial-gradient(ellipse at 50% 50%, var(--lining-1), var(--lining-2) 70%, var(--lining-3));
+}
+.dice-box-felt::before { border-color: var(--stitch); }
+.box-ebony {
+  --w-top: #4a3a34; --w-right: #1c1412; --w-bottom: #120c0a; --w-left: #2a201c;
+  --lining-1: #8a1a2a; --lining-2: #5a0c18; --lining-3: #3a0610; --stitch: rgba(220, 220, 235, 0.3);
+  --m-hi: #ffffff; --m-mid: #b8bcc8; --m-lo: #5a5e6a; --rim: #0a0606; --trim: #c8ccd8; --grain: 0.22;
+}
+.box-leather {
+  --w-top: #9a5a32; --w-right: #5a2e16; --w-bottom: #3e1e0c; --w-left: #6e3a1c;
+  --lining-1: #2a3e7a; --lining-2: #182858; --lining-3: #0e1a3e; --stitch: rgba(255, 214, 160, 0.4);
+  --m-hi: #ffe2a0; --m-mid: #c08a3a; --m-lo: #6a4418; --rim: #2a1206; --trim: #8a5a2a; --grain: 0.06;
+}
+/* Leather: stitching runs round the walls instead of wood grain. */
+.box-leather::after {
+  inset: calc(var(--wall) * -1 + 5px);
+  background: none; mix-blend-mode: normal;
+  border: 2px dashed rgba(255, 220, 170, 0.5);
+}
+.box-stone {
+  --w-top: #9a98a8; --w-right: #55536a; --w-bottom: #3a384a; --w-left: #6e6c80;
+  --lining-1: #5a2a8a; --lining-2: #3a1a64; --lining-3: #240e42; --stitch: rgba(200, 170, 255, 0.35);
+  --m-hi: #d8c8ff; --m-mid: #8a6ad8; --m-lo: #3a2a6a; --rim: #16141e; --trim: #8f7bff; --grain: 0.08;
+}
+/* Stone: speckles instead of grain, and the rift glowing faintly in the corners. */
+.box-stone::after {
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.18) 0.8px, transparent 1.4px) 0 0 / 7px 9px,
+    radial-gradient(circle, rgba(0, 0, 0, 0.35) 0.9px, transparent 1.6px) 3px 4px / 11px 8px;
+  mix-blend-mode: normal;
+}
+.box-stone { box-shadow: 0 0 0 3px var(--rim), 0 0 0 5px var(--trim), 0 0 0 7px var(--rim), 0 30px 50px rgba(0, 0, 0, 0.75), 0 0 40px rgba(143, 123, 255, 0.35); }
+.box-bone {
+  --w-top: #f0e6cc; --w-right: #b8a888; --w-bottom: #8e7e60; --w-left: #d4c6a6;
+  --lining-1: #c8a878; --lining-2: #a88a5a; --lining-3: #7a6240; --stitch: rgba(90, 50, 20, 0.35);
+  --m-hi: #ffc08a; --m-mid: #c06a2a; --m-lo: #6a3010; --rim: #3a2a18; --trim: #c06a2a; --grain: 0.05;
+}
+.box-bone .box-empty { color: rgba(60, 36, 14, 0.55); }
+.box-die .real-die { display: block; }
+.held-die .real-die { display: block; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.5)); }
+.held-die { display: inline-block; }
+.held-die.shaking { animation: die-shake 0.32s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .held-die.shaking { animation: none; } }
+
+/* ── Dice workshop in hero creation ── */
+.dice-workshop .workshop-box { width: min(100%, 440px); height: 170px; min-height: 0; margin: 12px auto 8px; cursor: default; }
+.ws-die { position: absolute; display: block; filter: drop-shadow(0 6px 5px rgba(0, 0, 0, 0.55)); }
+.ws-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center; margin-bottom: 10px; }
+.ws-row > span { font-size: 13px; color: var(--muted); }
+.ws-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.ws-option { display: flex; align-items: center; gap: 8px; padding: 8px 10px; text-align: left; font-size: 13px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
+.ws-option:hover { border-color: rgba(255, 255, 255, 0.45); }
+.ws-option.active { border-color: #ffe27a; box-shadow: 0 0 0 1px #ffe27a, 0 0 14px rgba(255, 226, 122, 0.3); }
+.ws-option .real-die { flex: none; }
+.ws-options.boxes { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.mini-box { --wall: 7px; position: relative; display: block; flex: none; width: 54px; height: 38px; min-height: 0; transform: none; box-shadow: 0 0 0 1px var(--rim), 0 0 0 2px var(--trim); cursor: inherit; }
+.mini-box .dice-box-felt { display: block; }
+.mini-box .dice-box-felt::before { inset: 3px; border-width: 1px; background: none; }
+.mini-box::before { display: none; }
+@media (max-width: 560px) { .ws-row { grid-template-columns: 1fr; gap: 4px; } .dice-workshop .workshop-box { height: 150px; transform: none; } }

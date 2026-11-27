@@ -93,5 +93,34 @@ export interface DiceLook {
   d6: string;
   d10: string;
   d100: string;
+  /** How the dice are finished: matte, polished, pearl or metal. */
+  finish?: DiceFinish;
+  /** What is cut into them: plain numbers, gold-inked numbers, runes on the sides, or a filigree edge. */
+  engrave?: DiceEngraving;
+  /** The box the dice are thrown into. */
+  box?: string;
 }
+
+export type DiceFinish = 'matte' | 'gloss' | 'pearl' | 'metal';
+export type DiceEngraving = 'plain' | 'inked' | 'runes' | 'filigree';
+export const DICE_FINISHES: { id: DiceFinish; name: Text }[] = [
+  { id: 'gloss', name: { pl: 'Połysk', en: 'Polished' } },
+  { id: 'matte', name: { pl: 'Mat', en: 'Matte' } },
+  { id: 'pearl', name: { pl: 'Perłowe', en: 'Pearl' } },
+  { id: 'metal', name: { pl: 'Metaliczne', en: 'Metal' } },
+];
+export const DICE_ENGRAVINGS: { id: DiceEngraving; name: Text }[] = [
+  { id: 'plain', name: { pl: 'Zwykłe cyfry', en: 'Plain numbers' } },
+  { id: 'inked', name: { pl: 'Złocone żłobienia', en: 'Gold-inked engraving' } },
+  { id: 'runes', name: { pl: 'Runy na ściankach', en: 'Runes on the sides' } },
+  { id: 'filigree', name: { pl: 'Filigranowe krawędzie', en: 'Filigree edges' } },
+];
+/** Dice boxes: a frame of wood, leather, stone or crystal around a lining of felt or velvet. */
+export const DICE_BOXES: { id: string; name: Text }[] = [
+  { id: 'oak', name: { pl: 'Dębowa skrzynka, zielone sukno', en: 'Oak box, green baize' } },
+  { id: 'ebony', name: { pl: 'Heban i srebro, karmazynowy aksamit', en: 'Ebony and silver, crimson velvet' } },
+  { id: 'leather', name: { pl: 'Skóra podróżnika, granatowy filc', en: "Traveller's leather, navy felt" } },
+  { id: 'stone', name: { pl: 'Kamień z Rozłamu, fioletowy aksamit', en: 'Rift stone, violet velvet' } },
+  { id: 'bone', name: { pl: 'Kość i miedź, piaskowe płótno', en: 'Bone and copper, sand linen' } },
+];
 export const DEFAULT_DICE: DiceLook = { d6: 'bone', d10: 'obsidian', d100: 'void' };
