@@ -336,7 +336,8 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
         break;
       }
       case 'peek':
-        for (const n of neighbours(state.map, player.position)) reveal(state, player, n);
+        // Seen from afar: the fragment's XP comes only when the hero steps on it, so an event never pays for it (Jacob, 2026-11-27).
+        for (const n of neighbours(state.map, player.position)) reveal(state, player, n, undefined, { peek: true });
         break;
       case 'condition':
         if (!player.conditions.some((x) => x.id === o.id)) {
