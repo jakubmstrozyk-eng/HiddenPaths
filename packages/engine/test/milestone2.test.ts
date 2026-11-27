@@ -86,7 +86,7 @@ describe('event cards', () => {
     const state = withCard(game(), 2);
     currentPlayer(state).character.gold = 0;
     currentPlayer(state).character.food = 0;
-    expect(legalActions(state, 'p1')).toEqual([{ type: 'event', option: 2 }, { type: 'event', option: 3 }]);
+    expect(legalActions(state, 'p1').filter((a) => a.type === 'event')).toEqual([{ type: 'event', option: 2 }, { type: 'event', option: 3 }]);
     expect(() => applyAction(state, 'p1', { type: 'event', option: 0 })).toThrow();
   });
 

@@ -67,7 +67,7 @@ export function SkillHand({ profession, owned, actor, playable = [], onPlay, inF
     <>
       <div className={`hand ${compact ? 'compact' : ''}`} aria-label={t('skillCards')}>
         {cards.map((card, i) => (
-          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} idle={!!card.combat && !inFight && status(card.id) !== 'play'} onOpen={() => setOpen(card)} />
+          <HandCard key={card.id} card={card} status={status(card.id)} uses={uses(card.id)} tilt={(i - mid) * 7} lift={Math.abs(i - mid) * 6} idle={!!card.combat && !inFight && !MAP_PLAY.includes(card.id) && status(card.id) !== 'play'} onOpen={() => setOpen(card)} />
         ))}
       </div>
       <AnimatePresence>
@@ -142,7 +142,7 @@ function CardFace({ card, profession, uses, large = false }: { card: ActionCard;
     <div className={`card-face ${card.combat ? 'combat' : ''} ${large ? 'large' : ''}`}>
       <span className="card-level">{card.level}</span>
       <span className="card-tags">
-        {card.combat && <span className="card-tag">{t('combatCard')}</span>}
+        {card.combat && <span className="card-tag">{t(MAP_PLAY.includes(card.id) ? 'combatAndMapCard' : 'combatCard')}</span>}
         {isPassive(card.id) && <span className="card-tag passive">{t('passiveCard')}</span>}
       </span>
       <span className="card-art"><CardArt card={card.id} size={large ? 96 : 34} /></span>

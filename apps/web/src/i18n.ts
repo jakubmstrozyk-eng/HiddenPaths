@@ -83,6 +83,7 @@ const UI = {
   tapDie: { pl: 'Dotknij kości, by rzucić', en: 'Tap the die to roll' },
   skillCards: { pl: 'Karty umiejętności', en: 'Skill cards' },
   combatCard: { pl: 'Walka', en: 'Combat' },
+  combatAndMapCard: { pl: 'Walka i mapa', en: 'Fight and map' },
   passiveCard: { pl: 'Pasywna', en: 'Passive' },
   playCard: { pl: 'Zagraj kartę', en: 'Play the card' },
   cardPassive: { pl: 'Karta pasywna: działa sama, gdy przyjdzie jej chwila. Nie trzeba jej zagrywać.', en: 'Passive card: it works on its own when its moment comes. You never need to play it.' },

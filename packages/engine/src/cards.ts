@@ -45,8 +45,21 @@ export function refreshCards(actor: Pick<ActorState, 'counters'>) {
 
 const trapKey = (cell: number) => `trap:${cell}`;
 
-/** Cards the player can play outside a fight right now. */
+/**
+ * Cards the hero may also play in the middle of an event, before answering it (Jacob, 2026-11-27: cards such as
+ * Empowered Weapon are an ordinary action outside a fight too). Only quick ones that act on the hero: a buff for the
+ * coming test or fight, or first aid. Crafting, scouting, traps and the like wait until the event is over.
+ */
+export const EVENT_CARDS = ['elder-nature', 'warrior-rations', 'runemaster-empower', 'elder-herb', 'explorer-bandages', 'wraith-leaves'];
+
+/** Cards the player can play outside a fight right now: on the map, or during an event (only EVENT_CARDS). */
 export function playableCards(state: GameState, player: PlayerState): string[] {
+  if (player.combat || player.pendingEvent?.puzzle) return [];
+  const all = mapCards(state, player);
+  return player.pendingEvent ? all.filter((card) => EVENT_CARDS.includes(card)) : all;
+}
+
+function mapCards(state: GameState, player: PlayerState): string[] {
   const out: string[] = [];
   if (has(player, 'wraith-haste') && !isSpent(player, 'wraith-haste')) out.push('wraith-haste');
   if (has(player, 'warrior-rations') && usesLeft(player, 'warrior-rations')! > 0) out.push('warrior-rations');
