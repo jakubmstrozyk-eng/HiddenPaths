@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EVENTS, EVENT_BY_ID, ITEMS, ENEMIES } from '@hp/content';
+import { LEVEL_XP } from '../src/character';
 import {
   applyAction, createGame, currentPlayer, legalActions, neighbours, startCombat, strengthStep, worldView, Rng,
   type Action, type CharacterInput, type GameConfig, type GameState,
@@ -236,7 +237,7 @@ describe('levelling and winning', () => {
   it('a level gives 20 attribute points and +2 Vitality, and the points can be spent', () => {
     let state = withCard(game(), 12);
     const p = currentPlayer(state);
-    p.character.xp = 9;
+    p.character.xp = LEVEL_XP[2]! - 1;
     const maxVit = p.character.maxVitality;
     // Choose to walk on (no XP); then give XP through a fight win.
     p.combat = startCombat(worldView(state), ['imp']);
