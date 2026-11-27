@@ -43,13 +43,13 @@ export const TRAITS: Record<TraitId, Trait> = {
     plus: t('+5 do testów Zręczności w lochu (pułapki).', '+5 to Dexterity tests in the dungeon (traps).'),
     minus: t('Pierwszy atak w każdej walce −5.', 'The first attack of every fight −5.') },
   merciful: { id: 'merciful', axis: 'mercy', side: -1, name: t('Litościwy', 'Merciful'),
-    plus: t('+5 Charyzmy w osadach. Opcja „Oszczędź” na niektórych kartach.', '+5 Charisma in settlements. A "Spare" choice on some cards.'),
+    plus: t('+5 Charyzmy w osadach. Własne, łagodne wybory na niektórych kartach.', '+5 Charisma in settlements. Gentle choices of its own on some cards.'),
     minus: t('Po walce z ludźmi zabiera 1 złoto mniej.', 'Takes 1 gold less after a fight with people.') },
   ruthless: { id: 'ruthless', axis: 'mercy', side: 1, name: t('Bezwzględny', 'Ruthless'),
-    plus: t('+1 złota po walce z ludźmi. Opcja „Zastrasz” (S.) na niektórych kartach.', '+1 gold after a fight with people. An "Intimidate" (Str) choice on some cards.'),
+    plus: t('+1 złota po walce z ludźmi. Wybory siłowe (zastraszenie, S.) na niektórych kartach.', '+1 gold after a fight with people. Rough choices (intimidation, Str) on some cards.'),
     minus: t('−5 Charyzmy w osadach.', '−5 Charisma in settlements.') },
   curious: { id: 'curious', axis: 'curiosity', side: -1, name: t('Dociekliwy', 'Curious'),
-    plus: t('+5 Inteligencji w kartach wydarzeń. Opcja „Zbadaj” na niektórych kartach.', '+5 Intelligence on event cards. An "Investigate" choice on some cards.'),
+    plus: t('+5 Inteligencji w kartach wydarzeń. Wybory „zbadaj, wypytaj” na niektórych kartach.', '+5 Intelligence on event cards. "Look closer, ask around" choices on some cards.'),
     minus: t('−5 Zręczności w lochu (pułapki trafiają częściej).', '−5 Dexterity in the dungeon (traps hit more often).') },
   prudent: { id: 'prudent', axis: 'curiosity', side: 1, name: t('Rozważny', 'Prudent'),
     plus: t('Pierwszy test w każdym zejściu do lochu łatwy (+10).', 'The first test of every trip down the dungeon is easy (+10).'),
@@ -58,7 +58,7 @@ export const TRAITS: Record<TraitId, Trait> = {
     plus: t('Spełnione postanowienie: +1 Punkt Doświadczenia więcej.', 'A kept vow: +1 more Experience Point.'),
     minus: t('Porzucone postanowienie zabiera Natchnienie.', 'An abandoned vow takes away Inspiration.') },
   schemer: { id: 'schemer', axis: 'honour', side: 1, name: t('Kombinator', 'Schemer'),
-    plus: t('+5 Charyzmy w kartach wydarzeń. Opcja „Oszukaj” na niektórych kartach.', '+5 Charisma on event cards. A "Trick" choice on some cards.'),
+    plus: t('+5 Charyzmy w kartach wydarzeń. Wybory „oszukaj” na niektórych kartach.', '+5 Charisma on event cards. "Trick" choices on some cards.'),
     minus: t('Spełnione postanowienie: 1 Punkt Doświadczenia mniej.', 'A kept vow: 1 Experience Point less.') },
 };
 
@@ -99,32 +99,32 @@ export const JOURNAL_PROMPTS: JournalPrompt[] = [
     a('„Odpoczywam. Głupi pośpiech zabija.”', '"I rest. Foolish haste kills."', 'courage', 1),
     a('„Szukam kogoś, kto mi pomoże, i nie wstydzę się prosić.”', '"I look for someone to help me, and I am not ashamed to ask."', 'honour', -1),
   ] },
-  { id: 'fight', topic: 'fightWon', question: t('Walka z {name} dobiegła końca. Co czujesz, patrząc na pokonanego?', 'The fight with {name} is over. What do you feel, looking at the fallen?'), answers: [
+  { id: 'fight', topic: 'fightWon', question: t('Walka skończona (przeciwnik: {name}). Co czujesz, patrząc na pokonanego?', 'The fight is over (foe: {name}). What do you feel, looking at the fallen?'), answers: [
     a('„Nic. Tak wygląda ten świat.”', '"Nothing. That is how this world is."', 'mercy', 1),
     a('„Żal. Wolałbym, żeby to się skończyło inaczej.”', '"Sorrow. I wish it had ended otherwise."', 'mercy', -1),
     a('„Ciekawość. Muszę zrozumieć, jak walczył.”', '"Curiosity. I must understand how it fought."', 'curiosity', -1),
   ] },
-  { id: 'fled', topic: 'fled', question: t('Uciekłeś przed {name}. Jak to zapiszesz?', 'You ran from {name}. How will you write it down?'), answers: [
+  { id: 'fled', topic: 'fled', question: t('Ucieczka z walki (przeciwnik: {name}). Jak to zapiszesz?', 'You ran from a fight (foe: {name}). How will you write it down?'), answers: [
     a('„Mądry wojownik wie, kiedy odejść.”', '"A wise fighter knows when to leave."', 'courage', 1),
-    a('„Wrócę i dokończę to, co zacząłem.”', '"I will come back and finish what I started."', 'courage', -1),
+    a('„Wrócę i dokończę tę walkę.”', '"I will come back and finish this fight."', 'courage', -1),
     a('„Napiszę, że to był podstęp. Nikt nie musi wiedzieć.”', '"I will write it was a ruse. Nobody needs to know."', 'honour', 1),
   ] },
-  { id: 'died', topic: 'died', question: t('Ocknąłeś się daleko od miejsca, w którym padłeś. Czego nauczyła cię śmierć?', 'You woke far from where you fell. What did death teach you?'), answers: [
+  { id: 'died', topic: 'died', question: t('Przebudzenie daleko od miejsca upadku. Czego nauczyła cię śmierć?', 'You woke far from where you fell. What did death teach you?'), answers: [
     a('„Że nie ma czego się bać.”', '"That there is nothing to fear."', 'courage', -1),
     a('„Że trzeba patrzeć pod nogi.”', '"That I must watch my step."', 'courage', 1),
     a('„Że muszę dowiedzieć się, co mnie zabiło.”', '"That I must find out what killed me."', 'curiosity', -1),
   ] },
-  { id: 'person', topic: 'person', question: t('Spotkanie z: {name} nie daje ci spokoju. Co o tym myślisz?', 'Meeting {name} stays with you. What do you make of it?'), answers: [
-    a('„Dotrzymałem słowa i jestem z tego dumny.”', '"I kept my word and I am proud of it."', 'honour', -1),
+  { id: 'person', topic: 'person', question: t('Spotkanie: {name}. Co o tym myślisz?', 'A meeting: {name}. What do you make of it?'), answers: [
+    a('„Dane słowo to rzecz święta.”', '"A word given is sacred."', 'honour', -1),
     a('„Każdy chce czegoś ode mnie. Ja też umiem brać.”', '"Everyone wants something from me. I can take too."', 'honour', 1),
     a('„Chcę wiedzieć o tej osobie więcej.”', '"I want to know more about this person."', 'curiosity', -1),
   ] },
   { id: 'dungeon', topic: 'dungeon', question: t('W ciemności lochu słyszałeś własne serce. Co cię tam pchało?', 'In the dark of the dungeon you heard your own heart. What drove you on?'), answers: [
     a('„Skarb. Zawsze chodzi o skarb.”', '"Treasure. It is always about treasure."', 'honour', 1),
     a('„Tajemnica. Kto zbudował te komnaty?”', '"The mystery. Who built these rooms?"', 'curiosity', -1),
-    a('„Szedłem powoli, sprawdzając każdy kamień.”', '"I went slowly, testing every stone."', 'curiosity', 1),
+    a('„Ostrożność. Krok po kroku, kamień po kamieniu.”', '"Care. Step by step, stone by stone."', 'curiosity', 1),
   ] },
-  { id: 'event', topic: 'event', question: t('Dzisiejsza przygoda, {name}, wciąż chodzi ci po głowie. Co z niej wynosisz?', 'Today\'s adventure, {name}, is still on your mind. What do you take from it?'), answers: [
+  { id: 'event', topic: 'event', question: t('Przygoda „{name}” wciąż chodzi ci po głowie. Co z niej wynosisz?', 'The adventure "{name}" is still on your mind. What do you take from it?'), answers: [
     a('„Następnym razem rzucę się na głęboką wodę.”', '"Next time I will jump in at the deep end."', 'courage', -1),
     a('„Następnym razem dwa razy się zastanowię.”', '"Next time I will think twice."', 'curiosity', 1),
     a('„Liczy się to, jak potraktowałem innych.”', '"What matters is how I treated others."', 'mercy', -1),

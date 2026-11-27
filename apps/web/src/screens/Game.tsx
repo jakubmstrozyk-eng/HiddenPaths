@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
-  type Action, type GameMap, type GameState, type LogEntry, type PlayerState, type Side,
+  applyAction, canWriteJournal, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
 import { TerrainArt } from '../TerrainArt';
@@ -27,6 +27,7 @@ const TANNERY_LABEL = {
 import { CardCastHost } from '../CardArt';
 import { HurtFlash, hurtSound, munch } from '../Feedback';
 import { DungeonBoard } from '../Dungeon';
+import { Campfire, JournalBook, JournalChip } from '../Journal';
 
 /** Which side a hero first stands at, before the player picks one: the side nearest their homeland. */
 const HOME_SIDE: Record<RaceId, Side> = { humans: 'S', sunborn: 'W', keepers: 'W', flintborn: 'N', nomads: 'N', myrmids: 'E' };
@@ -135,7 +136,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [story, setStory] = useState<{ title: string; lines: string[] } | null>(null);
-  const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | null>(null);
+  const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | 'journal' | null>(null);
+  /** The campfire of the hero journal: after a camp, or before leaving the game (Jacob, 2026-11-27). */
+  const [campfire, setCampfire] = useState<{ leaving: boolean } | null>(null);
   const [storyTitle, setStoryTitle] = useState('');
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
@@ -258,6 +261,29 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     void submit?.(game, a);
   }, [game, me, lines, storyTitle, T, t, tx, cells, onChange, submit]);
 
+  /** A journal entry: written by this player, even when it is not their turn (camping ends the turn). */
+  const writeJournal = useCallback((entry?: JournalWrite) => {
+    const a: Action = { type: 'journal', ...(entry ? { entry } : {}) };
+    const next = applyAction(game, me.id, a);
+    const entries = newEntries(game, next).filter((e) => !('player' in e) || e.player === me.id);
+    setLast(entries);
+    const rolls = diceOf(entries, T);
+    if (rolls.length) setDice({ rolls, heading: tx({ pl: 'Bestiariusz · Inteligencja', en: 'Bestiary · Intelligence' }) });
+    const said = entries.filter((e) => e.type !== 'check').map((e) => describe(e, T)).filter((l): l is string => !!l);
+    if (entry && said.length) setStory({ title: tx({ pl: 'Dziennik Wędrowca', en: "Wanderer's Journal" }), lines: said });
+    onChange(next);
+    void submit?.(game, a);
+  }, [game, me.id, T, tx, onChange, submit]);
+  useEffect(() => {
+    if (me.journal?.open && !campfire && !me.pendingEvent && !me.combat) setCampfire({ leaving: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.version, me.id]);
+  /** Leaving the game: a last chance to write what happened since the last camp. */
+  const leave = () => {
+    if (canWriteJournal(me) && (me.journal?.facts.length ?? 0) > 0) setCampfire({ leaving: true });
+    else onMenu();
+  };
+
   // Eating is the player's own move. Ending the turn (or camping, which ends it) without having eaten
   // asks first: eat now and go on, or go on hungry.
   const meal = mealDue(game, me);
@@ -312,7 +338,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   return (
     <div className={`game ${shaking ? 'shaking' : ''}`}>
       <header className="hud">
-        <button className="ghost small with-icon" onClick={onMenu}><Icon name="menu" />{t('menu')}</button>
+        <button className="ghost small with-icon" onClick={leave}><Icon name="menu" />{t('menu')}</button>
         {canSave && (
           <button className="ghost small with-icon" onClick={() => setSheet('save')} title={tx({ pl: 'Zapisz grę', en: 'Save game' })}>
             <Icon name="save" />{tx({ pl: 'Zapisz grę', en: 'Save game' })}
@@ -324,6 +350,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             <b>{c.name}</b> · {t('level')} {c.level} · {t('round')} {game.round}
           </span>
         </div>
+        <JournalChip me={me} onOpen={() => setSheet('journal')} />
         <div className="stats">
           <MoveBar icon="speed" label={t('speed')} left={me.speedLeft} max={c.speed} kind="speed" />
           <MoveBar icon="stamina" label={t('stamina')} left={me.staminaLeft} max={c.stamina} kind="stamina" />
@@ -368,6 +395,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                     <span className={`frag-dungeon ${game.dungeon.plundered ? 'plundered' : ''}`} title={dungeonTheme ? tx(dungeonTheme.name) : ''}>
                       ⛬<small>{game.dungeon.plundered ? tx({ pl: 'Oczyszczony', en: 'Cleared' }) : tx({ pl: 'Loch', en: 'Dungeon' })}</small>
                     </span>
+                  )}
+                  {me.hints?.includes(cell.index) && !game.dungeon?.foundBy.includes(me.id) && (
+                    <span className="frag-hint" title={tx({ pl: 'Przeczucie ze snu: coś tu jest ukryte', en: 'A hunch from a dream: something is hidden here' })}>?</span>
                   )}
                   {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
                   {!seen && (
@@ -617,6 +647,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         <div className="dock-actions">
           <button className={`ghost with-icon ${c.unspentPoints > 0 ? 'badge' : ''}`} disabled={!quiet} onClick={() => setSheet('hero')}><Icon name="xp" />{t('heroSheet')}</button>
           <button className="ghost with-icon" disabled={!quiet} onClick={() => setSheet('bag')}><Icon name="bag" />{t('bag')}</button>
+          <button className="ghost with-icon" onClick={() => setSheet('journal')}><span aria-hidden="true">📖</span>{tx({ pl: 'Dziennik', en: 'Journal' })}</button>
         </div>
       </footer>
 
@@ -637,6 +668,29 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
         {sheet === 'hero' && quiet && <HeroSheet key="hero" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
+        {sheet === 'journal' && me.journal && (
+          <JournalBook
+            key="journal"
+            hero={c}
+            summary={me.journal.summary}
+            entries={me.journal.written}
+            inspiration={me.journal.inspiration}
+            vow={me.journal.vow}
+            level={c.level}
+            note={me.journal.summary.entries > me.journal.written.length ? tx({ pl: 'Kronika pokazuje wpisy z tej gry. Cały dziennik znajdziesz w ekranie Bohaterowie.', en: 'The chronicle shows entries from this game. The whole journal is on the Heroes screen.' }) : undefined}
+            onClose={() => setSheet(null)}
+          />
+        )}
+        {campfire && !dice && !onTheWay && !replay && !me.pendingEvent && !me.combat && (
+          <Campfire
+            key="campfire"
+            game={game}
+            me={me}
+            leaving={campfire.leaving}
+            onWrite={(entry) => { const leaving = campfire.leaving; setCampfire(null); writeJournal(entry); if (leaving) onMenu(); }}
+            onSkip={() => { const leaving = campfire.leaving; setCampfire(null); if (leaving) onMenu(); else writeJournal(); }}
+          />
+        )}
         {game.winner && !story && (
           <div className="overlay" key="won">
             <motion.article className="card victory" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
@@ -665,7 +719,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
         )}
         {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
-      {myTurn && !game.winner && !dice && !story && <Tip candidates={tipsFor()} />}
+      {myTurn && !game.winner && !dice && !story && !campfire && <Tip candidates={tipsFor()} />}
       <CardCastHost />
       <AnimatePresence>{hurt && <HurtFlash key={hurt.key} amount={hurt.amount} fatal={hurt.fatal} cause={hurt.cause} />}</AnimatePresence>
     </div>

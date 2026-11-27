@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
-import { eventOptions, isOutside, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
+import { cardTestBonus, eventOptions, isOutside, knownPerson, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
+import { JOURNAL_PEOPLE, PERSON_MARKS, TRAITS, type TraitId } from '@hp/content';
 import { EventScene } from '../EventScene';
 import { cardSwish } from '../Feedback';
 import { outcomeText, PUZZLE_NAME, puzzleBest, puzzleWorst, testLabel, testOf } from '../outcomeText';
@@ -100,6 +101,15 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
             {room ? <small>{tx(room.name)}</small> : here && here !== 'core' && <small>{tx(TERRAINS[here].name)}</small>}
           </header>
           <p className="ev-text">{tx(step.text ?? card.text)}</p>
+          {(() => {
+            const known = pending.step === 'start' ? knownPerson(me, card.id) : null;
+            const who = known && JOURNAL_PEOPLE.find((p) => p.id === known.id);
+            return who ? (
+              <p className="ev-known">
+                📖 {pl ? 'Z dziennika' : 'From your journal'}: <b>{tx(who.name)}</b>{known!.mark !== 'met' ? ` · ${tx(PERSON_MARKS[known!.mark])}` : ''} · {pl ? 'wiesz, czego się spodziewać: +10 do testów' : 'you know what to expect: +10 to tests'}
+              </p>
+            ) : null;
+          })()}
           {lines.length > 0 && (
             <ul className="ev-lines">
               {lines.map((l, i) => <li key={i}>{l}</li>)}
@@ -120,7 +130,7 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
               const test = testOf(option.then);
               const puzzle = option.then.find((o) => o.do === 'puzzle');
               const bonus = test?.raceBonus && test.raceBonus.race === me.character.race ? test.raceBonus.amount : 0;
-              const odds = test ? Math.round(successChance(me.character.attributes[test.attribute], testModifier(worldView(game), me, test.attribute, (test.modifier ?? 0) + bonus)) * 100) : null;
+              const odds = test ? Math.round(successChance(me.character.attributes[test.attribute], testModifier(worldView(game), me, test.attribute, (test.modifier ?? 0) + bonus + cardTestBonus(me, card.id, test.attribute))) * 100) : null;
               const rest = test ? option.then.filter((o) => o !== test) : option.then;
               const win = test ? [...(test.pass ?? []), ...rest] : rest;
               const cost = option.cost && [
@@ -138,6 +148,7 @@ export function EventPanel({ game, me, lines, act, hold = false }: { game: GameS
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: (pending.step === 'start' && !reduce ? 1.0 : 0.15) + n * 0.08 }}
                 >
+                  {option.trait && <span className="ev-trait">✒ {tx(TRAITS[option.trait as TraitId].name)}</span>}
                   <span className="ev-choice-label">{tx(option.label)}</span>
                   {puzzle && puzzle.do === 'puzzle' ? (
                     <span className="ev-chip puzzle">🧩 {PUZZLE_NAME[puzzle.puzzle.kind][locale]}</span>

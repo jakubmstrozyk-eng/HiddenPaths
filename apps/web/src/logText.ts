@@ -23,6 +23,7 @@ export function itemName(id: string, locale: Locale): string {
 }
 
 export function cardName(id: string, locale: Locale): string {
+  if (id === 'inspiration') return locale === 'pl' ? 'Natchnienie' : 'Inspiration';
   for (const prof of Object.values(PROFESSIONS)) {
     const card = prof.cards.find((c) => c.id === id);
     if (card) return card.name[locale];
@@ -163,6 +164,19 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       return pl
         ? `Ciemna materia znów przykrywa ${e.cells.length === 1 ? 'opuszczony fragment' : `opuszczone fragmenty (${e.cells.length})`}`
         : `Dark matter covers ${e.cells.length === 1 ? 'a forgotten fragment' : `${e.cells.length} forgotten fragments`} again`;
+    case 'journal':
+      switch (e.what) {
+        case 'entry': return (e.rewarded ? (pl ? 'Wpis w dzienniku' : 'Journal entry') : (pl ? 'Krótki wpis w dzienniku' : 'A short journal entry'))
+          + (e.enemy ? (e.ok ? (pl ? ' · Bestiariusz: notatka trafna, +5 do pierwszego testu w walce z tym wrogiem' : ' · Bestiary: a true note, +5 to the first test against this foe') : (pl ? ' · Bestiariusz: notatka chybiona, spróbujesz po kolejnej walce' : ' · Bestiary: the note missed, try again after the next fight')) : '');
+        case 'inspiration': return pl ? '+1 Natchnienie (jedno przerzucenie testu)' : '+1 Inspiration (one test thrown again)';
+        case 'vowKept': return pl ? `Postanowienie spełnione! +${e.xp} Punkty Doświadczenia i Natchnienie` : `Vow kept! +${e.xp} Experience Points and Inspiration`;
+        case 'vowBroken': return pl ? 'Porzucone postanowienie: Słowny traci Natchnienie' : 'A vow abandoned: the hero true to his word loses Inspiration';
+        case 'traits': return pl ? 'Twój charakter się zmienia' : 'Your character changes';
+        case 'chapter': return pl ? 'Rozdział zamknięty' : 'Chapter closed';
+        case 'omen': return pl ? 'Sen się spełnia: na mapie pojawia się znak zapytania' : 'The dream comes true: a question mark appears on the map';
+        case 'story': return e.ok ? (pl ? 'Podróżni słuchają z zapartym tchem. Gospodarz stawia kolację.' : 'The travellers hang on every word. The host stands you dinner.') : (pl ? 'Opowieść nie porwała słuchaczy.' : 'The tale did not catch on.');
+        default: return null;
+      }
     case 'hungry':
       return pl ? `Głód: ${e.rounds} rund bez jedzenia${e.vitalityLost ? `, −${e.vitalityLost} Żyw.` : ''}` : `Hunger: ${e.rounds} rounds without food${e.vitalityLost ? `, −${e.vitalityLost} Vit` : ''}`;
     default:

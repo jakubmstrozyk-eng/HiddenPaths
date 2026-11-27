@@ -482,10 +482,10 @@ export function writeJournal(state: GameState, player: PlayerState, write: Journ
   const text = clean(write.text, TEXT_LIMIT);
   if (text) entry.text = text;
   if (write.marks && Object.keys(write.marks).length) entry.marks = { ...write.marks };
-  // Bestiary: the guess is checked with an Intelligence test: easy (+10) for the true nature, hard (−20) otherwise.
+  // Bestiary: the guess is checked with an Intelligence test: easy (+10) for the true nature, hard (−10) otherwise.
   if (write.note && offer.note) {
     const rng = offerRng(state, player, 'noteTest');
-    const result = test(rng, c.attributes.int, write.note === offer.note.truth ? 10 : -20);
+    const result = test(rng, c.attributes.int, write.note === offer.note.truth ? 10 : -10);
     log({ type: 'check', player: player.id, attribute: 'int', result });
     entry.note = { enemy: offer.note.enemy, stat: offer.note.truth, confirmed: result.success };
   }
