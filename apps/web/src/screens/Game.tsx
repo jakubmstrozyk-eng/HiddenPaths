@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MAX_VOWS, MISSIONS, TERRAINS, VOWS, VOW_XP, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, eventOptions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
@@ -20,6 +20,7 @@ import { Tip, type TipId } from '../Tips';
 import { Icon, type IconName } from '../Icons';
 import { KeepCards, SkillHand } from '../SkillCards';
 import { Afflictions } from '../Afflictions';
+import { eventTestHeading, testOf } from '../outcomeText';
 
 /** Tannery: the parts of the body, as the card sheet names them (arms and legs are made as a pair here). */
 const TANNERY_LABEL = {
@@ -200,7 +201,13 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const rollHeading = (a: Action, who: PlayerState, entries: LogEntry[]): string | null => {
     const drawn = entries.find((e) => e.type === 'eventDrawn');
     if (drawn && drawn.type === 'eventDrawn') return tx(EVENT_BY_ID[drawn.card]!.title);
-    if (who.pendingEvent) return tx(EVENT_BY_ID[who.pendingEvent.card]!.title);
+    if (who.pendingEvent) {
+      // A test on the card: say plainly what is tested and why (Jacob, 2026-11-27), e.g. "Test: Siła Woli +10 · Opieram się zawodzeniu".
+      const chosen = a.type === 'event' ? eventOptions(game, who).find((o) => o.index === a.option)?.option : undefined;
+      const test = chosen && testOf(chosen.then);
+      if (chosen && test) return eventTestHeading(test, tx(chosen.label), locale);
+      return tx(EVENT_BY_ID[who.pendingEvent.card]!.title);
+    }
     if (entries.some((e) => e.type === 'dungeonSearch')) return tx({ pl: 'Coś tu jest? · szukasz ukrytego przejścia', en: 'Is something here? · looking for a hidden way' });
     if (a.type === 'terrain') return t(a.action as (typeof TERRAIN_ACTIONS)[number]);
     if (a.type === 'service') return t(a.service);
