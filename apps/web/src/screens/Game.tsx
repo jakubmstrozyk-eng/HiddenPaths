@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MISSIONS, TERRAINS, type RaceId, type TerrainAction } from '@hp/content';
+import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MAX_VOWS, MISSIONS, TERRAINS, VOWS, VOW_XP, type RaceId, type TerrainAction } from '@hp/content';
 import {
-  applyAction, canWriteJournal, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
+  activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
@@ -144,6 +144,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | 'journal' | null>(null);
   /** The campfire of the hero journal: after a camp, or before leaving the game (Jacob, 2026-11-27). */
   const [campfire, setCampfire] = useState<{ leaving: boolean } | null>(null);
+  /** The campfire opens by itself once per camp; after "Not now" the journal button still writes while the fire burns. */
+  const campShown = useRef(false);
   const [storyTitle, setStoryTitle] = useState('');
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[] } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
@@ -285,10 +287,14 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     void submit?.(game, a);
   }, [game, me.id, T, tx, onChange, submit]);
   useEffect(() => {
-    if (me.journal?.open && !campfire && !me.pendingEvent && !me.combat) setCampfire({ leaving: false });
+    if (!me.journal?.open) campShown.current = false;
+    else if (!campShown.current && !campfire && !me.pendingEvent && !me.combat) {
+      campShown.current = true;
+      setCampfire({ leaving: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.version, me.id]);
-  /** Leaving the game: a last chance to write what happened since the last camp. */
+  /** Leaving the game from a camp: a last chance to write what happened (only at camp, Jacob 2026-11-27). */
   const leave = () => {
     if (canWriteJournal(me) && (me.journal?.facts.length ?? 0) > 0) setCampfire({ leaving: true });
     else onMenu();
@@ -562,8 +568,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
               <button className="ghost act-btn journal-btn" onClick={() => (canWriteJournal(me) ? setCampfire({ leaving: false }) : setSheet('journal'))}>
                 <span className="act-title"><span aria-hidden="true">📖</span>{canWriteJournal(me) ? tx({ pl: 'Zapisz w dzienniku', en: 'Write in the journal' }) : tx({ pl: 'Otwórz dziennik', en: 'Open the journal' })}</span>
                 <small className="act-reward">{canWriteJournal(me)
-                  ? tx({ pl: 'Wpis o tym, co się wydarzyło od ostatniego · nie kończy tury', en: 'An entry on what happened since the last one · does not end the turn' })
-                  : tx({ pl: 'Kronika, charakter, znajomi, bestiariusz · nic nowego do zapisania', en: 'Chronicle, character, people, bestiary · nothing new to write' })}</small>
+                  ? tx({ pl: 'Jesteś w obozowisku: wpis o tym, co się wydarzyło od ostatniego', en: 'You are at camp: an entry on what happened since the last one' })
+                  : tx({ pl: 'Tylko do czytania · wpisy dodasz w obozowisku', en: 'Read only · entries are written at camp' })}</small>
               </button>
             )}
             {myTurn && actions.some((a) => a.type === 'camp') && (
@@ -687,7 +693,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             summary={me.journal.summary}
             entries={me.journal.written}
             inspiration={me.journal.inspiration}
-            vow={me.journal.vow}
+            vows={activeVows(me.journal)}
+            campNote
             level={c.level}
             note={me.journal.summary.entries > me.journal.written.length ? tx({ pl: 'Kronika pokazuje wpisy z tej gry. Cały dziennik znajdziesz w ekranie Bohaterowie.', en: 'The chronicle shows entries from this game. The whole journal is on the Heroes screen.' }) : undefined}
             onClose={() => setSheet(null)}
@@ -701,7 +708,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             me={me}
             leaving={campfire.leaving}
             onWrite={(entry) => { const leaving = campfire.leaving; setCampfire(null); writeJournal(entry); if (leaving) onMenu(); }}
-            onSkip={() => { const leaving = campfire.leaving; setCampfire(null); if (leaving) onMenu(); else writeJournal(); }}
+            onSkip={() => { const leaving = campfire.leaving; setCampfire(null); if (leaving) onMenu(); }}
           />
         )}
         {game.winner && !story && (
@@ -885,7 +892,37 @@ function GoalsPanel({ game, me }: { game: GameState; me: PlayerState }) {
           </div>
         );
       })}
+      {me.journal && <VowGoals me={me} />}
     </section>
+  );
+}
+
+/** The hero's vows beside the goals (Jacob, 2026-11-27): at most two at once, with an empty place showing what is free. */
+function VowGoals({ me }: { me: PlayerState }) {
+  const { tx, locale } = useT();
+  const vows = activeVows(me.journal!);
+  const pl = locale === 'pl';
+  return (
+    <>
+      <small className="goals-head vows-head">{pl ? `Postanowienia ${vows.length}/${MAX_VOWS}` : `Vows ${vows.length}/${MAX_VOWS}`}</small>
+      {vows.map((v) => {
+        const def = VOWS.find((d) => d.kind === v.kind);
+        if (!def) return null;
+        return (
+          <div key={v.kind} className="goal vow" title={tx(def.text)}>
+            <span className="goal-title"><b><span aria-hidden="true">✒ </span>{tx(def.text)}</b> <small>+{VOW_XP} {pl ? 'PD' : 'XP'}</small></span>
+            <span className="goal-bar"><motion.span initial={false} animate={{ width: `${(v.have / v.need) * 100}%` }} /></span>
+            <small className="goal-count">{v.have}/{v.need}</small>
+          </div>
+        );
+      })}
+      {Array.from({ length: Math.max(0, MAX_VOWS - vows.length) }, (_, i) => (
+        <div key={`free-${i}`} className="goal vow free">
+          <span className="goal-title"><b>{pl ? 'Wolne postanowienie' : 'Free vow'}</b></span>
+          <small className="goal-text">{pl ? 'Złożysz je w obozowisku' : 'Make one at camp'}</small>
+        </div>
+      ))}
+    </>
   );
 }
 
