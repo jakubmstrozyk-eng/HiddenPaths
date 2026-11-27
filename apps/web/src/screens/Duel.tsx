@@ -13,7 +13,7 @@ import { FoeFigure, HeroFigure } from '../ArmouredFigure';
 import { buzz, clack, ShakeToThrow, Verdict } from '../Throw';
 import { HitFx, hitKind } from '../HitFx';
 import { hurtSound } from '../Feedback';
-import { PixelFoe } from '../PixelHero';
+import { FoeArt } from '../HeroArt';
 import { cardName, combatLine, foeName, itemName } from '../logText';
 import { SkillHand } from '../SkillCards';
 
@@ -358,7 +358,7 @@ export function Duel({ game, me, entries, act, onReplayDone }: {
                       animate={step?.kind === 'hit' && step.target === pet.uid ? { x: [0, -8, 6, 0] } : step?.kind === 'hit' && step.who === pet.uid ? { x: [0, 30, 0] } : { x: 0 }}
                       title={foeName(pet.uid, locale)}
                     >
-                      <PixelFoe kind={ENEMIES[pet.enemy]!.kind} size={34} />
+                      <FoeArt kind={ENEMIES[pet.enemy]!.kind} size={34} />
                       <span className="bar hero-bar"><motion.span animate={{ width: `${(vit / pet.maxVitality) * 100}%` }} /></span>
                       <small>{vit}/{pet.maxVitality}{pet.tame ? '' : ` · ${locale === 'pl' ? 'więź' : 'bond'} ${pet.bond}/3`}</small>
                       {hitFx && step?.kind === 'hit' && step.target === pet.uid && <HitFx key={`pfx-${at}`} kind={hitFx} />}

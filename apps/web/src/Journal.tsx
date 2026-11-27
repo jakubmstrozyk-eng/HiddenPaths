@@ -10,7 +10,7 @@ import {
 } from '@hp/engine';
 import { useT } from './i18n';
 import { attrShort } from './logText';
-import { PixelHero } from './PixelHero';
+import { HeroArt } from './HeroArt';
 
 /**
  * The hero journal (Jacob, 2026-11-27): the campfire where an entry is written, and the book with every page.
@@ -256,7 +256,7 @@ export function JournalBook({ hero, summary, entries, inspiration, vow, level, o
           <button className="ghost small" onClick={onClose}>{t('close')}</button>
         </header>
         <div className="jr-front">
-          <PixelHero race={hero.race} profession={hero.profession} look={hero.look} size={56} />
+          <HeroArt race={hero.race} profession={hero.profession} look={hero.look} size={56} />
           <div>
             <b>{tx(cover.name)}</b> · {summary.entries} {pl ? plural(summary.entries, 'wpis', 'wpisy', 'wpisów') : summary.entries === 1 ? 'entry' : 'entries'}
             {summary.chapters.length > 0 && <div className="jr-muted">{pl ? 'Ostatni rozdział' : 'Last chapter'}: „{summary.chapters[summary.chapters.length - 1]!.title}”</div>}

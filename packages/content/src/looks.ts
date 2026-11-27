@@ -9,9 +9,11 @@ export interface HeroLook {
   skin?: string;
   hair?: string;
   cloth?: string;
+  /** Trousers, kilt or leg wraps. */
+  legwear?: string;
 }
 export const LOOK_OPTIONS = 5;
-export const LOOK_COLOURS = ['skin', 'hair', 'cloth'] as const;
+export const LOOK_COLOURS = ['skin', 'hair', 'cloth', 'legwear'] as const;
 
 /** Skin tones offered for each race: the first is the race's own. */
 export const SKIN_TONES: Record<RaceId, string[]> = {
@@ -22,10 +24,12 @@ export const SKIN_TONES: Record<RaceId, string[]> = {
   keepers: ['#b8e0a0', '#a8d0e8', '#ded6a8', '#8ac890', '#cdb0e8'],
   flintborn: ['#8a8f98', '#a69686', '#6a7080', '#b4aea6', '#7e6e8e'],
 };
-/** Colours for hair, fur, crests and the like. */
-export const HAIR_COLOURS = ['#1a1410', '#4a2e1a', '#8a5a2a', '#c89048', '#ecdca0', '#b03a2a', '#e8e8f0', '#4a9a3a', '#3a5aa8', '#8a3aa8'];
+/** Colours for hair, fur, headwear, crests and the like: whatever the chosen head has to colour. */
+export const HAIR_COLOURS = ['#1a1410', '#5a3a1a', '#9a6a32', '#e0c070', '#e8e8f0', '#b03a2a', '#e87aa8', '#4a9a3a', '#3a6ad0', '#7af0ff'];
 /** Colours for the hero's clothes. */
-export const CLOTH_COLOURS = ['#7a3b3b', '#2f5d7c', '#3f6b3a', '#8a6f3e', '#5a3a7a', '#a0802a', '#3a3a48', '#c8c0b0', '#a04a1a', '#2a7a7a'];
+export const CLOTH_COLOURS = ['#7a3b3b', '#c0502a', '#d8b040', '#3f6b3a', '#2a7a7a', '#2f5d7c', '#5a3a7a', '#3a3a48', '#e8e0d0', '#8a6f3e'];
+/** Colours for trousers and kilts. */
+export const LEGWEAR_COLOURS = ['#4a3a2e', '#2e2e36', '#6a6a72', '#3a4a6a', '#3f5a3a', '#7a3030', '#8a6a40', '#d8ccb0'];
 export const DEFAULT_LOOK: HeroLook = { head: 0, torso: 0, legs: 0 };
 
 /** Names of the look options shown while creating a hero, per race. */

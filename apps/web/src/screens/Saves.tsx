@@ -4,7 +4,7 @@ import { PROFESSIONS, RACES } from '@hp/content';
 import { currentPlayer, type GameState } from '@hp/engine';
 import { useT } from '../i18n';
 import { Icon } from '../Icons';
-import { PixelHero } from '../PixelHero';
+import { HeroArt } from '../HeroArt';
 import { listSaves, MAX_NAMED, removeSave, saveAs, type SaveSlot } from '../saves';
 import { Sheet } from './Sheets';
 
@@ -19,7 +19,7 @@ function SaveRow({ slot, children, onOpen }: { slot: SaveSlot; children?: React.
   const title = slot.auto ? tx({ pl: 'Autozapis', en: 'Autosave' }) : slot.name;
   return (
     <div className={`save-row ${onOpen ? 'pickable' : ''}`} onClick={onOpen} role={onOpen ? 'button' : undefined}>
-      <PixelHero race={hero.race} profession={hero.profession} look={hero.look} size={44} />
+      <HeroArt race={hero.race} profession={hero.profession} look={hero.look} size={44} />
       <div className="save-body">
         <b>{title}{slot.auto && <span className="mode-badge auto">{tx({ pl: 'auto', en: 'auto' })}</span>}</b>
         <small>

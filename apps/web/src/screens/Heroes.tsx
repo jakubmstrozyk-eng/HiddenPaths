@@ -2,7 +2,7 @@ import { BackArrow } from '../BackArrow';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  ATTRIBUTES, CLOTH_COLOURS, DEFAULT_DICE, DEFAULT_LOOK, DICE_STYLES, HAIR_COLOURS, LOOK_NAMES, LOOK_OPTIONS, SKIN_TONES, MISSIONS, PROFESSIONS, RACES,
+  ATTRIBUTES, CLOTH_COLOURS, DEFAULT_DICE, DEFAULT_LOOK, DICE_STYLES, HAIR_COLOURS, LEGWEAR_COLOURS, LOOK_NAMES, LOOK_OPTIONS, SKIN_TONES, MISSIONS, PROFESSIONS, RACES,
   type Attribute, type DiceLook, type HeroLook, type ProfessionId, type RaceId,
 } from '@hp/content';
 import {
@@ -12,8 +12,8 @@ import { heroGamesInPlay, HERO_GAMES } from '../saves';
 import { DieFace, diceStyle } from '../DiceFace';
 import type { HeroStore } from '../heroStore';
 import { useT } from '../i18n';
+import { HeroArt, RACE_DEFAULTS, headTint } from '../HeroArt';
 import { DiceWorkshop } from '../DiceWorkshop';
-import { PixelHero } from '../PixelHero';
 import { WorldMap } from '../WorldMap';
 import { Choice } from './Setup';
 import { JournalBook } from '../Journal';
@@ -46,7 +46,7 @@ export function HeroCard({ hero, active, onClick, children }: { hero: Hero; acti
   const { t, tx } = useT();
   return (
     <div className={`hero-card ${active ? 'active' : ''} ${onClick ? 'pickable' : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} aria-pressed={onClick ? !!active : undefined}>
-      <div className="hero-card-avatar"><PixelHero race={hero.race} profession={hero.profession} look={hero.look} size={72} /></div>
+      <div className="hero-card-avatar"><HeroArt race={hero.race} profession={hero.profession} look={hero.look} size={72} /></div>
       <div className="hero-card-body">
         <b>{hero.name}</b>
         <small>{tx(RACES[hero.race].name)} · {tx(PROFESSIONS[hero.profession].name)} · {t('level')} {hero.growth?.level ?? 1}{hero.growth ? ` · ${hero.growth.xp} ${t('xp')}` : ''}</small>
@@ -266,6 +266,37 @@ function Parchment({ onDone }: { onDone: () => void }) {
 
 const PART_KEY = { head: 'lookHead', torso: 'lookTorso', legs: 'lookLegs' } as const;
 
+type ColourKey = 'skin' | 'hair' | 'cloth' | 'legwear';
+/** The look with this colour, or without it (back to the race's own) when it is the race's own. */
+function withColour(look: HeroLook, key: ColourKey, colour: string | null): HeroLook {
+  const { [key]: _drop, ...rest } = look;
+  return colour ? { ...rest, [key]: colour } : rest;
+}
+
+/** One line of the appearance: the part's name, its option and, beside it, its colour. */
+function LookPart({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="look-part">
+      <span className="look-label">{label}</span>
+      <div className="look-body">{children}</div>
+    </div>
+  );
+}
+
+/** A row of colours, the first being the race's (or the part's) own. */
+function Swatches({ colours, base, value, onPick, label }: { colours: string[]; base: string; value?: string; onPick: (c: string | null) => void; label: string }) {
+  const { tx } = useT();
+  const list = colours.filter((c) => c.toLowerCase() !== base.toLowerCase());
+  return (
+    <div className="swatches" role="group" aria-label={label}>
+      <button className={`swatch swatch-base ${!value ? 'active' : ''}`} style={{ background: base }} title={tx({ pl: 'Domyślny', en: 'Default' })} aria-label={tx({ pl: 'Domyślny', en: 'Default' })} aria-pressed={!value} onClick={() => onPick(null)} />
+      {list.map((c) => (
+        <button key={c} className={`swatch ${value === c ? 'active' : ''}`} style={{ background: c }} aria-label={c} aria-pressed={value === c} onClick={() => onPick(c)} />
+      ))}
+    </div>
+  );
+}
+
 type Step = 'intro' | 'world' | 'look' | 'attrs' | 'dice' | 'name';
 const STEPS: Step[] = ['intro', 'world', 'look', 'attrs', 'dice', 'name'];
 
@@ -346,7 +377,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
               {focused && (
                 <motion.aside key={focused.id} className="race-info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                   <div className="race-info-head">
-                    <PixelHero race={focused.id} profession={Object.values(PROFESSIONS).find((p) => p.race === focused.id && p.mvp)!.id} size={64} />
+                    <HeroArt race={focused.id} profession={Object.values(PROFESSIONS).find((p) => p.race === focused.id && p.mvp)!.id} size={88} />
                     <h3>{tx(focused.name)}</h3>
                   </div>
                   <p>{tx(focused.blurb)}</p>
@@ -367,8 +398,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
           <h2>{tx(r.name)}</h2>
           <div className="look">
             <div className="look-preview">
-              <PixelHero race={race} profession={profession} look={look} size={192} />
-              <PixelHero race={race} profession={profession} look={look} size={64} walking />
+              <HeroArt race={race} profession={profession} look={look} size={220} />
             </div>
             <div className="look-options">
               <h3>{t('profession')}</h3>
@@ -381,36 +411,31 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
                 ))}
               </div>
               <h3>{t('looks')}</h3>
-              {(['head', 'torso', 'legs'] as const).map((part) => (
-                <div key={part} className="look-part">
-                  <span>{t(PART_KEY[part])}</span>
-                  <button aria-label={`← ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + LOOK_OPTIONS - 1) % LOOK_OPTIONS })}>‹</button>
-                  <b>{tx(LOOK_NAMES[race][part][look[part]]!)} <small className="look-count">{look[part] + 1}/{LOOK_OPTIONS}</small></b>
-                  <button aria-label={`→ ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + 1) % LOOK_OPTIONS })}>›</button>
-                </div>
-              ))}
-              <h3>{tx({ pl: 'Kolory', en: 'Colours' })}</h3>
-              {([
-                ['skin', tx({ pl: 'Skóra', en: 'Skin' }), SKIN_TONES[race]],
-                ['hair', tx({ pl: 'Włosy i ozdoby', en: 'Hair and crest' }), HAIR_COLOURS],
-                ['cloth', tx({ pl: 'Strój', en: 'Clothes' }), CLOTH_COLOURS],
-              ] as const).map(([part, label, colours]) => (
-                <div key={part} className="look-colour">
-                  <span>{label}</span>
-                  <div className="swatches">
-                    <button
-                      className={`swatch swatch-auto ${!look[part] ? 'active' : ''}`}
-                      title={tx({ pl: 'Barwy rasy', en: "The race's own" })}
-                      aria-label={tx({ pl: 'Barwy rasy', en: "The race's own" })}
-                      aria-pressed={!look[part]}
-                      onClick={() => { const { [part]: _drop, ...rest } = look; setLook(rest); }}
-                    >↺</button>
-                    {colours.map((c) => (
-                      <button key={c} className={`swatch ${look[part] === c ? 'active' : ''}`} style={{ background: c }} aria-label={c} aria-pressed={look[part] === c} onClick={() => setLook({ ...look, [part]: c })} />
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <LookPart label={tx({ pl: 'Skóra', en: 'Skin' })}>
+                <Swatches colours={SKIN_TONES[race]} base={RACE_DEFAULTS[race].skin} value={look.skin} onPick={(c) => setLook(withColour(look, 'skin', c))} label={tx({ pl: 'Kolor skóry', en: 'Skin colour' })} />
+              </LookPart>
+              {(['head', 'torso', 'legs'] as const).map((part) => {
+                const colour = part === 'head' ? headTint(race, look.head) : part === 'torso'
+                  ? { label: { pl: 'Kolor stroju', en: 'Clothes colour' }, colour: RACE_DEFAULTS[race].cloth }
+                  : { label: { pl: 'Kolor spodni', en: 'Trousers colour' }, colour: RACE_DEFAULTS[race].legwear };
+                const key = part === 'head' ? 'hair' : part === 'torso' ? 'cloth' : 'legwear';
+                const list = part === 'head' ? HAIR_COLOURS : part === 'torso' ? CLOTH_COLOURS : LEGWEAR_COLOURS;
+                return (
+                  <LookPart key={part} label={t(PART_KEY[part])}>
+                    <div className="look-cycle">
+                      <button aria-label={`← ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + LOOK_OPTIONS - 1) % LOOK_OPTIONS })}>‹</button>
+                      <b>{tx(LOOK_NAMES[race][part][look[part]]!)} <small className="look-count">{look[part] + 1}/{LOOK_OPTIONS}</small></b>
+                      <button aria-label={`→ ${t(PART_KEY[part])}`} onClick={() => setLook({ ...look, [part]: (look[part] + 1) % LOOK_OPTIONS })}>›</button>
+                    </div>
+                    {colour && (
+                      <div className="look-tint">
+                        <small>{tx(colour.label)}</small>
+                        <Swatches colours={list} base={colour.colour} value={look[key]} onPick={(c) => setLook(withColour(look, key, c))} label={tx(colour.label)} />
+                      </div>
+                    )}
+                  </LookPart>
+                );
+              })}
             </div>
           </div>
         </>
@@ -441,7 +466,7 @@ export function CreateHeroScreen({ store, mode: presetMode, multiAllowed, onBack
 
       {step === 'name' && (
         <>
-          <div className="look-preview single"><PixelHero race={race} profession={profession} look={look} size={128} /></div>
+          <div className="look-preview single"><HeroArt race={race} profession={profession} look={look} size={128} /></div>
           <h3>{t('name')}</h3>
           <input className="name" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Ara" autoFocus />
           <h3>{t('heroMode')}</h3>
