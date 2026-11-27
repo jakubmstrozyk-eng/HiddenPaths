@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROFESSIONS, type ProfessionId, type RaceId } from '@hp/content';
+import { EVENTS, PROFESSIONS, type ProfessionId, type RaceId } from '@hp/content';
 import {
   applyAction, combatMoves, combatTurn, createGame, heroArmour, heroTest, legalActions, Rng, runTerrainAction, startCombat, testModifier, worldView,
   type GameState,
@@ -191,6 +191,27 @@ describe('the six professions added after the MVP', () => {
     expect(e.amount).toBe(2);
     expect(e.untilRound).toBe(g.round + 2);
     expect(legalActions(g, 'p').some((a) => a.type === 'card' && a.card === 'runemaster-empower')).toBe(false);
+  });
+
+  it('quick skill cards can be played during an event, before it is answered; the rest wait', () => {
+    let g = make('flintborn', 'runemaster');
+    const p = g.players[0]!;
+    p.character.cards.push('elder-nature', 'trapper-tannery');
+    p.counters.hides = 5;
+    p.pendingEvent = { card: EVENTS[0]!.id, step: 'start' };
+    const cards = legalActions(g, 'p').flatMap((a) => (a.type === 'card' ? [a.card] : []));
+    expect(cards).toContain('runemaster-empower');
+    expect(cards).toContain('elder-nature');
+    expect(cards).not.toContain('trapper-tannery');
+    expect(() => applyAction(g, 'p', { type: 'card', card: 'trapper-tannery' })).toThrow();
+    g = applyAction(g, 'p', { type: 'card', card: 'runemaster-empower' });
+    expect(g.players[0]!.pendingEvent).toBeTruthy();
+    expect(g.players[0]!.effects.some((e) => e.id === 'empower')).toBe(true);
+    // In a fight the map version is not offered: the card is a combat move there.
+    const q = g.players[0]!;
+    q.pendingEvent = null;
+    q.combat = startCombat(worldView(g), ['wolf']);
+    expect(() => applyAction(g, 'p', { type: 'card', card: 'elder-nature' })).toThrow();
   });
 
   it('Runemaster · Vise: a failed mining test is thrown again', () => {

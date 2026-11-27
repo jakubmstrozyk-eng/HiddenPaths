@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
-import { cardTestBonus, eventOptions, isOutside, knownPerson, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
-import { JOURNAL_PEOPLE, PERSON_MARKS, TRAITS, type TraitId } from '@hp/content';
+import { cardTestBonus, eventOptions, isOutside, legalActions, knownPerson, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
+import { JOURNAL_PEOPLE, PERSON_MARKS, PROFESSIONS, TRAITS, type TraitId } from '@hp/content';
 import { EventScene } from '../EventScene';
 import { cardSwish } from '../Feedback';
 import { LEVEL_XP } from '@hp/engine';
@@ -40,6 +40,9 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
   const card = EVENT_BY_ID[pending.card]!;
   const step = card.steps[pending.step]!;
   const options = eventOptions(game, me);
+  // Quick skill cards (a buff for the test, first aid) may be played before answering.
+  const playable = new Set(legalActions(game, me.id).flatMap((a) => (a.type === 'card' ? [a.card] : [])));
+  const quickCards = PROFESSIONS[me.character.profession].cards.filter((c) => playable.has(c.id));
   const here = isOutside(me) ? null : landAt(game.map, me.position);
   // A dungeon room plays as a card too, marked with the dungeon's name instead of the deck's number.
   const room = isDungeonCard(card.id) ? DUNGEON_THEMES[themeOfCard(card.id)!] : null;
@@ -174,6 +177,14 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
               );
             })}
           </div>
+          {!hold && quickCards.length > 0 && (
+            <div className="ev-cards">
+              <div className="ev-rule"><span>{pl ? 'Karty przed wyborem' : 'Cards before you choose'}</span></div>
+              {quickCards.map((card) => (
+                <button key={card.id} className="ghost" onClick={() => act({ type: 'card', card: card.id })}>🂠 {tx(card.name)}</button>
+              ))}
+            </div>
+          )}
           </>)}
           <XpFoot gained={xp} xp={me.character.xp} level={me.character.level} />
         </motion.article>
