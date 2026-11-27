@@ -20,7 +20,7 @@ interface Body {
   x: number; y: number; z: number;
   vx: number; vy: number; vz: number;
   a: number; va: number;
-  /** Fake tumbling while it flies: squashes the die along one axis. */
+  /** How far the die has rolled; drives the flicker of faces only. */
   tumble: number;
   sides: number; tens: boolean;
   final: string;
@@ -94,8 +94,8 @@ export function DiceTray({ rolls, onDone, dice, heading, base }: {
       if (!el || !sh) return;
       const lift = b.z * 0.45;
       const scale = 1 + b.z / 240;
-      const squash = 0.6 + 0.4 * Math.abs(Math.cos(b.tumble));
-      el.style.transform = `translate(${b.x - r}px, ${b.y - r - lift}px) rotate(${b.a}deg) scale(${scale * squash}, ${scale})`;
+      // The die keeps its shape: it only turns, and looks a little bigger while it is in the air.
+      el.style.transform = `translate(${b.x - r}px, ${b.y - r - lift}px) rotate(${b.a}deg) scale(${scale})`;
       sh.style.transform = `translate(${b.x - r + b.z * 0.18}px, ${b.y - r + 4 + b.z * 0.12}px) scale(${1 + b.z / 160})`;
       sh.style.opacity = String(Math.max(0.15, 0.55 - b.z / 400));
     };
