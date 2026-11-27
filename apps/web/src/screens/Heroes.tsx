@@ -6,7 +6,7 @@ import {
   type Attribute, type DiceLook, type HeroLook, type ProfessionId, type RaceId,
 } from '@hp/content';
 import {
-  BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, summarize, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
+  BONUS_POINTS, MISSIONS_KEPT, Rng, careerProgress, heroVows, summarize, drawMissionChoices, missionGoal, type SizePreset, heroFits, seedFromString, validateHero, type Hero,
 } from '@hp/engine';
 import { heroGamesInPlay, HERO_GAMES } from '../saves';
 import { DieFace, diceStyle } from '../DiceFace';
@@ -124,7 +124,7 @@ export function HeroesScreen({ store, onBack, onCreate }: { store: HeroStore; on
             summary={summarize(reading.journal?.entries ?? [])}
             entries={reading.journal?.entries ?? []}
             inspiration={reading.journal?.inspiration ?? 0}
-            vow={reading.journal?.vow ?? null}
+            vows={heroVows(reading.journal)}
             level={reading.growth?.level ?? 1}
             onClose={() => setReading(null)}
           />

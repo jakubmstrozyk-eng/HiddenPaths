@@ -311,6 +311,8 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   }
 
   if (player.delve && MAP_ONLY.has(action.type)) throw new EngineError('dungeon.inside', 'Climb out of the dungeon first.');
+  // The journal is written only at camp (Jacob, 2026-11-27): the campfire stays lit until the hero does something else.
+  if (player.journal?.open && action.type !== 'camp' && action.type !== 'eat' && !anytime) player.journal.open = false;
 
   switch (action.type) {
     case 'dungeon':
@@ -754,7 +756,7 @@ function journalAction(prev: GameState, playerId: string, action: Extract<Action
   const state = structuredClone(prev);
   const player = state.players.find((p) => p.id === playerId);
   if (!player) throw new EngineError('game.player', 'No such player.');
-  if (action.entry && !canWriteJournal(player)) throw new EngineError('journal.nothing', 'Nothing new to write yet.');
+  if (action.entry && !canWriteJournal(player)) throw new EngineError('journal.camp', 'The journal is written only at camp.');
   writeJournal(state, player, action.entry, (e) => log(state, e));
   if (state.log.length > LOG_LIMIT) state.log.splice(0, state.log.length - LOG_LIMIT);
   state.version++;
