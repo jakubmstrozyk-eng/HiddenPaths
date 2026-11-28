@@ -63,24 +63,35 @@ describe('dark matter returns', () => {
     return cell.index;
   }
 
-  it(`covers a fragment nobody stood on for ${COVER_AFTER_ROUNDS} rounds, with new terrain beneath`, () => {
+  it(`covers a fragment ${COVER_AFTER_ROUNDS} rounds after it was discovered, with new terrain beneath`, () => {
     let game = standingOn('forest');
     const away = seenAway(game, 'fields');
     game.lastVisit = { [away]: 1 };
     game.depleted = { [`${away}:hunt`]: 3 };
-    for (let r = 1; r <= COVER_AFTER_ROUNDS; r++) {
+    // Seen in round 1: still there in rounds 1-5.
+    for (let r = 1; r < COVER_AFTER_ROUNDS; r++) {
       game = pass(game);
       expect(currentPlayer(game).revealed).toContain(away);
     }
-    // Rounds 2-6 passed without anyone there: at the start of round 7 it goes dark.
+    // At the start of round 6 it goes dark.
     game = pass(game);
-    expect(game.round).toBe(2 + COVER_AFTER_ROUNDS);
+    expect(game.round).toBe(1 + COVER_AFTER_ROUNDS);
     expect(currentPlayer(game).revealed).not.toContain(away);
     expect(game.log.some((e) => e.type === 'covered' && e.cells.includes(away))).toBe(true);
     expect(Object.keys(game.depleted ?? {}).some((k) => k.startsWith(`${away}:`))).toBe(false);
     expect(['forest', 'mountains', 'fields', 'river', 'lake', 'desert', 'cave']).toContain(game.map.cells[away]!.terrain);
     // The fragment the hero stands on stays in sight.
     expect(currentPlayer(game).revealed).toContain(currentPlayer(game).position);
+  });
+
+  it('starts the count for fragments of older saves that have none', () => {
+    let game = standingOn('forest');
+    const away = seenAway(game, 'fields');
+    delete game.lastVisit;
+    for (let r = 0; r < COVER_AFTER_ROUNDS; r++) game = pass(game);
+    expect(currentPlayer(game).revealed).toContain(away);
+    game = pass(game);
+    expect(currentPlayer(game).revealed).not.toContain(away);
   });
 
   it('keeps the centre, towns, inns and monuments, and the fragment a hero stands on', () => {
@@ -93,18 +104,26 @@ describe('dark matter returns', () => {
     expect(game.map.cells[city]!.terrain).toBe('city');
   });
 
-  it('a hero walking back in keeps the fragment uncovered', () => {
+  it('walking back over a fragment does not restart its count; standing on it keeps it until the hero leaves', () => {
     let game = standingOn('forest');
     const p = currentPlayer(game);
     const start = p.position;
     const next = neighbours(game.map, start).find((n) => game.map.cells[n]!.terrain !== 'core' && insideMap(game.map.cells[n]!))!;
-    (game.map.cells[next] as { terrain: string }).terrain = 'village';
+    (game.map.cells[next] as { terrain: string }).terrain = 'fields';
+    (game.map.cells[start] as { terrain: string }).terrain = 'forest';
+    p.revealed.push(next);
+    game.lastVisit = { [start]: 1, [next]: 1 };
     p.character.speed = 9;
     game = applyAction(game, 'p1', { type: 'move', to: next });
     for (let r = 0; r < 4; r++) game = pass(game);
     game = applyAction(game, 'p1', { type: 'move', to: start });
     game = applyAction(game, 'p1', { type: 'move', to: next });
-    for (let r = 0; r < 4; r++) game = pass(game);
-    expect(currentPlayer(game).revealed).toContain(start);
+    game = pass(game);
+    // Round 5 ends: the start fragment, discovered in round 1, goes dark despite the walk back.
+    expect(game.round).toBe(6);
+    expect(currentPlayer(game).revealed).not.toContain(start);
+    // The hero stood on `next` the whole time: it stays until they leave.
+    for (let r = 0; r < 3; r++) game = pass(game);
+    expect(currentPlayer(game).revealed).toContain(next);
   });
 });

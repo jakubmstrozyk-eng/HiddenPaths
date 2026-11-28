@@ -11,7 +11,7 @@ type Txt = { pl: string; en: string };
 type Chip = { icon: IconName; name: Txt; value: Txt };
 
 /** How long the reveal stays before it fades by itself (a few seconds, Jacob 2026-11-28). */
-export const DISCOVERY_MS = 3800;
+export const DISCOVERY_MS = 5800;
 
 /** The short label under each action: what one success brings. Mirrors actionInfo, kept tiny for the reveal. */
 function chipOf(action: TerrainAction, terrain: TerrainId): Chip | null {

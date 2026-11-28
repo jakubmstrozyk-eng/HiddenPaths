@@ -5,8 +5,9 @@ import type { GameState } from './state';
 
 /**
  * Jacob's rules (2026-11-26): a successful hunt, gathering, herb picking or mining empties that
- * resource on the fragment for 3 rounds, for every hero. A fragment nobody has stood on for 5 rounds
- * is covered by dark matter again, and a new random fragment lies hidden beneath it.
+ * resource on the fragment for 3 rounds, for every hero. A fragment is covered by dark matter again
+ * 5 rounds after it was discovered, and a new random fragment lies hidden beneath it (Jacob, 2026-11-28:
+ * the count starts at discovery and walking over the fragment again does not restart it).
  */
 export const DEPLETION_ROUNDS = 3;
 export const COVER_AFTER_ROUNDS = 5;
@@ -37,10 +38,10 @@ export function deplete(state: GameState, cell: number, action: TerrainAction): 
   return until;
 }
 
-/** A hero stands on (or has just seen) a fragment this round. */
+/** A fragment is discovered (stepped on or seen from afar) this round: its 5 rounds start now. */
 export function markVisit(state: GameState, cell: number) {
   if (cell < 0) return;
-  (state.lastVisit ??= {})[cell] = state.round;
+  (state.lastVisit ??= {})[cell] ??= state.round;
 }
 
 /** Fragments that never change under the dark matter: the centre, towns, inns and monuments. */
@@ -56,22 +57,28 @@ function newTerrain(state: GameState, rng: Rng): TerrainId {
 }
 
 /**
- * At the start of a round: every fragment that has been empty of heroes for COVER_AFTER_ROUNDS rounds
- * goes dark for everyone and gets a new random terrain. Returns the fragments covered.
+ * At the start of a round: every fragment discovered COVER_AFTER_ROUNDS rounds ago goes dark for
+ * everyone and gets a new random terrain. A fragment a hero stands on waits until they leave it.
+ * Returns the fragments covered.
  */
 export function coverForgotten(state: GameState, rng: Rng): number[] {
-  const visits = state.lastVisit ?? {};
+  const seen = (state.lastVisit ??= {});
+  // Games saved before the count existed (or fragments seen without it): the count starts now.
+  for (const p of state.players) for (const cell of p.revealed) seen[cell] ??= state.round;
   const occupied = new Set(state.players.map((p) => p.position));
   const covered: number[] = [];
-  for (const [cellKey, round] of Object.entries(visits)) {
+  for (const [cellKey, round] of Object.entries(seen)) {
     const cell = Number(cellKey);
-    if (occupied.has(cell) || state.round - round <= COVER_AFTER_ROUNDS) continue;
+    if (occupied.has(cell) || state.round - round < COVER_AFTER_ROUNDS) continue;
     const c = state.map.cells[cell];
-    delete visits[cell];
-    // The dungeon's entrance stays where it is, like a town or a monument.
+    delete seen[cell];
+    // Towns, inns, monuments, the centre and the dungeon's entrance stay where they are.
     if (!c || !insideMap(c) || !coverable(c.terrain) || state.dungeon?.cell === cell) continue;
     c.terrain = newTerrain(state, rng);
-    for (const p of state.players) p.revealed = p.revealed.filter((x) => x !== cell);
+    for (const p of state.players) {
+      p.revealed = p.revealed.filter((x) => x !== cell);
+      delete p.counters[`peeked:${cell}`];
+    }
     for (const k of Object.keys(state.depleted ?? {})) if (k.startsWith(`${cell}:`)) delete state.depleted![k];
     covered.push(cell);
   }

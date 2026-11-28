@@ -154,7 +154,7 @@ export interface GameState {
   eventDeck: number[];
   /** `cell:action` → the round the resource is back (missing in older saves). */
   depleted?: Record<string, number>;
-  /** Fragment → the last round a hero stood on it or saw it (missing in older saves). */
+  /** Fragment → the round it was discovered; it goes dark again 5 rounds later (missing in older saves). */
   lastVisit?: Record<number, number>;
   /** Set when someone reaches the goal. */
   winner: string | null;
