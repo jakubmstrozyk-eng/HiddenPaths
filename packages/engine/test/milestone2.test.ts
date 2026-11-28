@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EVENTS, EVENT_BY_ID, ITEMS, ENEMIES } from '@hp/content';
+import { BOUNTY_CARDS, EVENTS, EVENT_BY_ID, ITEMS, ENEMIES, TOWN_EVENTS } from '@hp/content';
 import { LEVEL_XP } from '../src/character';
 import {
   applyAction, createGame, currentPlayer, legalActions, neighbours, startCombat, strengthStep, worldView, Rng,
@@ -30,7 +30,7 @@ function withCard(state: GameState, card: number, step = 'start'): GameState {
 describe('event cards', () => {
   it('every card is well formed: steps exist, gotos point at real steps, items and foes exist', () => {
     const ids = new Set<number>();
-    for (const card of EVENTS) {
+    for (const card of [...EVENTS, ...TOWN_EVENTS, ...BOUNTY_CARDS]) {
       expect(ids.has(card.id)).toBe(false);
       ids.add(card.id);
       expect(card.title.pl && card.title.en && card.text.pl && card.text.en).toBeTruthy();
@@ -267,6 +267,8 @@ describe('levelling and winning', () => {
     p.speedLeft = 10;
     state = applyAction(state, 'p1', { type: 'move', to: core });
     expect(currentPlayer(state).hasStone).toBe(true);
+    // No town card in the way this time.
+    currentPlayer(state).counters[`townEvent:${next}`] = state.round;
     state = applyAction(state, 'p1', { type: 'move', to: next });
     // Arriving is not enough: the town stays open until the Stone is handed over at the castle.
     expect(state.winner).toBeNull();

@@ -4,7 +4,7 @@ import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, 
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
 import { DIFFICULTIES, type GameConfig } from './config';
 import { EngineError } from './errors';
-import { ALL_EVENT_IDS, answerPuzzle, chooseEventOption, drawEvent, drawsEvent, eventOptions, giveItem, resetEventXp, runOutcomes, startEvent, tickConditions, winCombat } from './events';
+import { ALL_EVENT_IDS, answerPuzzle, chooseEventOption, drawEvent, drawTownEvent, drawsEvent, eventOptions, giveItem, resetEventXp, runOutcomes, startEvent, tickConditions, winCombat } from './events';
 import { EXIT_SPEED, canAfford, canDescend, enterRoom, rememberBoss, retreat, roomMoves, settleRoom, placeDungeon, woundBoss } from './dungeon';
 import { generateMap, insideMap, landAt, neighbours, validateMapSetup } from './mapgen';
 import { readableScrolls, scrollOf, selfSpell, spendScroll, teleportTargets } from './scrolls';
@@ -16,6 +16,7 @@ import type { GameMap } from './mapgen';
 import { coverForgotten, deplete, DEPLETING_ACTIONS, markVisit } from './tiles';
 import { availableTerrainActions, effectBonus, heroTest, isWater, runTerrainAction } from './terrain';
 import { ENDS_ROUND, startSpeed } from './cardsHigh';
+import { bountyAt, canTakeQuest, dropQuest, handInQuest, offeredQuests, progressQuests, questsToHandIn, takeQuest } from './quests';
 import {
   availableServices, buy, buyPrice, canSmelt, mysticStock, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
@@ -194,6 +195,9 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   if (canSmelt(state, player)) actions.push({ type: 'smelt', into: 'ore' }, { type: 'smelt', into: 'item' });
   for (const service of availableServices(state, player)) actions.push({ type: 'service', service });
   for (const to of portalTargets(state, player)) actions.push({ type: 'portal', to });
+  if (canTakeQuest(player)) for (const q of offeredQuests(state, player)) actions.push({ type: 'quest', op: 'take', id: q.id });
+  for (const q of questsToHandIn(state, player)) actions.push({ type: 'quest', op: 'handIn', id: q.uid });
+  for (const q of player.quests ?? []) actions.push({ type: 'quest', op: 'drop', id: q.uid });
   for (const item of ['food', ...shopStock(state, player), ...mysticStock(state, player)]) {
     const price = buyPrice(state, player, item);
     if (price !== null && price <= player.character.gold) actions.push({ type: 'buy', item });
@@ -281,7 +285,25 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   }
   // The fragment is shown first; its event card waits for the hero's first action here (Jacob, 2026-11-28).
   if (fresh && drawsEvent(terrain)) player.eventDue = to;
+  // Cities, villages and inns: a town card waits for the first action of each visit, at most once in TOWN_EVENT_ROUNDS.
+  else if (isTownPlace(terrain) && townEventReady(state, player, to)) player.eventDue = to;
+  // A notice-board bounty: its foes wait on the marked fragment.
+  const bounty = bountyAt(player, to);
+  if (bounty !== null && !player.pendingEvent && !player.combat) {
+    player.eventDue = null;
+    startEvent(state, player, bounty);
+  }
   searchForDungeon(state, player, rng);
+}
+
+/** Places with a town deck of their own. */
+const isTownPlace = (terrain: string) => terrain === 'city' || terrain === 'village' || terrain === 'inn';
+/** A town card comes at most once in this many rounds for the same hero in the same place. */
+export const TOWN_EVENT_ROUNDS = 3;
+const townKey = (cell: number) => `townEvent:${cell}`;
+function townEventReady(state: GameState, player: PlayerState, cell: number): boolean {
+  const last = player.counters[townKey(cell)];
+  return last === undefined || state.round - last >= TOWN_EVENT_ROUNDS;
 }
 
 /** Chance that a new fragment's card is a real event; otherwise it is the quiet card (Jacob, 2026-11-28). */
@@ -293,6 +315,13 @@ function drawDueEvent(state: GameState, player: PlayerState, rng: Rng) {
   player.eventDue = null;
   if (cell === null || cell === undefined || cell !== player.position) return;
   const terrain = landAt(state.map, cell);
+  if (isTownPlace(terrain)) {
+    // The town deck: the same 7 in 10, with the quiet card otherwise (Jacob, 2026-11-28).
+    player.counters[townKey(cell)] = state.round;
+    const card = rng.next() < EVENT_CHANCE ? drawTownEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>) : QUIET_CARD;
+    if (card !== null) startEvent(state, player, card);
+    return;
+  }
   if (!drawsEvent(terrain)) return;
   const card = rng.next() < EVENT_CHANCE ? drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>) : QUIET_CARD;
   if (card !== null) startEvent(state, player, card);
@@ -309,7 +338,7 @@ function leavesFragment(action: Action): boolean {
 }
 
 /** The first action on the fragment itself (not packing the bag): the waiting card is drawn after it. */
-const FRAGMENT_ACTIONS = new Set<Action['type']>(['terrain', 'service', 'buy', 'sell', 'cook', 'smelt', 'read', 'card', 'combat']);
+const FRAGMENT_ACTIONS = new Set<Action['type']>(['terrain', 'service', 'buy', 'sell', 'cook', 'smelt', 'read', 'card', 'combat', 'quest']);
 
 /**
  * The dungeon's entrance is hidden: each time a hero steps onto its fragment they test the better of
@@ -359,8 +388,12 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
 
   const due = eventDueHere(player) && !player.pendingEvent && !player.combat;
   if (due && leavesFragment(action)) {
-    drawDueEvent(state, player, rng);
-    return finish(state, player, fromSeq, rng);
+    // In a town the card comes only after something done there: walking through or resting draws nothing.
+    if (isTownPlace(landAt(state.map, player.position))) player.eventDue = null;
+    else {
+      drawDueEvent(state, player, rng);
+      return finish(state, player, fromSeq, rng);
+    }
   }
 
   switch (action.type) {
@@ -477,6 +510,11 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       break;
     case 'portal':
       usePortal(state, player, action.to);
+      break;
+    case 'quest':
+      if (action.op === 'take') takeQuest(state, player, action.id);
+      else if (action.op === 'handIn') handInQuest(state, player, action.id);
+      else dropQuest(state, player, action.id);
       break;
     case 'use':
       if (!player.inventory.items.includes(action.item)) throw new EngineError('item.missing', 'You do not carry that.');
@@ -829,7 +867,9 @@ function chronicle(state: GameState, fromSeq: number) {
   for (let pass = 0; pass < 3 && state.logSeq > seq; pass++) {
     const added = Math.min(state.logSeq - seq, state.log.length);
     seq = state.logSeq;
-    const kept = noteLog(state, state.log.slice(-added));
+    const entries = state.log.slice(-added);
+    progressQuests(state, entries);
+    const kept = noteLog(state, entries);
     payVows(kept, (e) => log(state, e), (p, xp) => gainXp(state, p, xp));
   }
 }

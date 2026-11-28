@@ -11,11 +11,12 @@ export * from './cards';
 export * from './cardsHigh';
 export * from './towns';
 export * from './scrolls';
-export { eventOptions, drawEvent, ALL_EVENT_IDS } from './events';
+export { eventOptions, drawEvent, drawTownEvent, ALL_EVENT_IDS, ALL_TOWN_EVENT_IDS } from './events';
+export * from './quests';
 export type { Change, Service, Side } from './state';
 export { OUTSIDE, SIDES } from './state';
 export {
-  createGame, applyAction, legalActions, currentPlayer, entryCell, isOutside, isStuck, timeoutTurn, grantXp, mealDue, worldView, newEntries, WIN_XP, LOG_LIMIT, EVENT_CHANCE, eventDueHere, moveCost,
+  createGame, applyAction, legalActions, currentPlayer, entryCell, isOutside, isStuck, timeoutTurn, grantXp, mealDue, worldView, newEntries, WIN_XP, LOG_LIMIT, EVENT_CHANCE, TOWN_EVENT_ROUNDS, eventDueHere, moveCost,
   type GameState, type PlayerState, type Action, type LogEntry, type NewPlayer,
 } from './game';
 export * from './missions';

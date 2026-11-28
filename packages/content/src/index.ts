@@ -12,3 +12,5 @@ export * from './looks';
 export * from './dungeons';
 export * from './riddles';
 export * from './journal';
+export * from './townEvents';
+export * from './quests';
