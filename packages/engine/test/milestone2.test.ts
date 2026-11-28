@@ -254,7 +254,7 @@ describe('levelling and winning', () => {
     expect(currentPlayer(state).character.unspentPoints).toBe(0);
   });
 
-  it('bringing the Stone of Beginnings to a city wins a Stone game', () => {
+  it('the Stone of Beginnings handed over at a city castle wins a Stone game', () => {
     let state = game('stone', { ...solo, winMode: 'stone' });
     const p = currentPlayer(state);
     const core = state.map.cells.find((c) => c.terrain === 'core')!.index;
@@ -266,6 +266,13 @@ describe('levelling and winning', () => {
     state = applyAction(state, 'p1', { type: 'move', to: core });
     expect(currentPlayer(state).hasStone).toBe(true);
     state = applyAction(state, 'p1', { type: 'move', to: next });
+    // Arriving is not enough: the town stays open until the Stone is handed over at the castle.
+    expect(state.winner).toBeNull();
+    expect(legalActions(state, 'p1')).toContainEqual({ type: 'service', service: 'deliver' });
+    expect(legalActions(state, 'p1')).toContainEqual({ type: 'service', service: 'gossip' });
+    state = applyAction(state, 'p1', { type: 'service', service: 'gossip' });
+    expect(state.winner).toBeNull();
+    state = applyAction(state, 'p1', { type: 'service', service: 'deliver' });
     expect(state.winner).toBe('p1');
     expect(legalActions(state, 'p1')).toEqual([]);
   });
