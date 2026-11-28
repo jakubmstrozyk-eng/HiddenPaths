@@ -6,6 +6,7 @@ import {
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
   landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
 } from '@hp/engine';
+import { Discovery } from '../Discovery';
 import { TerrainArt } from '../TerrainArt';
 import { actionInfo } from '../actionInfo';
 import { DiceTray } from '../Dice';
@@ -141,7 +142,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [dice, setDice] = useState<{ rolls: DiceRoll[]; heading: string | null } | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   /** `fight`: the outcome of a fight, which closes only by its own button, never by a tap beside it. */
-  const [story, setStory] = useState<{ title: string; lines: string[]; xp: number; fight?: boolean } | null>(null);
+  /** `lead`: the result of the action after which a new fragment's card was drawn; it shows before the card. */
+  const [story, setStory] = useState<{ title: string; lines: string[]; xp: number; fight?: boolean; lead?: boolean } | null>(null);
   /** Experience gained since the card (or fight) began, shown at the foot of the card. */
   const [sceneXp, setSceneXp] = useState(0);
   const [sheet, setSheet] = useState<'town' | 'bag' | 'hero' | 'save' | 'journal' | null>(null);
@@ -150,6 +152,9 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   /** The campfire opens by itself once per camp; after "Not now" the journal button still writes while the fire burns. */
   const campShown = useRef(false);
   const [storyTitle, setStoryTitle] = useState('');
+  /** A new fragment just found: the short reveal with its name, motif, actions, Speed and XP (Jacob, 2026-11-28). */
+  const [discovery, setDiscovery] = useState<{ terrain: Exclude<ReturnType<typeof landAt>, 'core'>; xp: number; speed: number } | null>(null);
+  const endDiscovery = useCallback(() => setDiscovery(null), []);
   /** A fight round playing back; `walkFirst` when the fight broke out on a step, so the hero walks there before it shows. */
   const [replay, setReplay] = useState<{ before: GameState; entries: LogEntry[]; walkFirst?: boolean } | null>(null);
   const endReplay = useCallback(() => setReplay(null), []);
@@ -248,25 +253,52 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
     } else {
       // Only this hero's own throws: another player's rolls at the turn change are not ours to watch.
       const rolls = diceOf(entries.filter((e) => !('player' in e) || e.player === me.id), T);
-      if (rolls.length) setDice({ rolls, heading: rollHeading(a, me, entries) });
+      // A new fragment's card drawn after this action is not what the dice were thrown for.
+      const cut = entries.findIndex((e) => e.type === 'eventDrawn');
+      if (rolls.length) setDice({ rolls, heading: rollHeading(a, me, cut >= 0 && !me.pendingEvent ? entries.slice(0, cut) : entries) });
     }
 
     const nextMe = next.players.find((p) => p.id === me.id)!;
     const inScene = !!(me.pendingEvent || me.combat);
-    const drawn = entries.find((e) => e.type === 'eventDrawn');
+    const drawnAt = entries.findIndex((e) => e.type === 'eventDrawn');
+    const drawn = drawnAt >= 0 ? entries[drawnAt] : undefined;
     const started = entries.find((e) => e.type === 'combatStarted');
+    // Finding a fragment has its own reveal, apart from any card (Jacob, 2026-11-28): its XP is not counted on a card.
+    const found = entries.find((e): e is Extract<LogEntry, { type: 'revealed' }> => e.type === 'revealed' && e.player === me.id && e.xp > 0 && e.cell === nextMe.position);
+    const foundXp = entries.reduce((sum, e) => sum + (e.type === 'revealed' && e.player === me.id ? e.xp : 0), 0);
+    if (found && !isOutside(nextMe)) {
+      const land = landAt(next.map, found.cell);
+      const moved = entries.find((e) => e.type === 'moved' && e.player === me.id && e.to === found.cell);
+      if (land !== 'core') setDiscovery({ terrain: land, xp: found.xp, speed: moved && moved.type === 'moved' ? moved.cost : 0 });
+    }
     let title = storyTitle;
     let acc = inScene ? [...lines] : [];
-    const gained = nextMe.character.xp - me.character.xp;
+    const gained = nextMe.character.xp - me.character.xp - foundXp;
     let xpAcc = inScene ? sceneXp + gained : gained;
+    // Experience is not a line of the story: the card shows it at its foot, in full words.
+    const say = (list: LogEntry[]) => list.filter((e) => !(e.type === 'revealed' || (e.type === 'change' && e.change.what === 'xp'))).map((e) => (nextMe.combat || me.combat ? combatLine(e, T) : describe(e, T))).filter((l): l is string => !!l);
+    let fresh = say(entries);
     if (drawn && drawn.type === 'eventDrawn') {
+      // The card comes after the first action on a new fragment: that action's result shows first, then the card.
+      const before = entries.slice(0, drawnAt);
+      const tested = !inScene && before.some((e) => (e.type === 'test' || e.type === 'check') && 'player' in e && e.player === me.id);
+      if (tested) {
+        const xpBefore = before.reduce((sum, e) => sum + (e.type === 'change' && e.change.what === 'xp' && e.player === me.id ? e.change.amount : 0), 0) - foundXp;
+        const saidBefore = say(before);
+        const ok = before.some((e) => (e.type === 'test' || e.type === 'check') && e.result.success);
+        const onIt = cells[nextMe.position]?.terrain;
+        const land = !onIt || onIt === 'void' ? 'core' : onIt;
+        setStory({ title: rollHeading(a, me, before) ?? (land === 'core' ? tx({ pl: 'Kamień początku', en: 'Stone of Beginnings' }) : tx(TERRAINS[land].name)), lines: saidBefore.length ? saidBefore : [ok ? t('success') : t('failure')], xp: xpBefore, lead: true });
+        xpAcc = gained - xpBefore;
+      } else {
+        xpAcc = inScene ? xpAcc : gained;
+      }
       title = tx(EVENT_BY_ID[drawn.card]!.title);
       acc = [];
+      fresh = say(entries.slice(drawnAt + 1));
     } else if (started && !inScene) {
       title = t('fight');
     }
-    // Experience is not a line of the story: the card shows it at its foot, in full words.
-    const fresh = entries.filter((e) => !(e.type === 'revealed' || (e.type === 'change' && e.change.what === 'xp'))).map((e) => (nextMe.combat || me.combat ? combatLine(e, T) : describe(e, T))).filter((l): l is string => !!l);
     acc = [...acc, ...fresh];
     const stillInScene = !!(nextMe.pendingEvent || nextMe.combat);
     if ((inScene || drawn || started) && !stillInScene) {
@@ -696,7 +728,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
 
 
       <AnimatePresence>
-        {!onTheWay && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} xp={sceneXp} act={act} hold={!!dice} />}
+        {!onTheWay && !discovery && !story?.lead && me.pendingEvent && !me.combat && <EventPanel key="event" game={game} me={me} lines={lines} xp={sceneXp} act={act} hold={!!dice} />}
         {/* A round playing back stays on screen even when it moves the hero (a death, a flight): unmounting
             here closed the fight mid-round and played it again from the start once the walk ended. */}
         {!fightHidden && (replay ? !(replay.walkFirst && onTheWay) : !onTheWay && !!me.combat) && (
@@ -715,7 +747,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             <Icon name="sword" />{tx({ pl: 'Wróć do walki', en: 'Back to the fight' })}
           </button>
         )}
-        {!onTheWay && !replay && story && !me.pendingEvent && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} xp={story.xp} level={c.level} xpNow={c.xp} locked={story.fight} onClose={() => setStory(null)} />}
+        {!onTheWay && !replay && !discovery && story && (!me.pendingEvent || story.lead) && !me.combat && <StoryPanel key="story" title={story.title} lines={story.lines} xp={story.xp} level={c.level} xpNow={c.xp} locked={story.fight} onClose={() => setStory(null)} />}
         {sheet === 'town' && quiet && <TownSheet key="town" game={game} me={me} act={act} onClose={() => setSheet(null)} />}
         {sheet === 'bag' && quiet && <BagSheet key="bag" game={game} me={me} act={act} onClose={() => setSheet(null)} onAim={(item) => { setAim(item); setSheet(null); }} />}
         {sheet === 'save' && <SaveDialog key="save" game={game} onClose={() => setSheet(null)} />}
@@ -775,7 +807,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             onBack={() => setMealAsk(null)}
           />
         )}
-        {dice && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
+        {discovery && !onTheWay && <Discovery key={`disc-${game.version}`} terrain={discovery.terrain} xp={discovery.xp} speed={discovery.speed} onDone={endDiscovery} />}
+        {dice && !discovery && <DiceTray key={`dice-${game.version}`} rolls={dice.rolls} heading={dice.heading} base={c.attributes} dice={c.dice} onDone={() => setDice(null)} />}
       </AnimatePresence>
       {myTurn && !game.winner && !dice && !story && !campfire && <Tip candidates={tipsFor()} />}
       <CardCastHost />

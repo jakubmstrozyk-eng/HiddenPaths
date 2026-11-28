@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { DUNGEON_THEMES, EVENT_BY_ID, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
+import { DUNGEON_THEMES, EVENT_BY_ID, QUIET_CARD, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
 import { cardTestBonus, eventOptions, isOutside, legalActions, knownPerson, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
 import { JOURNAL_PEOPLE, PERSON_MARKS, PROFESSIONS, TRAITS, type TraitId } from '@hp/content';
 import { EventScene } from '../EventScene';
@@ -42,7 +42,8 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
   const options = eventOptions(game, me);
   // Quick skill cards (a buff for the test, first aid) may be played before answering.
   const playable = new Set(legalActions(game, me.id).flatMap((a) => (a.type === 'card' ? [a.card] : [])));
-  const quickCards = PROFESSIONS[me.character.profession].cards.filter((c) => playable.has(c.id));
+  // The quiet card has nothing to prepare for.
+  const quickCards = pending.card === QUIET_CARD ? [] : PROFESSIONS[me.character.profession].cards.filter((c) => playable.has(c.id));
   const here = isOutside(me) ? null : landAt(game.map, me.position);
   // A dungeon room plays as a card too, marked with the dungeon's name instead of the deck's number.
   const room = isDungeonCard(card.id) ? DUNGEON_THEMES[themeOfCard(card.id)!] : null;
