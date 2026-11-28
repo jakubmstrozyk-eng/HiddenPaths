@@ -8,7 +8,7 @@ import { onMap } from './helpers';
 
 const make = (race: RaceId, profession: ProfessionId, seed = 'profs'): GameState =>
   onMap(createGame(seed, { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter'] } }]));
 
 const at = (g: GameState, terrain: string) => {
   const cell = g.map.cells.find((c) => c.terrain === terrain);

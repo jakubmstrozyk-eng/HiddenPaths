@@ -4,7 +4,7 @@ import { careerOf, careerProgress, createGame, drawMissionChoices, missionProgre
 import { log } from '../src/progress';
 import { onMap } from './helpers';
 
-const game = (missions = ['warrior', 'hunter']) => onMap(createGame('missions', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
+const game = (missions = ['warrior']) => onMap(createGame('missions', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
   [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions } }]));
 
 describe('missions', () => {
@@ -29,7 +29,7 @@ describe('missions', () => {
   });
 
   it('counts food and herbs found on event cards for the Gatherer, and hunted food too', () => {
-    const g = game(['gatherer', 'hunter']);
+    const g = game(['gatherer']);
     const p = g.players[0]!;
     log(g, { type: 'change', player: 'p', change: { what: 'food', amount: 2 } });
     log(g, { type: 'change', player: 'p', change: { what: 'herbs', amount: 1 } });
@@ -41,7 +41,7 @@ describe('missions', () => {
   });
 
   it('counts only items gained for the Collector, not potions drunk or gear put on', () => {
-    const g = game(['collector', 'hunter']);
+    const g = game(['collector']);
     const p = g.players[0]!;
     log(g, { type: 'change', player: 'p', change: { what: 'item', item: 'healingPotion', amount: -1 } });
     log(g, { type: 'change', player: 'p', change: { what: 'item', item: 'dagger', amount: 0 } });

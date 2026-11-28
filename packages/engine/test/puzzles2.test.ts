@@ -6,7 +6,7 @@ import {
 } from '../src';
 import { onMap } from './helpers';
 
-const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter', 'scout'] };
+const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter'] };
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
 
 function atCard(card: number, seed = 'pz2'): GameState {

@@ -6,7 +6,7 @@ import {
   type GameConfig, type MapSetup,
 } from '../src';
 
-const hero = { name: 'A', race: 'humans' as const, profession: 'warrior' as const, bonus: { com: 10 }, missions: ['hunter', 'scout'] };
+const hero = { name: 'A', race: 'humans' as const, profession: 'warrior' as const, bonus: { com: 10 }, missions: ['hunter'] };
 const config = (map: MapSetup): GameConfig => ({ size: sizeForTiles(map.tiles), map, difficulty: 'normal', winMode: 'exploration', multiplayer: false });
 const sum = (pool: Partial<Record<TerrainId, number>>) => Object.values(pool).reduce((a, b) => a + (b ?? 0), 0);
 

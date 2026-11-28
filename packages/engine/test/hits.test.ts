@@ -5,7 +5,7 @@ import { onMap } from './helpers';
 
 const make = (): GameState =>
   onMap(createGame('hits', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'nomads', profession: 'elder', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race: 'nomads', profession: 'elder', bonus: { com: 10 }, missions: ['hunter'] } }]));
 
 type Strike = Extract<CombatEvent, { type: 'strike' }>;
 

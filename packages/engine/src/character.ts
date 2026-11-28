@@ -7,8 +7,9 @@ import type { Rng } from './rng';
 import type { Equipment, Inventory } from './terrain';
 
 export const BONUS_POINTS = 20;
-export const MISSIONS_DRAWN = 4;
-export const MISSIONS_KEPT = 2;
+/** Before each game the hero draws 2 missions and keeps 1 (Jacob, 2026-11-28: two goals a game gave about 100 XP, too much). */
+export const MISSIONS_DRAWN = 2;
+export const MISSIONS_KEPT = 1;
 
 export interface CharacterInput {
   name: string;
@@ -216,7 +217,7 @@ export function levelUp(c: Character, level: number): string[] {
   c.maxVitality += LEVEL_UP.vitality;
   c.vitality += LEVEL_UP.vitality;
   if (LEVEL_UP.staminaAt.includes(level)) c.stamina += 1;
-  // Levels 3, 5, 7 and 9 open new skill cards; while they fit in the hand of 5 they go straight in.
+  // Higher levels open new skill cards (5 at level 3, 7 at level 7, 9 at level 9, Jacob 2026-11-28); while they fit in the hand of 5 they go straight in, after that the hero picks 5 of them before each game.
   const fresh = PROFESSIONS[c.profession].cards.filter((card) => card.level === level).map((card) => card.id);
   if (!fresh.length) return [];
   if (!c.newCards?.length && c.cards.length + fresh.length <= MAX_CARDS) c.cards.push(...fresh);

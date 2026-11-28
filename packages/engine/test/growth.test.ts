@@ -11,7 +11,7 @@ const hero: Hero = {
   look: { head: 0, torso: 0, legs: 0 }, dice: { d6: 'bone', d10: 'bone', d100: 'bone' } as Hero['dice'], createdAt: '2026-11-26',
 };
 const config = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false } as const;
-const start = (h: Hero, seed = 'g1') => createGame(seed, config, [{ id: 'p', character: heroCharacter(h, ['hunter', 'scout']) }]);
+const start = (h: Hero, seed = 'g1') => createGame(seed, config, [{ id: 'p', character: heroCharacter(h, ['hunter']) }]);
 
 describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
   it('a new game starts where the last one left the hero', () => {

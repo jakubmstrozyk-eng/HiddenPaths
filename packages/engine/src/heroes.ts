@@ -48,7 +48,7 @@ export function withCareer(career: Hero['career'], game: string, share: GameCare
   return next;
 }
 
-const PLACEHOLDER_MISSIONS = ['hunter', 'scout'];
+const PLACEHOLDER_MISSIONS = ['hunter'];
 
 /** Checks a hero the same way a character is checked, without missions. Returns a clean copy. */
 export function validateHero(input: NewHero): NewHero {

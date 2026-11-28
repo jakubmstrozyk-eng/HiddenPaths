@@ -8,7 +8,7 @@ import { onMap } from './helpers';
 
 const make = (race: RaceId, profession: ProfessionId, seed = 'cards'): GameState =>
   onMap(createGame(seed, { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter'] } }]));
 
 describe('skill cards (level 1)', () => {
   it('every hero starts with its 3 level-1 cards', () => {

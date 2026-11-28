@@ -4,7 +4,7 @@ import { buildApp } from '../src/app';
 import { memoryDb, migrate, postgresDb, type Db } from '../src/db';
 import { MAX_OPEN_GAMES, TURN_HOURS } from '../src/games';
 
-const hero = (name: string): CharacterInput => ({ name, race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] });
+const hero = (name: string): CharacterInput => ({ name, race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter'] });
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
 const multi: GameConfig = { ...solo, multiplayer: true };
 
@@ -199,7 +199,7 @@ describe('heroes', () => {
     const list = (await app.inject({ method: 'GET', url: '/api/heroes', headers: as(s) })).json().heroes;
     expect(list).toHaveLength(1);
     expect(list[0].look).toEqual({ head: 1, torso: 2, legs: 0 });
-    for (const missions of [['hunter', 'scout'], ['hunter', 'scout']]) {
+    for (const missions of [['hunter'], ['hunter']]) {
       const g = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: id, missions } });
       expect(g.statusCode).toBe(201);
       const state: GameState = (await app.inject({ method: 'GET', url: `/api/games/${g.json().id}`, headers: as(s) })).json().state;
@@ -211,7 +211,7 @@ describe('heroes', () => {
   it('keeps each game\'s share of the career goals on the hero', async () => {
     const s = await signIn('career@x.io');
     const id = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
-    const g = (await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: id, missions: ['hunter', 'scout'] } })).json().id;
+    const g = (await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: id, missions: ['hunter'] } })).json().id;
     const state: GameState = (await app.inject({ method: 'GET', url: `/api/games/${g}`, headers: as(s) })).json().state;
     expect(state.players[0]!.character.heroId).toBe(id);
     const act = await app.inject({ method: 'POST', url: `/api/games/${g}/actions`, headers: as(s), payload: { version: state.version, action: { type: 'endTurn' } } });
@@ -227,12 +227,12 @@ describe('heroes', () => {
     const s = await signIn('modes@x.io');
     const soloHero = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
     const multiHero = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('multi', 'Bo') } })).json().hero.id;
-    const a = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: soloHero, missions: ['hunter', 'scout'] } });
+    const a = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: soloHero, missions: ['hunter'] } });
     expect(a.statusCode).toBe(422);
     expect(a.json().error).toBe('hero.mode');
-    const b = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: multiHero, missions: ['hunter', 'scout'] } });
+    const b = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: solo, heroId: multiHero, missions: ['hunter'] } });
     expect(b.statusCode).toBe(422);
-    const c = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: multiHero, missions: ['hunter', 'scout'] } });
+    const c = await app.inject({ method: 'POST', url: '/api/games', headers: as(s), payload: { config: multi, heroId: multiHero, missions: ['hunter'] } });
     expect(c.statusCode).toBe(201);
   });
 
@@ -242,7 +242,7 @@ describe('heroes', () => {
     expect(bad.statusCode).toBe(422);
     const id = (await app.inject({ method: 'POST', url: '/api/heroes', headers: as(s), payload: { hero: newHero('solo') } })).json().hero.id;
     const other = await signIn('other@x.io');
-    const g = await app.inject({ method: 'POST', url: '/api/games', headers: as(other), payload: { config: solo, heroId: id, missions: ['hunter', 'scout'] } });
+    const g = await app.inject({ method: 'POST', url: '/api/games', headers: as(other), payload: { config: solo, heroId: id, missions: ['hunter'] } });
     expect(g.statusCode).toBe(404);
   });
 });
