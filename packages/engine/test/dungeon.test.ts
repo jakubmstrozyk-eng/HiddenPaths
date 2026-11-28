@@ -6,7 +6,7 @@ const SIZES: SizePreset[] = ['short', 'medium', 'long', 'epic'];
 
 const game = (size: SizePreset = 'medium', seed = 'dungeon', players = 1): GameState => {
   const g = createGame(seed, { size, difficulty: 'normal', winMode: 'exploration', multiplayer: players > 1 },
-    Array.from({ length: players }, (_, i) => ({ id: `p${i}`, character: { name: 'A', race: 'humans' as const, profession: 'warrior' as const, bonus: { com: 10 }, missions: ['hunter', 'scout'] } })));
+    Array.from({ length: players }, (_, i) => ({ id: `p${i}`, character: { name: 'A', race: 'humans' as const, profession: 'warrior' as const, bonus: { com: 10 }, missions: ['hunter'] } })));
   // Stand everyone on the entrance, already found, with plenty of Speed and Stamina.
   g.dungeon!.foundBy = g.players.map((p) => p.id);
   for (const p of g.players) {
@@ -53,7 +53,7 @@ describe('dungeons', () => {
   it('puts one dungeon on every map, on open ground and not on the outer ring', () => {
     for (const size of SIZES) {
       for (const seed of ['a', 'b', 'c', 'd', 'e']) {
-        const g = createGame(seed, { size, difficulty: 'normal', winMode: 'stone', multiplayer: false }, [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]);
+        const g = createGame(seed, { size, difficulty: 'normal', winMode: 'stone', multiplayer: false }, [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter'] } }]);
         const d = g.dungeon!;
         expect(d).toBeTruthy();
         const cell = g.map.cells[d.cell]!;

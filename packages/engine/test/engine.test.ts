@@ -16,7 +16,7 @@ const hero = (over: Partial<CharacterInput> = {}): CharacterInput => ({
   race: 'keepers',
   profession: 'wraith',
   bonus: { dex: 10, com: 10 },
-  missions: ['hunter', 'scout'],
+  missions: ['hunter'],
   ...over,
 });
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
@@ -116,14 +116,14 @@ describe('characters', () => {
   it('rejects broken characters', () => {
     expect(() => createCharacter(hero({ bonus: { dex: 21 } }), 5)).toThrow(EngineError);
     expect(() => createCharacter(hero({ profession: 'warrior' }), 5)).toThrow(/not a profession/);
-    expect(() => createCharacter(hero({ missions: ['hunter'] }), 5)).toThrow(/exactly 2/);
+    expect(() => createCharacter(hero({ missions: ['hunter', 'scout'] }), 5)).toThrow(/exactly 1/);
     expect(() => createCharacter(hero({ name: ' ' }), 5)).toThrow(/name/);
-    expect(() => createCharacter(hero(), 5, ['hero', 'expert', 'master', 'magician'])).toThrow(/not drawn/);
+    expect(() => createCharacter(hero(), 5, ['magician', 'scout'])).toThrow(/not drawn/);
   });
 
-  it('draws 4 different missions', () => {
+  it('draws 2 different missions, of which the hero keeps 1 (Jacob, 2026-11-28)', () => {
     const drawn = drawMissionChoices(new Rng(3));
-    expect(new Set(drawn).size).toBe(4);
+    expect(new Set(drawn).size).toBe(2);
     expect(drawn.every((d) => MISSIONS.some((m) => m.id === d))).toBe(true);
   });
 

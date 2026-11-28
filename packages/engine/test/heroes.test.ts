@@ -34,10 +34,10 @@ describe('heroes', () => {
 
   it('brings its look and dice into a game, with the missions chosen for that game', () => {
     const g = createGame('h', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-      [{ id: 'p', character: heroCharacter(validateHero(hero), ['hunter', 'scout']) }]);
+      [{ id: 'p', character: heroCharacter(validateHero(hero), ['hunter']) }]);
     const c = g.players[0]!.character;
     expect(c.look).toEqual({ head: 2, torso: 1, legs: 0 });
     expect(c.dice?.d100).toBe('void');
-    expect(c.missions).toEqual(['hunter', 'scout']);
+    expect(c.missions).toEqual(['hunter']);
   });
 });

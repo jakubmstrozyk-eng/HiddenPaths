@@ -4,7 +4,7 @@ import { applyAction, createGame, currentPlayer, DIFFICULTIES, Rng, type Charact
 import { runOutcomes, startEvent } from '../src/events';
 import { onMap } from './helpers';
 
-const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter', 'scout'] };
+const hero: CharacterInput = { name: 'Ara', race: 'keepers', profession: 'wraith', bonus: {}, missions: ['hunter'] };
 const solo: GameConfig = { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false };
 
 /** Every XP amount anywhere inside a card script. */

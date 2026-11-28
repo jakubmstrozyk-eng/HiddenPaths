@@ -10,7 +10,7 @@ import { onMap } from './helpers';
 
 const make = (race: RaceId, profession: ProfessionId, level3 = true): GameState => {
   const g = onMap(createGame('level3', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race, profession, bonus: { com: 10 }, missions: ['hunter'] } }]));
   if (level3) g.players[0]!.character.cards.push(...PROFESSIONS[profession].cards.filter((c) => c.level === 3).map((c) => c.id));
   return g;
 };

@@ -7,7 +7,7 @@ import { onMap } from './helpers';
 
 const make = (): GameState =>
   onMap(createGame('scrolls', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 20 }, missions: ['magician', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 20 }, missions: ['magician'] } }]));
 
 describe('magic scrolls', () => {
   it('the Mystic sells scrolls in a city only', () => {

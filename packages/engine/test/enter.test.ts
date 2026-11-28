@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, createGame, entryCell, isOutside, legalActions, OUTSIDE, SIDES } from '../src';
 
 const fresh = () => createGame('enter', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-  [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]);
+  [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter'] } }]);
 
 describe('starting outside the map', () => {
   it('puts every hero outside the map, with nothing revealed', () => {

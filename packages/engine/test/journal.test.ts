@@ -8,7 +8,7 @@ import { onMap } from './helpers';
 
 const make = (journal?: HeroJournal, seed = 'journal'): GameState =>
   onMap(createGame(seed, { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter', 'scout'], ...(journal ? { journal } : {}) } }]));
+    [{ id: 'p', character: { name: 'A', race: 'humans', profession: 'warrior', bonus: { com: 10 }, missions: ['hunter'], ...(journal ? { journal } : {}) } }]));
 
 const me = (g: GameState) => g.players[0]!;
 

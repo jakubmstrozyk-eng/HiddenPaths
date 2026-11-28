@@ -162,6 +162,8 @@ export function HeroPickScreen({ store, multiplayer, size, onBack, onCreate, onS
   const toggleMission = (id: string) => {
     if (missions.includes(id)) setMissions(missions.filter((m) => m !== id));
     else if (missions.length < MISSIONS_KEPT) setMissions([...missions, id]);
+    // With room for one, tapping the other mission swaps to it.
+    else setMissions([...missions.slice(1), id]);
   };
   const start = async () => {
     if (!hero) return;
