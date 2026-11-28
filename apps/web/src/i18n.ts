@@ -59,7 +59,7 @@ const UI = {
   profession: { pl: 'Profesja', en: 'Profession' },
   attributes: { pl: 'Cechy', en: 'Attributes' },
   pointsLeft: { pl: 'Punkty do rozdania', en: 'Points to spend' },
-  missions: { pl: 'Misje: wybierz 2', en: 'Missions: keep 2' },
+  missions: { pl: 'Misja: wybierz 1 z 2', en: 'Mission: keep 1 of 2' },
   name: { pl: 'Imię bohatera', en: 'Hero name' },
   speed: { pl: 'Szybkość', en: 'Speed' },
   stamina: { pl: 'Wytrzymałość', en: 'Stamina' },

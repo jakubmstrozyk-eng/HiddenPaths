@@ -5,7 +5,7 @@ import { onMap } from './helpers';
 
 const make = (): GameState =>
   onMap(createGame('respawn', { size: 'short', difficulty: 'normal', winMode: 'exploration', multiplayer: false },
-    [{ id: 'p', character: { name: 'A', race: 'nomads', profession: 'elder', bonus: { com: 10 }, missions: ['hunter', 'scout'] } }]));
+    [{ id: 'p', character: { name: 'A', race: 'nomads', profession: 'elder', bonus: { com: 10 }, missions: ['hunter'] } }]));
 
 /** Fights a foe with 1 Vitality left until the hero falls, trying a few seeds; returns the state after death. */
 function dieTo(foe: string, gold = 30, food = 3): GameState {
