@@ -21,7 +21,7 @@ export const TOWN_EVENTS: EventCard[] = [
     text: t('Na środku placu dwóch osiłków okłada się pięściami, a gapie przekrzykują się, obstawiając zakłady. Ktoś zaraz oberwie kamieniem z bruku.', 'In the middle of the square two brutes trade punches while the crowd shouts its bets. Someone is about to get hit by a cobblestone.'),
     steps: { start: { options: [
       opt(t('Rozdzielam bijących', 'Pull them apart'), [{ do: 'test', attribute: 'str', pass: [{ do: 'gold', amount: 2 }, { do: 'xp', amount: 1 }], fail: [{ do: 'hit', damage: 3 }] }]),
-      opt(t('Uspokajam tłum przemową', 'Calm the crowd with a speech'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'effect', target: 'cha', amount: 10, rounds: 3 }, { do: 'xp', amount: 1 }], fail: [{ do: 'vitality', amount: -2 }] }]),
+      opt(t('Uspokajam tłum przemową', 'Calm the crowd with a speech'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'effect', target: 'cha', amount: 10, rounds: 3 }, { do: 'xp', amount: 1 }], fail: [{ do: 'vitality', amount: -2 }] }]),
       opt(t('Stawiam zakład na wyższego', 'Bet on the taller one'), [{ do: 'roll', die: 6, table: [{ upTo: 3, then: [] }, { upTo: 6, then: [{ do: 'gold', amount: 3 }] }] }], { gold: 1 }),
       leave,
     ] } },
@@ -32,7 +32,7 @@ export const TOWN_EVENTS: EventCard[] = [
     text: t('Wąsaty kramarz łapie Cię za rękaw: „Dla ciebie, przyjacielu, wyjątkowa cena! Takiego towaru nie ma nawet w zamku”. Zawiniątko pod jego płaszczem coś obiecuje.', 'A moustached pedlar grabs your sleeve: "For you, friend, a special price! Not even the castle has goods like these." The bundle under his cloak promises something.'),
     steps: { start: { options: [
       opt(t('Oglądam towar uważnie i kupuję', 'Look the goods over and buy'), [{ do: 'test', attribute: 'int', pass: [{ do: 'randomItem' }], fail: [{ do: 'roll', die: 10, table: [{ upTo: 6, then: [] }, { upTo: 10, then: [{ do: 'randomItem' }] }] }] }], { gold: 3 }),
-      opt(t('Targuję się o cenę', 'Haggle'), [{ do: 'test', attribute: 'cha', modifier: -10, pass: [{ do: 'randomItem' }], fail: [{ do: 'gold', amount: 1 }] }], { gold: 1 }),
+      opt(t('Targuję się o cenę', 'Haggle'), [{ do: 'test', attribute: 'cha', pass: [{ do: 'randomItem' }], fail: [{ do: 'gold', amount: 1 }] }], { gold: 1 }),
       leave,
     ] } },
   },

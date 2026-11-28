@@ -440,6 +440,51 @@ const ACTORS = {
       <path d="M-32 -12 L-14 -26 L0 -16 L16 -30 L32 -18 V-4 H-32 Z" fill="#5a7a9a" opacity={0.85} />
     </g>
   ),
+  // Town folk (Jacob, 2026-11-28: the town deck).
+  brute: Person({ robe: '#7a3a2a', skin: '#d8a07a', head: 'bald', bulk: 1.3 }),
+  bruteB: Person({ robe: '#3a5a3a', skin: '#c89070', hair: '#3a2a1a', bulk: 1.25 }),
+  guard: Person({ robe: '#4a4a6a', head: 'helmet', item: 'sword', trim: '#d8b040' }),
+  pedlar: Person({ robe: '#8a3a6a', head: 'hat', item: 'herbs', trim: '#e0b25c' }),
+  urchin: Person({ robe: '#6a5a4a', skin: '#e0b090', hair: '#5a3a1a', item: 'dagger', bulk: 0.8 }),
+  hooded: Person({ robe: '#2a2236', head: 'hood', legs: 'robe', glowEyes: '#ffd34d' }),
+  beggar: Person({ robe: '#6a6050', head: 'bandage', legs: 'robe', item: 'staff' }),
+  seer: Person({ robe: '#5a2a6a', head: 'scarf', trim: '#e0b25c', legs: 'robe' }),
+  cat: (
+    <g>
+      <ellipse cx={0} cy={-6} rx={9} ry={5} fill="#2a2a2a" stroke={O} strokeWidth={1} />
+      <circle cx={9} cy={-11} r={4.5} fill="#2a2a2a" stroke={O} strokeWidth={1} />
+      <path d="M6 -14 L7 -19 L9 -15 M10 -15 L12 -19 L13 -14" fill="#2a2a2a" stroke={O} strokeWidth={0.8} />
+      <path d="M-9 -7 Q-16 -12 -14 -20" fill="none" stroke="#2a2a2a" strokeWidth={2.4} strokeLinecap="round" />
+      <circle cx={8} cy={-11} r={0.9} fill="#ffd34d" /><circle cx={11} cy={-11} r={0.9} fill="#ffd34d" />
+    </g>
+  ),
+  rat: (
+    <g>
+      <ellipse cx={0} cy={-4} rx={7} ry={4} fill="#6a6058" stroke={O} strokeWidth={1} />
+      <path d="M6 -6 L11 -3 L6 -2 Z" fill="#6a6058" stroke={O} strokeWidth={0.8} />
+      <circle cx={4} cy={-8} r={2} fill="#8a7a70" stroke={O} strokeWidth={0.6} />
+      <path d="M-7 -4 Q-14 -2 -16 -8" fill="none" stroke="#c8a090" strokeWidth={1.2} />
+    </g>
+  ),
+  barrel: (
+    <g>
+      <rect x={-10} y={-24} width={20} height={24} rx={4} fill="#7a4a22" stroke={O} strokeWidth={1.4} />
+      <rect x={-10} y={-19} width={20} height={2.5} fill="#3a2414" /><rect x={-10} y={-7} width={20} height={2.5} fill="#3a2414" />
+    </g>
+  ),
+  target: (
+    <g>
+      <rect x={-1.5} y={-30} width={3} height={30} fill="#5a3418" />
+      {[16, 11, 6, 2].map((r, i) => <circle key={r} cx={0} cy={-36} r={r} fill={['#f4ecd8', '#c84a3a', '#f4ecd8', '#c84a3a'][i]} stroke={O} strokeWidth={1} />)}
+    </g>
+  ),
+  board: (
+    <g>
+      <rect x={-22} y={-20} width={3} height={20} fill="#5a3418" /><rect x={19} y={-20} width={3} height={20} fill="#5a3418" />
+      <rect x={-26} y={-44} width={52} height={28} fill="#8a5a32" stroke={O} strokeWidth={1.4} />
+      <rect x={-21} y={-40} width={12} height={16} fill="#efe3c4" /><rect x={-5} y={-41} width={12} height={18} fill="#f4ecd8" /><rect x={10} y={-39} width={11} height={14} fill="#e8d8b0" />
+    </g>
+  ),
 } satisfies Record<string, ReactNode>;
 type Actor = keyof typeof ACTORS;
 
@@ -577,6 +622,26 @@ const SCENES: Record<number, SceneDef & { steps?: Record<string, Partial<SceneDe
   56: { sky: 'night', fx: ['stars'], actors: [P('campfire', 290), P('dice', 260), P('nomadSit', 330, { flip: true, anim: 'bob' })] },
   57: { sky: 'night', land: 'forest', actors: [P('fireflies', 280, { y: 96 })] },
   58: { sky: 'day', land: 'monument', fx: ['sparkle'], actors: [P('fresco', 280)] },
+  // The town deck.
+  600: { sky: 'day', land: 'city', actors: [P('brute', 250, { anim: 'shake' }), P('bruteB', 285, { flip: true, anim: 'shake' }), P('woman', 340, { flip: true, s: 0.9, anim: 'bob' }), P('merchant', 370, { flip: true, s: 0.85 })] },
+  601: { sky: 'day', land: 'village', actors: [P('wagon', 320, { s: 0.9 }), P('pedlar', 270, { flip: true, anim: 'bob' })] },
+  602: { sky: 'night', land: 'city', fx: ['fog'], actors: [P('hooded', 300, { flip: true, anim: 'sway' })], steps: { offer: { fx: ['fog', 'sparkle'] } } },
+  603: { sky: 'day', land: 'city', actors: [P('merchant', 250, { flip: true, s: 0.9 }), P('urchin', 330, { anim: 'prowl' })] },
+  604: { sky: 'dusk', land: 'inn', actors: [P('barrel', 250), P('flintborn', 300, { flip: true, anim: 'bob' }), P('barrel', 350)] },
+  605: { sky: 'dusk', land: 'inn', fx: ['sparkle'], actors: [P('bard', 290, { flip: true, anim: 'bob' }), P('barrel', 345)] },
+  606: { sky: 'night', land: 'inn', actors: [P('dice', 260), P('nomadSit', 320, { flip: true, anim: 'bob' })] },
+  607: { sky: 'dusk', land: 'village', fx: ['fire', 'embers'], actors: [P('hut', 300, { s: 1.3 }), P('woman', 240, { flip: true, anim: 'shake', s: 0.9 })] },
+  608: { sky: 'day', land: 'village', actors: [P('hut', 300, { s: 1.3 }), P('cat', 298, { y: 42, anim: 'sway' }), P('woman', 240, { flip: true, anim: 'bob', s: 0.9 })] },
+  609: { sky: 'day', land: 'city', actors: [P('guard', 260, { flip: true }), P('guard', 300, { flip: true, anim: 'bob' }), P('guard', 340, { flip: true })] },
+  610: { sky: 'dusk', land: 'village', fx: ['sparkle'], actors: [P('barrel', 260), P('seer', 300, { flip: true, anim: 'sway' })] },
+  611: { sky: 'cave', land: 'inn', actors: [P('barrel', 250), P('barrel', 272), P('rat', 320, { anim: 'prowl' }), P('rat', 350, { anim: 'prowl', s: 0.8 })] },
+  612: { sky: 'dusk', land: 'inn', actors: [P('barrel', 250), P('brute', 310, { flip: true, anim: 'shake' })] },
+  613: { sky: 'day', land: 'city', actors: [P('archer', 240), P('target', 350)] },
+  614: { sky: 'dusk', land: 'city', fx: ['stars'], actors: [P('beggar', 300, { flip: true, anim: 'sway' })] },
+  615: { sky: 'storm', land: 'village', fx: ['rain'], actors: [P('wagon', 300, { y: 118 }), P('driver', 350, { flip: true, anim: 'shake' })] },
+  700: { sky: 'night', fx: ['stars'], actors: [P('campfire', 300), P('bandit', 260, { flip: true, anim: 'bob' }), P('bandit', 345, { flip: true, anim: 'shake' })] },
+  701: { sky: 'dusk', actors: [P('bones', 250), P('beastman', 310, { flip: true, anim: 'shake', s: 1.2 })] },
+  702: { sky: 'night', fx: ['greenfog'], actors: [P('hut', 340), P('witch', 280, { flip: true, anim: 'sway' })] },
   900: { sky: 'dusk', fx: ['sparkle'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },
   901: { sky: 'night', fx: ['sparkle', 'stars'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },
   902: { sky: 'dusk', land: 'mountains', fx: ['sparkle'], actors: [P('book', 290, { anim: 'pulse', s: 1.5 })] },

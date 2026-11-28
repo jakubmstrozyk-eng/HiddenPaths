@@ -38,6 +38,7 @@ const TOWN_CHIPS: Record<string, Chip> = {
   stay: { icon: 'vitality', name: { pl: 'Nocleg', en: 'Rooms' }, value: { pl: 'pełne siły', en: 'full rest' } },
   gossip: { icon: 'town', name: { pl: 'Plotki', en: 'Gossip' }, value: { pl: 'wieści z krainy', en: 'news of the land' } },
   market: { icon: 'gold', name: { pl: 'Targ', en: 'Market' }, value: { pl: 'kupno i sprzedaż', en: 'buy and sell' } },
+  board: { icon: 'xp', name: { pl: 'Tablica ogłoszeń', en: 'Notice board' }, value: { pl: 'zadania za PD i złoto', en: 'quests for XP and gold' } },
   smith: { icon: 'sword', name: { pl: 'Kuźnia', en: 'Smithy' }, value: { pl: 'broń i pancerz', en: 'arms and armour' } },
   portal: { icon: 'map', name: { pl: 'Portal', en: 'Portal' }, value: { pl: 'do innych miast', en: 'to other cities' } },
 };
@@ -46,7 +47,9 @@ const TOWN_CHIPS: Record<string, Chip> = {
 export function discoveryChips(terrain: TerrainId): Chip[] {
   const t = TERRAINS[terrain];
   if (t.settlement || terrain === 'inn') {
-    return t.actions.flatMap((a) => (TOWN_CHIPS[a] ? [TOWN_CHIPS[a]!] : [])).slice(0, 5);
+    // The notice board goes up front, so it is not cut off (Jacob, 2026-11-28).
+    const order = t.actions.includes('board') ? ['board', ...t.actions.filter((a) => a !== 'board')] : t.actions;
+    return order.flatMap((a) => (TOWN_CHIPS[a] ? [TOWN_CHIPS[a]!] : [])).slice(0, 5);
   }
   return t.actions
     .filter((a) => a === 'camp' || ACTION_COST[a] !== undefined)
