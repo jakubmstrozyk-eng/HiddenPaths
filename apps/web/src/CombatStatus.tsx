@@ -50,9 +50,17 @@ const MIST_TEXT = {
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 const signed = (n: number) => `${n > 0 ? '+' : '−'}${Math.abs(n)}`;
 
+/** Timed effects named after the card that gave them. */
+const EFFECT_CARD: Record<string, string> = {
+  beastForm: 'elder-beast-form', wolfForm: 'druid-shapeshift', sign: 'guardian-sign', field: 'guardian-field', stoneSkin: 'cavedelver-stone-skin',
+  'ally:totem': 'druid-totem', 'ally:nature': 'druid-nature-force', 'ally:honour': 'runemaster-honour', 'ally:banner': 'warrior-banner',
+  flow: 'diver-flow', illusion: 'mystic-illusion', mountainStew: 'cavedelver-stew',
+};
+
 /** Where a timed bonus comes from: a card, a potion, a meal. */
 function sourceName(id: string, locale: Locale): string {
   const pl = locale === 'pl';
+  if (EFFECT_CARD[id]) return cardName(EFFECT_CARD[id]!, locale);
   if (id === 'meal') return pl ? 'Posiłek' : 'Meal';
   if (id === 'spice') return pl ? 'Przyprawa' : 'Seasoning';
   if (id === 'empower') return cardName('runemaster-empower', locale);
@@ -111,6 +119,28 @@ export function heroStatuses(game: GameState, me: PlayerState, combat: CombatSta
       duration: pl ? 'następna runda' : 'next round',
     });
   }
+  // Level 5 to 9 cards.
+  if (combat.bloodlust) {
+    out.push({ key: 'bloodlust', icon: '♥', tone: 'buff', name: cardName('diver-bloodlust', locale), effect: pl ? '+10 do Siły, Zręczności i Walki, +2 Obr.' : '+10 Strength, Dexterity and Combat, +2 damage.', duration: thisFight });
+  }
+  if ((combat.toxin ?? 0) >= live.turn) {
+    out.push({ key: 'toxin', icon: '☠', tone: 'buff', name: cardName('diver-toxin', locale), effect: pl ? 'Każde twoje trafienie zatruwa wroga (trucizna się sumuje); wróg, który cię uderzy, też się truje.' : 'Every hit of yours poisons the foe (it adds up); a foe that strikes you is poisoned too.', duration: pl ? `do rundy ${combat.toxin}` : `until round ${combat.toxin}` });
+  }
+  if ((combat.double ?? 0) >= live.turn) {
+    out.push({ key: 'double', icon: '⧉', tone: 'buff', name: cardName('mystic-double', locale), effect: pl ? 'Sobowtór atakuje razem z tobą; wróg może uderzyć w niego zamiast w ciebie.' : 'Your double attacks with you; a foe may strike it instead of you.', duration: pl ? 'do pierwszego trafienia, max 3 rundy' : 'until it is hit, 3 rounds at most' });
+  }
+  if (combat.wall) {
+    out.push({ key: 'wall', icon: '▥', tone: 'buff', mark: 'barrier', name: cardName('guardian-shield-wall', locale), effect: pl ? `Tarcze zatrzymają jeszcze ${combat.wall} celne ciosy.` : `The shields will stop ${combat.wall} more blows.`, duration: pl ? 'aż zatrzymają 3 ciosy' : 'until they stop 3 blows' });
+  }
+  if (combat.unarmed) {
+    out.push({ key: 'unarmed', icon: '⚔', tone: 'debuff', name: pl ? 'Bez włóczni' : 'No spear', effect: pl ? 'Włócznia tkwi we wrogu: następny atak to podniesienie jej.' : 'The spear is in the foe: your next attack picks it up.', duration: pl ? 'następny atak' : 'your next attack' });
+  }
+  if (me.counters.whetted) {
+    out.push({ key: 'whet', icon: '◇', tone: 'buff', name: cardName('warrior-whetstone', locale), effect: pl ? '+2 Obr. bronią białą.' : '+2 damage with a hand weapon.', duration: thisFight });
+  }
+  if (me.effects.some((e) => e.id === 'ally:honour')) {
+    out.push({ key: 'honour', icon: 'ᚱ', tone: 'buff', name: cardName('runemaster-honour', locale), effect: pl ? 'Nieudany test Walki rzucasz drugi raz (ty i towarzysze).' : 'A failed Combat test is thrown again (you and your companions).', duration: pl ? '2 rundy' : '2 rounds' });
+  }
   const j = combat.journal;
   if (j && !j.used && (j.lore || j.careful)) {
     const sum = j.lore + j.careful;
@@ -152,6 +182,8 @@ export function heroStatuses(game: GameState, me: PlayerState, combat: CombatSta
   }
   return out;
 }
+
+const thisFightFoe = (pl: boolean) => (pl ? 'do końca walki' : 'until the fight ends');
 
 /** Buffs and debuffs on one foe. */
 export function foeStatuses(combat: CombatState, foe: Foe, live: LiveFlags, locale: Locale): Status[] {
@@ -252,6 +284,19 @@ export function foeStatuses(combat: CombatState, foe: Foe, live: LiveFlags, loca
       duration: pl ? 'trzeba go podtrzymać co rundę' : 'must be renewed every round',
     });
   }
+  // Level 5 to 9 cards.
+  const left = (until: number) => (pl ? `do rundy ${until}` : `until round ${until}`);
+  if (foe.asleep) out.push({ key: 'asleep', icon: 'z', tone: 'debuff', mark: 'stun', name: pl ? 'Śpi' : 'Asleep', effect: pl ? 'Nie atakuje. Twój cios trafi sam (+2 Obr.), ale go obudzi.' : 'It does not attack. Your blow lands for sure (+2 damage) but wakes it.', duration: pl ? 'do pierwszego ciosu' : 'until struck' });
+  if (foe.dazed !== undefined && live.turn - foe.dazed <= 2) {
+    const n = [20, 10, 5][Math.max(0, live.turn - foe.dazed)] ?? 5;
+    out.push({ key: 'dazed', icon: '✺', tone: 'debuff', name: pl ? 'Otępiały' : 'Dazed', effect: pl ? `−${n} do wszystkich testów (potem mniej).` : `−${n} to every test (less after).`, duration: left(foe.dazed + 2) });
+  }
+  if ((foe.spiced ?? 0) >= live.turn) out.push({ key: 'spiced', icon: '◌', tone: 'debuff', mark: 'blind', name: cardName('gourmet-spice', locale), effect: pl ? '−20 do Walki i Zręczności.' : '−20 Combat and Dexterity.', duration: left(foe.spiced!) });
+  if (foe.venom) out.push({ key: 'venom', icon: '☠', tone: 'debuff', name: cardName('diver-toxin', locale), effect: pl ? `−${foe.venom} Żyw. co rundę.` : `−${foe.venom} Vitality a round.`, duration: thisFightFoe(pl) });
+  if (foe.rising !== undefined) out.push({ key: 'rising', icon: '☠', tone: 'debuff', name: cardName('gourmet-venom-bone', locale), effect: pl ? `W następnej rundzie −${foe.rising + 1} Żyw., potem coraz więcej.` : `Next round −${foe.rising + 1} Vitality, then more each round.`, duration: thisFightFoe(pl) });
+  if (foe.gash) out.push({ key: 'gash', icon: '♦', tone: 'debuff', name: cardName('wraith-pierce', locale), effect: pl ? '−1 Żyw. co rundę i −10 do Walki.' : '−1 Vitality a round and −10 Combat.', duration: thisFightFoe(pl) });
+  if (foe.shattered?.length) out.push({ key: 'shattered', icon: '✕', tone: 'debuff', name: pl ? 'Rozbity pancerz' : 'Smashed armour', effect: pl ? 'Pancerz w rozbitym miejscu nie chroni.' : 'Its armour where it was smashed stops nothing.', duration: thisFightFoe(pl) });
+  if (foe.inferno !== undefined) out.push({ key: 'inferno', icon: '♨', tone: 'debuff', mark: 'fire', name: pl ? 'Podpalony' : 'Ablaze', effect: pl ? 'W następnej rundzie traci połowę Żyw. i testuje Int.; porażka = śmierć.' : 'Next round it loses half its Vitality and tests Int; a failure kills it.', duration: pl ? 'następna runda' : 'next round' });
   if (combat.studiedKind === foe.enemy) {
     out.push({
       key: 'studied', icon: '⌕', tone: 'debuff',

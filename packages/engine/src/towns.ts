@@ -7,6 +7,7 @@ import { log, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState, Service } from './state';
 import { heroTest } from './terrain';
+import { townPrice } from './cardsHigh';
 import { armourPiece } from './combat';
 
 /** Settlement prices and limits from the "Fragmenty" and "Bohaterowie Niezależni" chapters. */
@@ -49,8 +50,8 @@ export function availableServices(state: GameState, player: PlayerState): Servic
 }
 
 /** A meal or a stay: 1 gold less with a friend in town (a chapter's lesson in the journal). */
-export function servicePrice(player: Pick<PlayerState, 'journal'>, service: 'meal' | 'stay'): number {
-  return Math.max(0, TOWN[service] - (player.journal?.summary.lessons.friend ? 1 : 0));
+export function servicePrice(player: Pick<PlayerState, 'journal' | 'character' | 'counters'>, service: 'meal' | 'stay'): number {
+  return townPrice(player, Math.max(0, TOWN[service] - (player.journal?.summary.lessons.friend ? 1 : 0)));
 }
 
 /** Inn table rolled on a stay: bad food, a brawl or a thief. */
@@ -147,10 +148,10 @@ export function buyPrice(state: GameState, player: PlayerState, item: string): n
   if (item === 'food') {
     if (place !== 'village' && place !== 'city') return null;
     const m = TOWN.market[place];
-    return (player.counters[onceKey(state, 'market')] ?? 0) < m.max ? m.price : null;
+    return (player.counters[onceKey(state, 'market')] ?? 0) < m.max ? townPrice(player, m.price) : null;
   }
   if (!shopStock(state, player).includes(item) && !mysticStock(state, player).includes(item)) return null;
-  return ITEMS[item]!.sell;
+  return townPrice(player, ITEMS[item]!.sell);
 }
 
 /** What a trader pays: rare materials only sell in a city. */

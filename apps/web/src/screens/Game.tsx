@@ -4,7 +4,7 @@ import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MAX_VOWS, MISSIONS, TERRAINS, 
 import {
   activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, eventOptions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
-  landAt, roomSpeed, TANNERY_HIDES, tannerySlots,
+  landAt, roomSpeed, TANNERY_HIDES, tannerySlots, distance, shadowRounds, spyTargets, travelTargets,
 } from '@hp/engine';
 import { Discovery } from '../Discovery';
 import { TerrainArt } from '../TerrainArt';
@@ -29,6 +29,9 @@ const TANNERY_LABEL = {
   head: { pl: 'Głowa', en: 'Head' }, torso: { pl: 'Korpus', en: 'Torso' }, arms: { pl: 'Ręce', en: 'Arms' }, legs: { pl: 'Nogi', en: 'Legs' },
 };
 import { CardCastHost } from '../CardArt';
+
+/** Cards played at a fragment the player picks. */
+const PICKED = ['gourmet-groundwater', 'cavedelver-shadow', 'explorer-spyglass'];
 import { HurtFlash, hurtSound, munch } from '../Feedback';
 import { DungeonBoard } from '../Dungeon';
 import { Campfire, JournalBook, JournalChip } from '../Journal';
@@ -111,6 +114,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const [aim, setAim] = useState<string | null>(null);
   /** Tannery played from the hand: the player picks the part of the body for the leather piece. */
   const [tannery, setTannery] = useState(false);
+  /** A card that goes somewhere (Groundwater, Shadow Walker, Spyglass): the player picks the fragment. */
+  const [picker, setPicker] = useState<string | null>(null);
   const moves = new Map<number, Action>(aim
     ? actions.flatMap((a) => (a.type === 'scroll' && a.item === aim && a.to !== undefined ? [[a.to, a] as const] : []))
     : actions.flatMap((a) => (a.type === 'move' ? [[a.to, a] as const] : [])));
@@ -685,9 +690,33 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                 </span>
               </div>
             )}
+            {myTurn && quiet && picker && actions.some((a) => a.type === 'card' && a.card === picker) && (
+              <div className="cook-box">
+                <span className="act-btn">
+                  <span className="act-title"><Icon name="cards" size={14} />{cardName(picker, locale)}</span>
+                  <small className="act-reward">{picker === 'explorer-spyglass' ? tx({ pl: 'Wybierz kierunek · −1 Wt', en: 'Pick a direction · −1 Stamina' }) : tx({ pl: 'Wybierz, dokąd idziesz', en: 'Pick where to go' })}</small>
+                </span>
+                <span className="cook-spices">
+                  {(picker === 'explorer-spyglass' ? spyTargets(game, me) : travelTargets(game, me, picker)).map((cell) => {
+                    const land = landAt(game.map, cell);
+                    const w = game.map.width;
+                    const dir = cell === me.position - w ? tx({ pl: 'Północ', en: 'North' }) : cell === me.position + w ? tx({ pl: 'Południe', en: 'South' }) : cell === me.position + 1 ? tx({ pl: 'Wschód', en: 'East' }) : tx({ pl: 'Zachód', en: 'West' });
+                    const label = picker === 'explorer-spyglass' ? dir
+                      : `${land === 'core' ? '' : tx(TERRAINS[land].name)} · ${distance(game, me.position, cell)} ${tx({ pl: 'fr.', en: 'tiles' })}${picker === 'cavedelver-shadow' ? ` · ${shadowRounds(game, me.position, cell)} ${tx({ pl: 'r.', en: 'rd' })}` : ''}`;
+                    return (
+                      <button key={cell} className="ghost small" onClick={() => { const card = picker; setPicker(null); act({ type: 'card', card, target: String(cell) }); }}>{label}</button>
+                    );
+                  })}
+                  <button className="ghost small" onClick={() => setPicker(null)}>{tx({ pl: 'Anuluj', en: 'Cancel' })}</button>
+                </span>
+              </div>
+            )}
             {myTurn && actions.some((a) => a.type === 'camp' && a.card) && actions.flatMap((a) => (a.type === 'camp' && a.card ? [a.card] : [])).map((card) => (
               <button key={card} className="ghost with-icon" onClick={() => endWith({ type: 'camp', card, ...(card === 'druid-teacher' && me.companions?.[0] ? { target: me.companions[0].uid } : {}) })}>
-                <Icon name="camp" />{tx({ pl: 'Obóz', en: 'Camp' })} + {cardName(card, locale)} <small className="odds">{card === 'warrior-way' ? tx({ pl: '+1 Walki · −1 Wt', en: '+1 Combat · −1 Stamina' }) : tx({ pl: 'test SW · towarzysz +1 · −2 Wt', en: 'Wil test · companion +1 · −2 Stamina' })}</small>
+                <Icon name="camp" />{tx({ pl: 'Obóz', en: 'Camp' })} + {cardName(card, locale)} <small className="odds">{card === 'warrior-way' ? tx({ pl: '+1 Walki · −1 Wt', en: '+1 Combat · −1 Stamina' })
+                  : card === 'elder-fill' ? tx({ pl: 'ładunek: Sz. i Wt. na później', en: 'a charge: Speed and Stamina for later' })
+                  : card === 'cavedelver-stew' ? tx({ pl: '−2 jedzenia · +6 Żyw. · +10 S. i Zr. · −1 Wt', en: '−2 food · +6 Vit · +10 Str and Dex · −1 Stamina' })
+                  : tx({ pl: 'test SW · towarzysz +1 · −2 Wt', en: 'Wil test · companion +1 · −2 Stamina' })}</small>
               </button>
             ))}
             {myTurn && quiet && actions.some((a) => a.type === 'reinforce') && (
@@ -719,7 +748,7 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           owned={c.cards}
           actor={me}
           playable={quiet ? actions.flatMap((a) => (a.type === 'card' ? [a.card] : [])) : []}
-          onPlay={(card) => (card === 'trapper-tannery' ? setTannery(true) : act({ type: 'card', card }))}
+          onPlay={(card) => (card === 'trapper-tannery' ? setTannery(true) : PICKED.includes(card) ? setPicker(card) : act({ type: 'card', card }))}
           dock
         />
         <GoalsPanel game={game} me={me} />

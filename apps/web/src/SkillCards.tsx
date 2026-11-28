@@ -11,15 +11,27 @@ import { Icon } from './Icons';
 const MAP_PLAY = [
   'wraith-haste', 'warrior-rations', 'wraith-leaves', 'trapper-trap', 'elder-nature', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'gourmet-stew',
   'trapper-tannery', 'elder-power-potion', 'mystic-levitate', 'wraith-lookout', 'runemaster-safety-rune',
+  // Levels 5 to 9.
+  'trapper-dog', 'trapper-leatherwork', 'elder-vision', 'elder-beast-form', 'elder-fill', 'elder-spirit', 'elder-life-potion',
+  'gourmet-groundwater', 'gourmet-recipe', 'gourmet-healthy', 'explorer-spyglass', 'explorer-bait', 'explorer-teleport', 'warrior-whetstone',
+  'mystic-illusion', 'mystic-healing', 'mystic-voidling', 'guardian-sign', 'guardian-field', 'wraith-untouchable', 'druid-totem', 'druid-raven',
+  'druid-nature-force', 'druid-shapeshift', 'druid-pack', 'runemaster-honour', 'runemaster-reflex', 'cavedelver-helping-hand', 'cavedelver-shadow', 'cavedelver-stone-skin',
 ];
 const FIGHT_PLAY = [
   'trapper-trap', 'warrior-heavy-swing', 'diver-blowpipe', 'cavedelver-whirling-axe', 'mystic-barrier', 'warrior-rations', 'wraith-leaves',
   'explorer-disarm', 'guardian-stance', 'druid-companion', 'elder-herb', 'explorer-bandages', 'runemaster-empower',
   'trapper-poison-arrow', 'elder-beast-master', 'diver-camouflage', 'diver-fillet', 'explorer-smoke', 'warrior-strategist', 'mystic-vines', 'wraith-mist', 'druid-fangs', 'cavedelver-blind',
+  // Levels 5 to 9.
+  'trapper-dog', 'trapper-piercing-arrow', 'trapper-volley', 'elder-mistral', 'elder-beast-form', 'diver-toxin', 'diver-sleep', 'diver-water-bolt',
+  'gourmet-spice', 'gourmet-venom-bone', 'explorer-flashbang', 'explorer-shrapnel', 'warrior-wide-swing', 'warrior-intimidate', 'warrior-banner', 'warrior-behead',
+  'mystic-void-bolt', 'mystic-illusion', 'mystic-healing', 'mystic-double', 'mystic-chasm', 'guardian-sign', 'guardian-field', 'guardian-claw', 'guardian-shield-wall', 'guardian-spear',
+  'wraith-pierce', 'wraith-aim', 'wraith-untouchable', 'wraith-triple-shot', 'wraith-headshot', 'druid-totem', 'druid-raven', 'druid-nature-force', 'druid-forest-lord', 'druid-shapeshift',
+  'runemaster-honour', 'runemaster-hammer', 'runemaster-rend', 'cavedelver-dynamite', 'cavedelver-flamethrower', 'cavedelver-stone-skin',
 ];
 /** Cards used through another button: at camp, when preparing food, in a city, or not yet in the game. */
 const ELSEWHERE: Record<string, 'later' | 'camp' | 'cook' | 'city' | 'town'> = {
   'cavedelver-craftsman': 'later', 'mystic-researcher': 'camp', 'warrior-way': 'camp', 'druid-teacher': 'camp', 'gourmet-seasoning': 'cook', 'runemaster-smelt': 'city', 'runemaster-reinforce': 'town',
+  'cavedelver-stew': 'camp', 'gourmet-better-food': 'cook',
 };
 
 /** A card that is never played: it works by itself whenever its moment comes. */

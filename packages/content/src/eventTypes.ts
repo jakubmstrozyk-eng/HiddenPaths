@@ -2,7 +2,8 @@ import type { EnemyKind } from './equipment';
 import type { Attribute, RaceId, TerrainId, Text } from './types';
 
 /** What an effect can change for a few rounds: a base attribute, all of them, Speed, Stamina or damage dealt. */
-export type EffectTarget = Attribute | 'all' | 'speed' | 'stamina' | 'damage';
+/** `armour`: added to the hero's armour on every part of the body (Protective Field, Stone Skin). */
+export type EffectTarget = Attribute | 'all' | 'speed' | 'stamina' | 'damage' | 'armour';
 
 /** Trained skills that add to their terrain action tests. */
 export type SkillId = 'hunt' | 'gather' | 'herbalism' | 'mine';

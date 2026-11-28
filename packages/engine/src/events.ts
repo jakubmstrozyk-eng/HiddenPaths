@@ -12,7 +12,7 @@ import { cardTestBonus, fightGold, traitOptions } from './journal';
 import { gainXp, log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, PlayerState } from './state';
-import { FOREVER, heroTest, testModifier, type Rune } from './terrain';
+import { FOREVER, heroTest, setRune, suddenDex, testModifier, type Rune } from './terrain';
 
 /** The whole deck in card order, shuffled into `state.eventDeck` at the start and whenever it runs out. */
 export const ALL_EVENT_IDS = EVENTS.map((e) => e.id);
@@ -57,6 +57,8 @@ function canPay(player: PlayerState, option: EventOption): boolean {
 
 /** A random event card gives at most this much extra XP in total, whatever path the player takes; fights pay their own XP. */
 export const EVENT_XP_CAP = 1;
+/** Luck: gold from events times this. */
+export const LUCK = 1.2;
 const EVENT_XP = 'eventXp';
 /** Clears the event XP tally when a new event card (or book reading) begins. */
 export const resetEventXp = (player: PlayerState) => { delete player.counters[EVENT_XP]; };
@@ -202,7 +204,8 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
     if (player.combat || player.pendingEvent?.puzzle || c.vitality <= 0) return;
     switch (o.do) {
       case 'gold': case 'food': case 'vitality':
-        change(state, player, o.do, o.amount);
+        // Luck: gold from an event card comes 20% bigger for the Explorer.
+        change(state, player, o.do, o.do === 'gold' && o.amount > 0 && card !== undefined && c.cards.includes('explorer-luck') ? Math.round(o.amount * LUCK) : o.amount);
         break;
       case 'herbs':
         for (let i = 0; i < o.amount; i++) {
@@ -272,7 +275,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       }
       case 'rune': {
         const rune = o.rune ?? RUNES[roll(state, player, rng, 10) - 1]!;
-        c.equipment.rune = rune;
+        setRune(c, rune);
         log(state, { type: 'change', player: player.id, change: { what: 'rune', rune } });
         break;
       }
@@ -280,7 +283,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       case 'fightRandom': {
         const pool = randomFoesFor(c.level);
         const enemies = o.do === 'fight' ? o.enemies : [pool[rng.int(pool.length)]!];
-        player.combat = startCombat(world, enemies, o.do === 'fight' ? o.onWin ?? [] : []);
+        player.combat = startCombat(world, enemies, o.do === 'fight' ? o.onWin ?? [] : [], player.position);
         if (card !== undefined) player.combat.card = card;
         log(state, { type: 'combatStarted', player: player.id, foes: enemies });
         springTrap(state, player, rng);
@@ -290,7 +293,7 @@ export function runOutcomes(state: GameState, player: PlayerState, rng: Rng, out
       case 'test': {
         const bonus = o.raceBonus && o.raceBonus.race === c.race ? o.raceBonus.amount : 0;
         // Vigilance: +10 to the Guardian's Dexterity tests in the sudden moments events bring.
-        const vigilance = o.attribute === 'dex' && c.cards.includes('guardian-vigilance') ? VIGILANCE : 0;
+        const vigilance = o.attribute === 'dex' ? (c.cards.includes('guardian-vigilance') ? VIGILANCE : 0) + suddenDex(player) : 0;
         // The journal: a person met before (+10), and the curious, the prudent and the schemer on cards.
         const journal = cardTestBonus(player, card, o.attribute);
         const result = heroTest(world, player, o.attribute, rng, (o.modifier ?? 0) + bonus + vigilance + journal);

@@ -5,7 +5,8 @@ import { EngineError } from './errors';
 import { log, reveal, worldView } from './progress';
 import type { Rng } from './rng';
 import type { GameState, Meal, PlayerState } from './state';
-import { heroTest, NATURE_BONUS, type ActorState } from './terrain';
+import { heroTest, NATURE_BONUS, runesOf, setRune, type ActorState } from './terrain';
+import { HIGH_EVENT_CARDS, highMapCards, playHighCard, STEW_FOOD } from './cardsHigh';
 import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
 
 /**
@@ -15,16 +16,25 @@ import { BOND_NEEDED, type CombatEvent, type Foe } from './combat';
  */
 
 /** Cards with a fixed number of uses per game. */
-export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3 };
+export const CARDS_PER_GAME: Record<string, number> = { 'warrior-rations': 3, 'wraith-leaves': 3, 'explorer-shrapnel': 2, 'cavedelver-dynamite': 2 };
 /** Cards that turn sideways when used and come back at the next camp. */
-export const CARDS_PER_CAMP = ['wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower', 'mystic-levitate', 'wraith-mist'];
+export const CARDS_PER_CAMP = [
+  'wraith-haste', 'elder-nature', 'elder-herb', 'runemaster-empower', 'mystic-levitate', 'wraith-mist',
+  // Level 5 to 9 cards.
+  'trapper-dog', 'elder-beast-form', 'explorer-bait', 'warrior-banner', 'mystic-healing', 'guardian-sign', 'guardian-field',
+  'druid-totem', 'druid-raven', 'druid-nature-force', 'druid-shapeshift', 'druid-pack', 'runemaster-honour', 'runemaster-rend',
+  'cavedelver-flamethrower', 'cavedelver-stone-skin',
+];
 /** Cards used only while camping (Jacob, 2026-11-26), with their Stamina on top of the camp's. */
-export const CAMP_CARDS: Record<string, number> = { 'warrior-way': 1, 'druid-teacher': 2 };
+export const CAMP_CARDS: Record<string, number> = { 'warrior-way': 1, 'druid-teacher': 2, 'elder-fill': 0, 'cavedelver-stew': 1 };
 /** Cards that cost Stamina when played on the map (Jacob, 2026-11-25); in a fight they take the hero's round instead. */
 export const MAP_STAMINA: Record<string, number> = {
   'elder-nature': 1, 'elder-herb': 1, 'runemaster-empower': 1, 'explorer-bandages': 1,
   // Level 3 cards, from their sheets.
   'trapper-tannery': 1, 'elder-power-potion': 1, 'mystic-levitate': 1, 'wraith-lookout': 1, 'runemaster-safety-rune': 2,
+  // Level 5 to 9 cards.
+  'trapper-leatherwork': 1, 'elder-vision': 1, 'elder-life-potion': 1, 'explorer-spyglass': 1, 'warrior-whetstone': 1,
+  'mystic-healing': 1, 'runemaster-reflex': 2, 'wraith-untouchable': 1,
 };
 
 export const has = (actor: Pick<ActorState, 'character'>, card: string) => actor.character.cards.includes(card);
@@ -56,7 +66,7 @@ export const EVENT_CARDS = ['elder-nature', 'warrior-rations', 'runemaster-empow
 export function playableCards(state: GameState, player: PlayerState): string[] {
   if (player.combat || player.pendingEvent?.puzzle) return [];
   const all = mapCards(state, player);
-  return player.pendingEvent ? all.filter((card) => EVENT_CARDS.includes(card)) : all;
+  return player.pendingEvent ? all.filter((card) => EVENT_CARDS.includes(card) || HIGH_EVENT_CARDS.includes(card)) : all;
 }
 
 function mapCards(state: GameState, player: PlayerState): string[] {
@@ -79,7 +89,8 @@ function mapCards(state: GameState, player: PlayerState): string[] {
   if (affords('wraith-lookout') && terrain === 'forest' && state.map.cells.some((cell) => cell.terrain !== 'void' && isNear(state, player, cell.index) && !player.revealed.includes(cell.index))) {
     out.push('wraith-lookout');
   }
-  if (affords('runemaster-safety-rune') && player.character.equipment.rune !== 'safety') out.push('runemaster-safety-rune');
+  if (affords('runemaster-safety-rune') && !runesOf(player.character.equipment).includes('safety')) out.push('runemaster-safety-rune');
+  out.push(...highMapCards(state, player));
   return out;
 }
 
@@ -107,6 +118,18 @@ export function campCard(state: GameState, player: PlayerState, card: string, rn
       player.character.attributes.com += 1;
       log(state, { type: 'card', player: player.id, card, ok: true, amount: 1 });
       break;
+    case 'elder-fill':
+      // Brimming: the charge waits for the moment the Elder needs a fresh round's Speed and Stamina.
+      player.counters.brimming = 1;
+      log(state, { type: 'card', player: player.id, card, ok: true });
+      break;
+    case 'cavedelver-stew':
+      // Mountain Stew: 2 food, eaten at once: 6 Vitality back and +10 Str and Dex for 3 rounds.
+      player.character.food -= STEW_FOOD;
+      player.effects.push({ id: 'mountainStew', attribute: 'str', amount: 10, untilRound: state.round + 2 });
+      player.effects.push({ id: 'mountainStew', attribute: 'dex', amount: 10, untilRound: state.round + 2 });
+      log(state, { type: 'card', player: player.id, card, ok: true, amount: heal(player, 6) });
+      break;
     case 'druid-teacher': {
       const result = heroTest(worldView(state), player, 'wil', rng);
       log(state, { type: 'check', player: player.id, attribute: 'wil', result });
@@ -120,7 +143,8 @@ export function campCard(state: GameState, player: PlayerState, card: string, rn
 
 /** Whether a camp card can be used at this camp. */
 export const canCampCard = (player: PlayerState, card: string) =>
-  has(player, card) && (card !== 'druid-teacher' || !!(player.companions ?? []).length);
+  has(player, card) && (card !== 'druid-teacher' || !!(player.companions ?? []).length)
+  && (card !== 'elder-fill' || !player.counters.brimming) && (card !== 'cavedelver-stew' || player.character.food >= STEW_FOOD);
 
 /** Bandages cost 1 Stamina on the map; in a fight they take the hero's move instead. */
 export const BANDAGE_STAMINA = MAP_STAMINA['explorer-bandages']!;
@@ -143,7 +167,8 @@ export function canCook(player: PlayerState): boolean {
 }
 /** Seasoning: the Gourmet may season one portion a round with an attribute of their choice. */
 export function canSeason(state: GameState, player: PlayerState): boolean {
-  return has(player, 'gourmet-seasoning') && !player.counters[roundKey(state, 'spiced')];
+  // Better Provisions replaces Seasoning, so it seasons too.
+  return (has(player, 'gourmet-seasoning') || has(player, 'gourmet-better-food')) && !player.counters[roundKey(state, 'spiced')];
 }
 
 /** Prepares one portion of food (Myrmid race rule), seasoned if the Gourmet asks for it. */
@@ -201,7 +226,8 @@ export function eatMeal(state: GameState, player: PlayerState, portions: number)
   if (pick < 0 && plainFood(player) < portions) pick = 0;
   if (pick < 0) return;
   const [meal] = list.splice(pick, 1);
-  const until = state.round + 1;
+  // Better Provisions: a prepared meal works one round longer.
+  const until = state.round + 1 + (has(player, 'gourmet-better-food') ? 1 : 0);
   if (meal!.kind === 'stew') {
     log(state, { type: 'card', player: player.id, card: 'gourmet-stew', ok: true, amount: heal(player, 2) });
   } else {
@@ -308,6 +334,8 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
       log(state, { type: 'check', player: player.id, attribute: 'int', result });
       if (result.success) {
         player.counters.hides = (player.counters.hides ?? 0) - TANNERY_HIDES[slot];
+        // Leather Suit: the Trapper learns it after 3 good Tanneries.
+        player.counters.tanned = (player.counters.tanned ?? 0) + 1;
         const item = `leather-${slot}`;
         player.inventory.items.push(item);
         log(state, { type: 'crafted', player: player.id, card, item });
@@ -358,8 +386,11 @@ export function playCard(state: GameState, player: PlayerState, card: string, rn
     case 'runemaster-safety-rune':
       // Rune of Safety: +20 initiative while the weapon carries it; a weapon holds one rune.
       player.staminaLeft -= MAP_STAMINA[card]!;
-      player.character.equipment.rune = 'safety';
+      setRune(player.character, 'safety');
       log(state, { type: 'card', player: player.id, card, ok: true, amount: 20 });
+      break;
+    default:
+      playHighCard(state, player, card, rng, target);
       break;
     case 'gourmet-stew': {
       // Healing Stew: an Intelligence test turns a portion into a stew; one try a round.

@@ -14,7 +14,8 @@ import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
 import { coverForgotten, deplete, DEPLETING_ACTIONS, markVisit } from './tiles';
-import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
+import { availableTerrainActions, effectBonus, heroTest, isWater, runTerrainAction } from './terrain';
+import { ENDS_ROUND, startSpeed } from './cardsHigh';
 import {
   availableServices, buy, buyPrice, canSmelt, mysticStock, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
@@ -46,7 +47,7 @@ export function createGame(seed: string, config: GameConfig, newPlayers: NewPlay
       start: OUTSIDE,
       respawnAt: OUTSIDE,
       revealed: [],
-      speedLeft: character.speed,
+      speedLeft: character.speed + (character.cards.includes('wraith-runner') ? 1 : 0),
       staminaLeft: character.stamina,
       cameFrom: null,
       roundsWithoutFood: 0,
@@ -172,7 +173,7 @@ export function legalActions(state: GameState, playerId: string): Action[] {
   if (player.delve) return delveActions(state, player);
   if (canDescend(state, player) && canAfford(state, player)) for (const to of state.dungeon!.entry) actions.push({ type: 'dungeon', to });
   for (const n of neighbours(state.map, player.position)) {
-    if (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n)) actions.push({ type: 'move', to: n });
+    if (flying(state, player) || (moveCost(state, n, player) <= player.speedLeft && player.staminaLeft >= MOVE_STAMINA && !blockedByRiver(state, player, n))) actions.push({ type: 'move', to: n });
   }
   const hidden = hiddenHere(player);
   if (!hidden) for (const action of availableTerrainActions(worldView(state), player)) actions.push({ type: 'terrain', action });
@@ -239,10 +240,26 @@ function delveActions(state: GameState, player: PlayerState): Action[] {
 const MAP_ONLY = new Set<Action['type']>(['move', 'enter', 'camp', 'terrain', 'service', 'buy', 'sell', 'portal', 'smelt', 'reinforce', 'cook', 'read']);
 
 /** One step onto a fragment: costs Speed and Stamina, reveals it and may draw an event. */
+/** Flow: after touching water the Diver has +20 to the base attributes for 2 rounds. */
+function flow(state: GameState, player: PlayerState, terrain: string) {
+  if (!player.character.cards.includes('diver-flow') || !isWater(terrain)) return;
+  player.effects = player.effects.filter((e) => e.id !== 'flow');
+  player.effects.push({ id: 'flow', attribute: 'all', amount: 20, untilRound: state.round + 1 });
+  log(state, { type: 'card', player: player.id, card: 'diver-flow', ok: true, amount: 20 });
+}
+
+/** Raven Form on the map: one flight to a neighbouring fragment this round, free of Speed, Stamina and rivers. */
+const flying = (state: GameState, player: PlayerState) => !!player.counters[`raven@${state.round}`];
+
 function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
-  const cost = moveCost(state, to, player);
+  const raven = flying(state, player);
+  const cost = raven ? 0 : moveCost(state, to, player);
   if (cost > player.speedLeft) throw new EngineError('move.noSpeed', 'Not enough Speed left.');
-  if (player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
+  if (!raven && player.staminaLeft < MOVE_STAMINA) throw new EngineError('move.noStamina', 'Not enough Stamina left.');
+  if (raven) {
+    delete player.counters[`raven@${state.round}`];
+    player.staminaLeft += MOVE_STAMINA;
+  }
   player.crossedRiver = false;
   log(state, { type: 'moved', player: player.id, from: player.position, to, cost });
   delete player.counters[`hiddenAt:${player.position}`];
@@ -251,6 +268,7 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
   player.cameFrom = isOutside(player) ? null : player.position;
   player.position = to;
   const terrain = landAt(state.map, to);
+  flow(state, player, terrain);
   const fresh = reveal(state, player, to, rng);
   // Traveller: every second new fragment found in one turn gives the Explorer +1 XP.
   if (fresh && player.character.cards.includes('explorer-traveller')) {
@@ -353,7 +371,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       if (isOutside(player) || !neighbours(state.map, player.position).includes(action.to)) {
         throw new EngineError('move.notAdjacent', 'You can only move to a neighbouring fragment.');
       }
-      if (blockedByRiver(state, player, action.to)) throw new EngineError('move.river', 'Swim across the river first.');
+      if (blockedByRiver(state, player, action.to) && !flying(state, player)) throw new EngineError('move.river', 'Swim across the river first.');
       step(state, player, action.to, rng);
       break;
     }
@@ -387,7 +405,9 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       const j = journalOf(player);
       const stars = j.summary.lessons.stars && !j.starsUsed;
       if (stars) j.starsUsed = true;
-      const healed = Math.min(stars ? 4 : 2, player.character.maxVitality - player.character.vitality);
+      // Better Camp: the Trapper's camp heals 3 more.
+      const better = player.character.cards.includes('trapper-camp') ? 3 : 0;
+      const healed = Math.min((stars ? 4 : 2) + better, player.character.maxVitality - player.character.vitality);
       player.character.vitality += healed;
       player.actionsSinceCamp = 0;
       log(state, { type: 'camped', player: player.id, cell: player.position, healed });
@@ -400,6 +420,7 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
     }
     case 'terrain': {
       const outcome = runTerrainAction(worldView(state), player, action.action, rng);
+      if (action.action === 'swim' && outcome.gained.includes('crossed')) flow(state, player, 'river');
       log(state, { player: player.id, ...outcome });
       // The animals, fruit, herbs or ore are gone for a while, for every hero.
       if (outcome.result.success && DEPLETING_ACTIONS.includes(action.action)) {
@@ -421,6 +442,8 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       break;
     case 'card':
       playCard(state, player, action.card, rng, action.target);
+      // Helping Hand's work and Shadow Walker's journey take the rest of the round.
+      if (ENDS_ROUND.includes(action.card)) endTurn(state, player, rng);
       break;
     case 'keepCards': {
       if (player.combat) throw new EngineError('combat.inProgress', 'Finish the fight first.');
@@ -526,6 +549,8 @@ function fight(state: GameState, player: PlayerState, rng: Rng, move: CombatMove
   if (result !== 'ongoing') {
     player.speedLeft = 0;
     player.staminaLeft = 0;
+    // Whetstone: the edge lasts one fight.
+    delete player.counters.whetted;
   }
   for (const event of events) log(state, { type: 'combat', player: player.id, event });
   switch (result) {
@@ -575,6 +600,7 @@ function equip(state: GameState, player: PlayerState, id: string) {
     inv.push(eq.weapon);
     eq.weapon = id;
     eq.rune = null; // a rune belongs to the blade it was set on
+    eq.rune2 = null;
   } else if (item.kind === 'armour') {
     take();
     const keep: string[] = [];
@@ -673,6 +699,8 @@ export function mealDue(state: GameState, player: PlayerState): { needed: number
   // Staying in the desert costs double food.
   const needed = !needsFood ? 0 : !isOutside(player) && landAt(state.map, player.position) === 'desert' ? 2 : 1;
   const eaten = player.counters[ateKey(state)] ?? 0;
+  // Healthy Eating: the dish keeps the Gourmet fed this round and the next.
+  if (player.counters[`sated@${state.round}`]) return { needed: 0, eaten, left: 0 };
   return { needed, eaten, left: Math.max(0, needed - eaten) };
 }
 
@@ -688,6 +716,12 @@ function eat(state: GameState, player: PlayerState) {
   const { left, eaten } = mealDue(state, player);
   const portions = Math.min(left, c.food);
   eatMeal(state, player, portions);
+  // Sign of Strength: while it lasts a meal heals 2 Vitality.
+  if (portions > 0 && player.effects.some((e) => e.id === 'sign')) {
+    const healed = Math.min(2, c.maxVitality - c.vitality);
+    c.vitality += healed;
+    if (healed) log(state, { type: 'card', player: player.id, card: 'guardian-sign', ok: true, amount: healed });
+  }
   c.food -= portions;
   trimMeals(player);
   if (portions === left) player.roundsWithoutFood = 0;
@@ -722,8 +756,16 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
     if (covered.length) log(state, { type: 'covered', player: player.id, cells: covered });
   }
   const next = currentPlayer(state);
-  next.speedLeft = Math.max(0, next.character.speed + effectBonus(next, state.round, 'speed'));
+  next.speedLeft = startSpeed(state, next);
   next.staminaLeft = Math.max(0, next.character.stamina + effectBonus(next, state.round, 'stamina'));
+  // Shadow Walker: a round still on the road underground; the hero cannot act this round.
+  if (next.counters.travelling) {
+    next.counters.travelling--;
+    if (!next.counters.travelling) delete next.counters.travelling;
+    next.speedLeft = 0;
+    next.staminaLeft = 0;
+    log(state, { type: 'card', player: next.id, card: 'cavedelver-shadow', ok: true, amount: 0 });
+  }
   log(state, { type: 'turnEnded', player: player.id, next: next.id, round: state.round });
   // Poison, nightmares and the like strike at the start of the hero's turn.
   tickConditions(state, next, rng);

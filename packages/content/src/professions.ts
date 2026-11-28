@@ -1,8 +1,9 @@
+import { HIGH_CARDS } from './cardsHigh';
 import type { Profession, ProfessionId } from './types';
 
 /**
- * Professions, two per race, each with its skill cards from the profession sheets: 3 at level 1, 2 more at level 3.
- * The cards for levels 5 to 9 are added in later milestones.
+ * Professions, two per race, each with its skill cards from the profession sheets: 3 at level 1, then 2 more at
+ * levels 3, 5, 7 and 9 (11 in all; the higher ones live in cardsHigh.ts).
  */
 export const PROFESSIONS: Record<ProfessionId, Profession> = {
   trapper: {
@@ -126,5 +127,7 @@ export const PROFESSIONS: Record<ProfessionId, Profession> = {
     ],
   },
 };
+
+for (const p of Object.values(PROFESSIONS)) p.cards.push(...HIGH_CARDS[p.id]);
 
 export const MVP_PROFESSIONS = Object.values(PROFESSIONS).filter((p) => p.mvp);

@@ -50,7 +50,7 @@ export function cardName(id: string, locale: Locale): string {
 export function foeName(uid: string, locale: Locale): string {
   // A companion: "pet-wolf-1" is the hero's tamed Wolf.
   if (uid.startsWith('pet-')) {
-    const enemy = ENEMIES[uid.slice(4).replace(/-\d+$/, '')];
+    const enemy = ENEMIES[uid.slice(4).replace(/-c?\d+$/, '')];
     return `${enemy ? enemy.name[locale] : uid} (${locale === 'pl' ? 'towarzysz' : 'companion'})`;
   }
   const id = uid.replace(/-\d+$/, '');
@@ -249,7 +249,33 @@ export function combatLine(e: LogEntry, T: T): string | null {
     case 'scroll': return `${itemName(ev.item, locale)}${ev.amount ? `: +${ev.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
     case 'shock': return `${foeName(ev.uid, locale)}: ${ev.stunned ? (pl ? 'ogłuszony błyskawicą' : 'stunned by lightning') : (pl ? 'otrząsa się z porażenia' : 'shrugs off the lightning')}`;
     case 'burn': return `${foeName(ev.uid, locale)}: ${ev.dead ? (pl ? 'spłonął!' : 'burnt to death!') : ev.out ? (pl ? 'gasi ogień, −1' : 'puts the fire out, −1') : (pl ? 'płonie, −1' : 'burns, −1')}`;
+    case 'cardTest': return `${cardName(ev.card, locale)}: ${attrShort(ev.attribute, locale)} ${ev.result.success ? t('success') : t('failure')} (${ev.result.roll}/${ev.result.target})`;
+    case 'save': return `${foeName(ev.uid, locale)}: ${attrShort(ev.attribute, locale)} ${ev.result.success ? (pl ? 'opiera się' : 'resists') : (pl ? 'nie opiera się' : 'fails')} (${ev.result.roll}/${ev.result.target})`;
+    case 'status': return `${cardName(ev.card, locale)}: ${ev.uid === 'hero' ? '' : `${foeName(ev.uid, locale)} `}${statusWords(ev.what, ev.amount, locale)}`;
+    case 'decoy': return `${foeName(ev.uid, locale)} → ${pl ? 'sobowtór' : 'the double'}: ${ev.gone ? (pl ? 'trafia, sobowtór znika' : 'hits, the double vanishes') : t('miss')}`;
   }
+}
+
+/** What a card's `status` event did, in words. */
+export function statusWords(what: string, amount: number | undefined, locale: Locale): string {
+  const pl = locale === 'pl';
+  const n = amount ?? 0;
+  const words: Record<string, [string, string]> = {
+    asleep: ['zasypia!', 'falls asleep!'], sleeping: ['śpi', 'sleeps'], woke: ['budzi się', 'wakes up'],
+    dazed: ['otępiały na 3 rundy', 'dazed for 3 rounds'], spiced: ['oślepiony, −20 Walki i Zr. na 3 rundy', 'blinded, −20 Combat and Dex for 3 rounds'],
+    gash: ['strzała na wylot: krwawi i ma −10 Walki', 'shot through: bleeds and has −10 Combat'], shattered: ['pancerz rozbity', 'armour smashed'],
+    burning: ['płonie!', 'catches fire!'], burnedOut: ['gasi ogień', 'puts the fire out'], burnedDown: ['spłonął!', 'burnt to death!'],
+    fled: ['ucieka z walki', 'runs from the fight'], void: ['znika w pustce', 'vanishes into the void'], fell: ['spada w rozpadlinę', 'falls into the chasm'],
+    stays: ['wrogowie biorą cię za kompana, walka się kończy', 'the foes take you for a friend; the fight ends'],
+    gale: [`traci ${n} Żyw. i następny ruch`, `loses ${n} Vitality and its next move`], venom: [`trucizna ${n}`, `poison ${n}`],
+    rising: ['zatruty, trucizna rośnie co rundę', 'poisoned, worse every round'], bloodlust: ['trans! +10 S., Zr., Walki i +2 Obr.', 'trance! +10 Str, Dex, Combat and +2 damage'],
+    summoned: ['przybywa na pomoc', 'comes to help'], wall: [`ściana tarcz zatrzyma ${n} ciosy`, `the wall will stop ${n} blows`], walled: ['tarcze blokują cios', 'the shields stop the blow'],
+    unarmed: ['włócznia tkwi we wrogu', 'the spear is in the foe'], pickedUp: ['podnosisz włócznię', 'you pick the spear up'],
+    double: ['sobowtór staje obok ciebie', 'your double stands beside you'], fizzle: ['nic z tego', 'nothing comes of it'],
+    buff: ['działa', 'takes hold'], healed: [`+${n} Żyw., dolegliwości znikają`, `+${n} Vitality, ailments gone`], dodged: ['unik!', 'dodged!'], hit: ['trafienie', 'a hit'],
+  };
+  const w = words[what];
+  return w ? w[pl ? 0 : 1] : what;
 }
 
 function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: number }, locale: Locale): string {
@@ -278,6 +304,39 @@ function cardLine(card: string, e: { ok?: boolean; roll?: number; amount?: numbe
     case 'druid-teacher': return `${name}: ${e.ok ? `${pl ? 'towarzysz' : 'companion'} +${e.amount ?? 1}` : (pl ? 'lekcja nie wyszła' : 'the lesson failed')}`;
     case 'runemaster-safety-rune': return `${name}: +20 ${pl ? 'inicjatywy' : 'initiative'}`;
     case 'guardian-scalp': return `${name}: +${e.amount ?? 1} ${pl ? 'Walki przeciw temu rodzajowi wroga' : 'Combat against this kind of foe'}`;
+    // Level 5 to 9 cards.
+    case 'trapper-dog': return `${name}: ${pl ? 'pies stepowy przy tobie' : 'the steppe dog is at your side'}`;
+    case 'trapper-leatherwork': return `${name}: ${pl ? 'nie udało się' : 'it did not work'}`;
+    case 'elder-vision': return e.amount === 2 ? `${name}: ${pl ? 'dobierasz kartę wydarzenia jeszcze raz' : 'you draw the event card again'}` : `${name}: ${e.ok ? (pl ? 'następną kartę wydarzenia możesz dobrać ponownie' : 'you may draw your next event card again') : (pl ? 'przyszłość pozostaje zakryta' : 'the future stays hidden')}`;
+    case 'elder-fill': return `${name}: ${e.ok && e.amount === undefined ? (pl ? 'Szybkość i Wytrzymałość jak na początku rundy' : 'Speed and Stamina as at the start of a round') : (pl ? 'ładunek gotowy' : 'the charge is ready')}`;
+    case 'elder-spirit': case 'explorer-spyglass': return `${name}: ${pl ? 'odkryte fragmenty' : 'fragments revealed'} ${e.amount ?? 0}`;
+    case 'elder-life-potion': return `${name}: ${e.amount ?? 0}/3 ${pl ? 'składników' : 'ingredients'}`;
+    case 'gourmet-groundwater': return `${name}: ${pl ? 'przepływasz wodami gruntowymi' : 'you swim through the groundwater'}`;
+    case 'cavedelver-shadow': return e.amount === 0 ? `${name}: ${pl ? 'wciąż w drodze pod ziemią, ta runda przepada' : 'still on the road underground, this round is spent'}` : `${name}: ${pl ? `droga na ${e.amount ?? 1} ${(e.amount ?? 1) === 1 ? 'rundę' : 'rundy'}` : `a way of ${e.amount ?? 1} round(s)`}`;
+    case 'gourmet-recipe': return `${name}: ${pl ? 'Wytrzymałość odnowiona' : 'Stamina restored'}`;
+    case 'gourmet-healthy': return `${name}: ${pl ? 'syty na 2 rundy, +1 Żyw. na stałe' : 'fed for 2 rounds, +1 max Vitality'}`;
+    case 'explorer-bait': return `${name}: +20 ${pl ? 'do następnego polowania' : 'to the next hunt'}`;
+    case 'explorer-teleport': return `${name}: ${e.amount ? (pl ? 'wracasz przez teleport' : 'you step back through the teleport') : (pl ? 'teleport postawiony' : 'teleport set')}`;
+    case 'warrior-whetstone': return `${name}: +2 ${pl ? 'Obr. w następnej walce' : 'damage in the next fight'}`;
+    case 'mystic-illusion': return `${name}: ${e.ok ? (pl ? '+20 do testów Charyzmy w tej rundzie' : '+20 to Charisma tests this round') : (pl ? 'iluzja się rozwiewa' : 'the illusion fades')}`;
+    case 'mystic-healing': return `${name}: ${e.ok ? `+${e.amount ?? 0} ${pl ? 'Żyw., dolegliwości znikają' : 'Vit, ailments gone'}` : (pl ? 'nie udało się' : 'it did not work')}`;
+    case 'mystic-voidling': return `${name}: ${e.ok ? (pl ? 'pustkowiec walczy po twojej stronie' : 'the voidling fights on your side') : (pl ? 'pustka się nie formuje' : 'the void will not take shape')}`;
+    case 'druid-raven': return `${name}: ${pl ? 'w tej rundzie przelecisz na sąsiedni fragment' : 'this round you fly to a neighbouring fragment'}`;
+    case 'druid-pack': return `${name}: ${e.ok ? (pl ? `wilki przy tobie: +${e.amount ?? 0}` : `wolves at your side: +${e.amount ?? 0}`) : (pl ? 'wilki nie przychodzą' : 'the wolves do not come')}`;
+    case 'runemaster-reflex': return `${name}: ${pl ? 'runy' : 'runes'} ${e.amount ?? 1}/2`;
+    case 'wraith-untouchable': return `${name}: ${pl ? 'nauka uniku' : 'dodge lessons'} ${e.amount ?? 0}/3`;
+    case 'cavedelver-helping-hand': return `${name}: ${pl ? 'praca' : 'work'} ${e.amount ?? 1}/2${(e.amount ?? 0) >= 2 ? (pl ? ' · −20% na zakupy' : ' · −20% on purchases') : ''}`;
+    case 'cavedelver-stew': return `${name}: +${e.amount ?? 0} ${pl ? 'Żyw., +10 S. i Zr. na 3 rundy' : 'Vit, +10 Str and Dex for 3 rounds'}`;
+    case 'diver-flow': return `${name}: +20 ${pl ? 'do cech na 2 rundy' : 'to attributes for 2 rounds'}`;
+    case 'guardian-sign': return e.amount && e.amount <= 2 ? `${name}: +${e.amount} ${pl ? 'Żyw. z posiłku' : 'Vit from the meal'}` : `${name}: +10 ${pl ? 'S., SW. i Int. na 2 rundy' : 'Str, Wil and Int for 2 rounds'}`;
+    case 'elder-beast-form': return `${name}: ${pl ? 'forma bestii na 2 rundy' : 'beast form for 2 rounds'}`;
+    case 'druid-shapeshift': return `${name}: ${pl ? 'wilkor na 2 rundy' : 'dire wolf for 2 rounds'}${e.amount ? `, +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'guardian-field': return `${name}: +2 ${pl ? 'pancerza na 2 rundy' : 'armour for 2 rounds'}${e.amount ? `, +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'druid-totem': return `${name}: +10 ${pl ? 'Walki, Zr. i S. na 3 rundy' : 'Combat, Dex and Str for 3 rounds'}${e.amount ? `, +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'druid-nature-force': return `${name}: +20 ${pl ? 'S. na 2 rundy' : 'Str for 2 rounds'}${e.amount ? `, +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'runemaster-honour': return `${name}: ${pl ? 'test Walki dwa razy przez 2 rundy' : 'Combat tests thrown twice for 2 rounds'}`;
+    case 'cavedelver-stone-skin': return `${name}: +5 ${pl ? 'pancerza na 3 rundy' : 'armour for 3 rounds'}${e.amount ? `, +${e.amount} ${pl ? 'Żyw.' : 'Vit'}` : ''}`;
+    case 'warrior-banner': return `${name}: +10 ${pl ? 'S. i Walki, +2 Obr. do końca walki' : 'Str and Combat, +2 damage until the fight ends'}`;
     default: return name;
   }
 }

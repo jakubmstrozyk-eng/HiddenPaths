@@ -59,6 +59,8 @@ export interface PotionItem extends BaseItem {
   effects?: { target: Attribute | 'all' | 'speed' | 'stamina'; amount: number; rounds: number }[];
   /** Made by a hero, never sold in a shop. */
   crafted?: boolean;
+  /** Ends every ill: poison, bleeding, rot and the like (the Elder's Potion of Life). */
+  cureAll?: boolean;
 }
 
 export interface TrinketItem extends BaseItem {
@@ -124,6 +126,7 @@ const list: Item[] = [
   { id: 'shield', kind: 'shield', name: t('Tarcza', 'Shield'), parry: 15, sell: 5, buy: 2.5, rare: false },
   // Event armour.
   { id: 'reinforcedBoots', kind: 'armour', name: t('Wzmocnione buty skórzane', 'Reinforced leather boots'), covers: ['legs'], value: 2, sell: 6, buy: 3, rare: false },
+  { id: 'leatherSuit', kind: 'armour', name: t('Skórznia', 'Leather suit'), covers: ['head', 'arms', 'torso', 'legs'], value: 2, sell: 12, buy: 6, rare: true },
   { id: 'chainmail', kind: 'armour', name: t('Kolczuga', 'Chainmail'), covers: ['torso', 'arms'], value: 3, sell: 15, buy: 7.5, rare: true },
   // Herbalist potions.
   { id: 'lifePotion', kind: 'potion', name: t('Mikstura życia', 'Potion of life'), heal: 5, sell: 2, buy: 1, rare: false },
@@ -134,6 +137,7 @@ const list: Item[] = [
     id: 'elderPotion', kind: 'potion', name: t('Mikstura Mocy Starszego', "Elder's Potion of Might"), heal: 2, crafted: true, sell: 8, buy: 4, rare: true,
     effects: [{ target: 'dex', amount: 10, rounds: 2 }, { target: 'str', amount: 10, rounds: 2 }, { target: 'com', amount: 10, rounds: 2 }, { target: 'stamina', amount: 1, rounds: 2 }],
   },
+  { id: 'elderLifePotion', kind: 'potion', name: t('Mikstura Życia Starszego', "Elder's Potion of Life"), heal: 99, cureAll: true, crafted: true, sell: 15, buy: 7.5, rare: true },
   { id: 'powerPotion', kind: 'potion', name: t('Mikstura mocy', 'Potion of power'), effect: { target: 'all', amount: 5, rounds: 1 }, sell: 5, buy: 2.5, rare: false },
   { id: 'healingElixir', kind: 'potion', name: t('Eliksir zdrowia', 'Elixir of health'), heal: 99, sell: 15, buy: 7.5, rare: true },
   // Trinkets found in events.
