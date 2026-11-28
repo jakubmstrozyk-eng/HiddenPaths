@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { DUNGEON_THEMES, EVENT_BY_ID, QUIET_CARD, TERRAINS, isDungeonCard, themeOfCard } from '@hp/content';
+import { DUNGEON_THEMES, EVENT_BY_ID, QUIET_CARD, TERRAINS, isBountyCard, isDungeonCard, isTownCard, themeOfCard } from '@hp/content';
 import { cardTestBonus, eventOptions, isOutside, legalActions, knownPerson, landAt, successChance, testModifier, worldView, type Action, type GameState, type PlayerState } from '@hp/engine';
 import { JOURNAL_PEOPLE, PERSON_MARKS, PROFESSIONS, TRAITS, type TraitId } from '@hp/content';
 import { EventScene } from '../EventScene';
@@ -98,7 +98,7 @@ export function EventPanel({ game, me, lines, xp = 0, act, hold = false }: { gam
           aria-label={tx(card.title)}
         >
           <span className="ev-number">{room ? '⛬' : card.id}</span>
-          <span className="ev-tag">{room ? (pl ? 'Komnata lochu' : 'Dungeon room') : card.hostile ? (pl ? 'Zagrożenie' : 'Danger') : (pl ? 'Wydarzenie' : 'Event')}</span>
+          <span className="ev-tag">{room ? (pl ? 'Komnata lochu' : 'Dungeon room') : isBountyCard(card.id) ? (pl ? 'List gończy' : 'Bounty') : isTownCard(card.id) ? (card.hostile ? (pl ? 'Kłopoty w osadzie' : 'Trouble in town') : (pl ? 'Wydarzenie w osadzie' : 'Town event')) : card.hostile ? (pl ? 'Zagrożenie' : 'Danger') : (pl ? 'Wydarzenie' : 'Event')}</span>
           <div className="ev-art" aria-hidden="true">
             <EventScene card={card.id} step={pending.step} terrain={here} hostile={card.hostile} hero={me.character} />
           </div>

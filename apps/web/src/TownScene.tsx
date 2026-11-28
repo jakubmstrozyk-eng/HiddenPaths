@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
 /** The places in a settlement a hero can walk into. */
-export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal' | 'mystic' | 'castle';
+export type Spot = 'bar' | 'rooms' | 'table' | 'tavern' | 'smith' | 'yard' | 'market' | 'shop' | 'portal' | 'mystic' | 'castle' | 'board';
 
 export const SPOTS: Record<'inn' | 'village' | 'city', Spot[]> = {
   inn: ['bar', 'table', 'rooms'],
-  village: ['tavern', 'smith', 'yard', 'market', 'shop'],
-  city: ['tavern', 'smith', 'yard', 'market', 'shop', 'mystic', 'portal', 'castle'],
+  village: ['tavern', 'board', 'smith', 'yard', 'market', 'shop'],
+  city: ['tavern', 'board', 'smith', 'yard', 'market', 'shop', 'mystic', 'portal', 'castle'],
 };
 
 export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
@@ -21,6 +21,7 @@ export const SPOT_NAME: Record<Spot, { pl: string; en: string }> = {
   portal: { pl: 'Portal', en: 'Portal' },
   mystic: { pl: 'Wieża Mistyka', en: "The Mystic's tower" },
   castle: { pl: 'Zamek', en: 'Castle' },
+  board: { pl: 'Tablica ogłoszeń', en: 'Notice board' },
 };
 
 /** A clickable building or corner of the picture, lit when hovered or chosen. */
@@ -114,6 +115,16 @@ function TownStreet({ chosen, onPick, name, city }: { chosen: Spot | null; onPic
       <Hot spot="tavern" chosen={chosen} onPick={onPick} label={name('tavern')} x={95} y={110}>
         <House x={30} y={170} w={130} h={90} wall="#c8a878" roof="#7a2a1a" />
         <rect x={160} y={175} width={4} height={40} fill="#1a120c" /><rect x={164} y={180} width={28} height={18} fill="#c89a5a" stroke="#1a120c" />
+      </Hot>
+      <Hot spot="board" chosen={chosen} onPick={onPick} label={name('board')} x={190} y={258}>
+        <rect x={160} y={300} width={6} height={44} fill="#5a3418" stroke="#1a120c" strokeWidth={1.5} />
+        <rect x={214} y={300} width={6} height={44} fill="#5a3418" stroke="#1a120c" strokeWidth={1.5} />
+        <rect x={152} y={272} width={76} height={40} fill="#8a5a32" stroke="#1a120c" strokeWidth={2} />
+        <path d="M148 274 L190 262 L232 274 Z" fill="#5a3418" stroke="#1a120c" strokeWidth={2} />
+        <rect x={158} y={278} width={18} height={22} fill="#efe3c4" transform="rotate(-4 167 289)" />
+        <rect x={181} y={280} width={18} height={26} fill="#f4ecd8" />
+        <rect x={204} y={277} width={18} height={20} fill="#e8d8b0" transform="rotate(5 213 287)" />
+        {[167, 190, 213].map((x) => <circle key={x} cx={x} cy={281} r={1.8} fill="#7a2a1a" />)}
       </Hot>
       <Hot spot="smith" chosen={chosen} onPick={onPick} label={name('smith')} x={275} y={130}>
         <House x={215} y={185} w={120} h={75} wall="#8a7a6a" roof="#3a3a44" />

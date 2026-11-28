@@ -1,4 +1,4 @@
-import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, MISSIONS, PROFESSIONS, type Attribute, type Locale, type Text } from '@hp/content';
+import { ATTRIBUTES, ENEMIES, HERBS, ITEMS, MATERIALS, MISSIONS, PROFESSIONS, QUEST_BY_ID, type Attribute, type Locale, type Text } from '@hp/content';
 import type { LogEntry } from '@hp/engine';
 import type { useT } from './i18n';
 
@@ -142,6 +142,15 @@ export function describe(e: LogEntry, { t, tx, locale }: T): string | null {
       const m = MISSIONS.find((x) => x.id === e.mission);
       return `${pl ? 'Cel osiągnięty' : 'Goal reached'}: ${m ? m.name[pl ? 'pl' : 'en'] : e.mission} (+${Math.round(e.xp)} ${t('xp')})`;
     }
+    case 'quest': {
+      const name = QUEST_BY_ID[e.quest]?.title[pl ? 'pl' : 'en'] ?? e.quest;
+      if (e.what === 'taken') return `${pl ? 'Nowe zadanie' : 'New quest'}: ${name}`;
+      if (e.what === 'ready') return `${pl ? 'Zadanie wykonane, wróć po nagrodę' : 'Quest done, go back for the reward'}: ${name}`;
+      if (e.what === 'dropped') return `${pl ? 'Porzucone zadanie' : 'Quest dropped'}: ${name}`;
+      return `${pl ? 'Zadanie oddane' : 'Quest handed in'}: ${name} (+${Math.round(e.xp ?? 0)} ${t('xp')}, +${e.gold ?? 0} ${t('gold').toLowerCase()}${e.item ? `, ${itemName(e.item, locale)}` : ''})`;
+    }
+    case 'bounty':
+      return pl ? 'List gończy wypełniony: wróć do tablicy po nagrodę.' : 'Bounty done: go back to the board for the reward.';
     case 'revealed':
       return e.xp ? `+${fmt(e.xp)} ${t('xp')}` : null;
     case 'moved':

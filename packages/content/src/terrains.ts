@@ -31,7 +31,7 @@ export const TERRAINS: Record<TerrainId, Terrain> = {
     actions: ['meal', 'stay', 'gossip'], regions: [],
   },
   monument: {
-    id: 'monument', name: { pl: 'Monument', en: 'Monument' }, deckCount: 6, hard: false, drawsEvent: false,
+    id: 'monument', name: { pl: 'Monument', en: 'Monument' }, deckCount: 6, hard: false, drawsEvent: true,
     actions: ['meditate'], regions: [],
   },
   cave: {

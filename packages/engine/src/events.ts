@@ -1,6 +1,6 @@
 import { springTrap } from './cards';
 import {
-  BOOK_READINGS, COMMON_ORES, EVENT_BY_ID, EVENTS, HERB_IDS, HIT_LOCATIONS, ITEMS, isDungeonCard, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
+  BOOK_READINGS, COMMON_ORES, EVENT_BY_ID, EVENTS, TOWN_EVENTS, isBountyCard, HERB_IDS, HIT_LOCATIONS, ITEMS, isDungeonCard, RARE_ORES, LOOT_COMMON, LOOT_RARE, TERRAINS, randomFoesFor,
   type EventOption, type Outcome, type TerrainId,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
@@ -36,6 +36,27 @@ export function drawEvent(state: GameState, rng: Rng, terrain: TerrainId): numbe
   const i = rng.weighted(w);
   if (i < 0) return null;
   return state.eventDeck.splice(i, 1)[0]!;
+}
+
+/** The town deck in card order: cities, villages and inns draw from it, never from the fragments' deck. */
+export const ALL_TOWN_EVENT_IDS = TOWN_EVENTS.map((e) => e.id);
+
+/** Draws a town card for a settlement or inn (Jacob, 2026-11-28): cards for other places are skipped. */
+export function drawTownEvent(state: GameState, rng: Rng, place: TerrainId): number | null {
+  const hostile = DIFFICULTIES[state.config.difficulty].hostileEvents;
+  const weights = () => (state.townDeck ?? []).map((id) => {
+    const card = EVENT_BY_ID[id]!;
+    if (card.terrains && !card.terrains.includes(place)) return 0;
+    return card.hostile ? hostile : 1;
+  });
+  let w = weights();
+  if (w.every((x) => x === 0)) {
+    state.townDeck = rng.shuffle(ALL_TOWN_EVENT_IDS);
+    w = weights();
+  }
+  const i = rng.weighted(w);
+  if (i < 0) return null;
+  return state.townDeck!.splice(i, 1)[0]!;
 }
 
 /** The step of the player's pending event, with the options they can pay for. */
@@ -118,6 +139,8 @@ export function winCombat(state: GameState, player: PlayerState, rng: Rng) {
     }
   }
   runOutcomes(state, player, rng, combat.onWin, combat.card);
+  // A notice-board bounty: its foes are beaten, the quest can be handed in.
+  if (isBountyCard(combat.card)) log(state, { type: 'bounty', player: player.id, card: combat.card! });
   // The journal: the ruthless take 1 gold more from beaten people, the merciful 1 less.
   const gold = fightGold(player, combat.foes.filter((f) => !f.tamed).map((f) => f.enemy));
   if (gold) change(state, player, 'gold', gold);

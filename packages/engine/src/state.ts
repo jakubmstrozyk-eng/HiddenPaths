@@ -8,6 +8,7 @@ import type { GameJournal, JournalWrite } from './journal';
 import type { GameMap } from './mapgen';
 import type { PuzzleAnswer, PuzzleState } from './puzzles';
 import type { Companion, Condition, Effect, Inventory, TerrainOutcome } from './terrain';
+import type { Board, Quest } from './quests';
 
 /**
  * A portion of food made better before it is eaten: prepared by a Myrmid (+2 to all attributes for a round),
@@ -61,6 +62,8 @@ export interface PlayerState {
   journal?: GameJournal;
   /** Fragments a dream marked with a question mark (the journal's omens). */
   hints?: number[];
+  /** Quests taken from notice boards (missing in older saves). */
+  quests?: Quest[];
 }
 
 /** A change to a hero's stats or belongings, for the log and the app's floating numbers. */
@@ -138,6 +141,10 @@ export type LogEntry =
   /** The hero journal: an entry written, new traits, an Inspiration, a vow kept or broken, a chapter, a dream come true, a story told. */
   | { type: 'journal'; player: string; what: 'entry' | 'traits' | 'inspiration' | 'inspired' | 'vowKept' | 'vowBroken' | 'chapter' | 'omen' | 'story';
       rewarded?: boolean; traits?: string[]; vow?: string; xp?: number; lesson?: string; enemy?: string; ok?: boolean }
+  /** A notice-board quest was taken, became ready, was handed in (with its reward) or dropped. */
+  | { type: 'quest'; player: string; quest: string; what: 'taken' | 'ready' | 'done' | 'dropped'; xp?: number; gold?: number; item?: string }
+  /** The foes of a bounty were beaten on its marked fragment. */
+  | { type: 'bounty'; player: string; card: number }
   | ({ player: string } & TerrainOutcome);
 
 export interface GameState {
@@ -152,6 +159,10 @@ export interface GameState {
   round: number;
   /** Event cards not drawn yet. Refilled from the whole deck when empty. */
   eventDeck: number[];
+  /** The town deck (cities, villages, inns), kept apart from the fragments' deck (missing in older saves). */
+  townDeck?: number[];
+  /** Notice boards by settlement fragment: which posting they show and what was taken (missing in older saves). */
+  boards?: Record<number, Board>;
   /** `cell:action` → the round the resource is back (missing in older saves). */
   depleted?: Record<string, number>;
   /** Fragment → the last round a hero stood on it or saw it (missing in older saves). */
@@ -216,6 +227,8 @@ export type Action =
   | { type: 'dungeon'; to: number | 'exit' }
   /** The hero journal at the campfire; any player may write, even out of turn. No `entry` closes it unwritten. */
   | { type: 'journal'; entry?: JournalWrite }
+  /** Notice board: take a posted quest (`id` is the quest), hand one in or drop it (`id` is its uid). */
+  | { type: 'quest'; op: 'take' | 'handIn' | 'drop'; id: string }
   | { type: 'endTurn' };
 
 export interface NewPlayer {

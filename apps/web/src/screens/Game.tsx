@@ -4,7 +4,7 @@ import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MAX_VOWS, MISSIONS, TERRAINS, 
 import {
   activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, eventOptions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
-  landAt, roomSpeed, TANNERY_HIDES, tannerySlots, distance, shadowRounds, spyTargets, travelTargets,
+  landAt, questProgress, roomSpeed, TANNERY_HIDES, tannerySlots, distance, shadowRounds, spyTargets, travelTargets,
 } from '@hp/engine';
 import { Discovery } from '../Discovery';
 import { TerrainArt } from '../TerrainArt';
@@ -483,6 +483,14 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
                   {me.hints?.includes(cell.index) && !game.dungeon?.foundBy.includes(me.id) && (
                     <span className="frag-hint" title={tx({ pl: 'Przeczucie ze snu: coś tu jest ukryte', en: 'A hunch from a dream: something is hidden here' })}>?</span>
                   )}
+                  {(() => {
+                    // Notice-board quests on the map: the bounty's marked fragment, unchecked fragments of a scouting job, a board with a reward waiting.
+                    const qs = me.quests ?? [];
+                    if (qs.some((q) => q.target === cell.index && !q.done)) return <span className="frag-quest bounty" title={tx({ pl: 'List gończy: tu czekają przeciwnicy', en: 'Bounty: the foes wait here' })}>⚔</span>;
+                    if (qs.some((q) => q.cells?.includes(cell.index) && !q.seen?.includes(cell.index))) return <span className="frag-quest scout" title={tx({ pl: 'Zwiad: stań na tym fragmencie', en: 'Scouting: stand on this fragment' })}>!</span>;
+                    if (qs.some((q) => q.town === cell.index && questProgress(me, q).ready)) return <span className="frag-quest ready" title={tx({ pl: 'Zadanie wykonane: oddaj je przy tablicy ogłoszeń', en: 'Quest done: hand it in at the notice board' })}>📜</span>;
+                    return null;
+                  })()}
                   {seen && cell.terrain !== 'core' && TERRAINS[cell.terrain].hard && <span className="frag-hard" title={t('speed')}><Icon name="speed" size={10} />2</span>}
                   {!seen && (
                     <span className="void-wrap">
@@ -623,7 +631,8 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
             {inTown && quiet && (
               <button className="ghost act-btn town-btn" onClick={() => setSheet('town')}>
                 <span className="act-title"><Icon name="town" size={14} />{tx({ pl: 'Wejdź', en: 'Go in' })}: {hereTerrain ? tx(hereTerrain.name) : t('town')}</span>
-                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : here?.terrain === 'city' ? tx({ pl: 'karczma, kuźnia, plac, targ, kupiec, wieża mistyka', en: 'tavern, smithy, yard, market, merchant, mystic' }) : tx({ pl: 'karczma, kuźnia, plac, targ, kupiec', en: 'tavern, smithy, yard, market, merchant' })}</small>
+                <small className="act-reward">{here?.terrain === 'inn' ? tx({ pl: 'szynk, stół podróżnych, pokoje', en: 'bar, travellers\' table, rooms' }) : here?.terrain === 'city' ? tx({ pl: 'tablica ogłoszeń, karczma, kuźnia, plac, targ, kupiec, wieża mistyka', en: 'notice board, tavern, smithy, yard, market, merchant, mystic' }) : tx({ pl: 'tablica ogłoszeń, karczma, kuźnia, plac, targ, kupiec', en: 'notice board, tavern, smithy, yard, market, merchant' })}
+                  {(me.quests ?? []).some((q) => q.town === me.position && questProgress(me, q).ready) && <b>{tx({ pl: ' · 📜 zadanie do oddania!', en: ' · 📜 a quest to hand in!' })}</b>}</small>
               </button>
             )}
             {me.journal && (

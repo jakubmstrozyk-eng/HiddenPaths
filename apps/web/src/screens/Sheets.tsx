@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ATTRIBUTES, ITEMS, TERRAINS, type Attribute, type ScrollItem } from '@hp/content';
+import { ATTRIBUTES, ITEMS, MAX_QUESTS, QUEST_BY_ID, TERRAINS, type Attribute, type Locale, type QuestGoods, type ScrollItem } from '@hp/content';
 import {
-  buyPrice, heroArmour, servicePrice, storyBonus, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
+  buyPrice, canTakeQuest, heroArmour, offeredQuests, questProgress, questReward, servicePrice, type Quest, storyBonus, legalActions, mysticStock, sellPrice, shopStock, successChance, testModifier, TOWN, worldView,
   type Action, type GameState, type PlayerState, type Service,
   landAt,
 } from '@hp/engine';
@@ -105,6 +105,7 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
           ? tx({ pl: 'Strażnicy czekają na Kamień początku. Przynieś go ze środka świata.', en: 'The guards await the Stone of Beginnings. Bring it from the centre of the world.' })
           : tx({ pl: 'W tej grze zamek nie czeka na Kamień: wygrywa ten, kto odkryje cały świat.', en: 'In this game the castle awaits no Stone: whoever reveals the whole world wins.' })}</p>
       )}
+      {chosen === 'board' && <NoticeBoard game={game} me={me} act={act} />}
       {chosen === 'smith' && wares(atSmith)}
       {chosen === 'shop' && wares(atShop)}
       {chosen === 'mystic' && (
@@ -139,6 +140,107 @@ export function TownSheet({ game, me, act, onClose }: { game: GameState; me: Pla
         </div>
       ))}
     </Sheet>
+  );
+}
+
+/** The goods a quest asks for, in words. */
+function goodsName(what: QuestGoods, locale: Locale): string {
+  const pl = locale === 'pl';
+  if (what === 'food') return pl ? 'jedzenie' : 'food';
+  if (what === 'herb') return pl ? 'dowolne zioła' : 'herbs of any kind';
+  if (what === 'ore') return pl ? 'zwykła ruda' : 'common ore';
+  if (what === 'rareOre') return pl ? 'rzadki kruszec' : 'a rare metal';
+  return itemName(what, locale);
+}
+
+/** What a quest has reached so far, in words. */
+function questLine(game: GameState, me: PlayerState, q: Quest, locale: Locale): string {
+  const pl = locale === 'pl';
+  const t = QUEST_BY_ID[q.id]!;
+  const { have, need, ready } = questProgress(me, q);
+  const n = `${have}/${need}`;
+  const tail = ready ? (q.town === me.position ? (pl ? ' · gotowe do oddania' : ' · ready to hand in') : (pl ? ` · wróć do tablicy (${cellName(game, q.town, locale)})` : ` · back to the board (${cellName(game, q.town, locale)})`)) : '';
+  switch (t.kind) {
+    case 'scout': return `${pl ? 'Zbadane fragmenty wokół' : 'Fragments around checked'}: ${n}${ready ? tail : pl ? ' · oznaczone „!” na mapie' : ' · marked "!" on the map'}`;
+    case 'discover': return `${pl ? 'Nowe fragmenty' : 'New fragments'}: ${n}${tail}`;
+    case 'hunt': return `${pl ? 'Udane polowania' : 'Successful hunts'}: ${n}${tail}`;
+    case 'fights': return `${pl ? 'Wygrane walki' : 'Fights won'}: ${n}${tail}`;
+    case 'events': return `${pl ? 'Przeżyte przygody' : 'Adventures lived'}: ${n}${tail}`;
+    case 'bring': return `${pl ? 'Masz przy sobie' : 'You carry'}: ${n} (${goodsName(t.what!, locale)})${tail}`;
+    case 'bounty': return ready ? `${pl ? 'Przeciwnicy pokonani' : 'Foes beaten'}${tail}` : (pl ? 'Przeciwnicy czekają na fragmencie oznaczonym ⚔ na mapie' : 'The foes wait on the fragment marked ⚔ on the map');
+  }
+}
+
+const cellName = (game: GameState, cell: number, locale: Locale) => {
+  const land = landAt(game.map, cell);
+  return `${land === 'core' ? '' : TERRAINS[land].name[locale === 'pl' ? 'pl' : 'en']} ${cell % game.map.width + 1},${Math.floor(cell / game.map.width) + 1}`;
+};
+
+/**
+ * The notice board of a village or city (Jacob, 2026-11-28): postings to take, with their reward, and the hero's
+ * own quests with how far they are; a finished one is handed in at the board that posted it.
+ */
+function NoticeBoard({ game, me, act }: { game: GameState; me: PlayerState; act: (a: Action) => void }) {
+  const { tx, locale } = useT();
+  const pl = locale === 'pl';
+  const offered = offeredQuests(game, me);
+  const mine = me.quests ?? [];
+  const full = !canTakeQuest(me);
+  const reward = (id: string) => {
+    const r = questReward(game, id);
+    return `${pl ? 'Nagroda' : 'Reward'}: +${r.xp} ${pl ? 'PD' : 'XP'} · +${r.gold} ${pl ? 'zł' : 'gold'}${r.item ? ` · ${itemName(r.item, locale)}` : ''}`;
+  };
+  const text = (id: string, need: number) => tx(QUEST_BY_ID[id]!.text).replace('{n}', String(need));
+  return (
+    <>
+      <p className="muted">{pl
+        ? `Zadanie bierzesz z tablicy i oddajesz przy tej samej tablicy. Naraz możesz mieć ${MAX_QUESTS} zadania.`
+        : `Take a quest from the board and hand it in at the same board. You can carry ${MAX_QUESTS} at once.`}</p>
+      {mine.length > 0 && (
+        <>
+          <h3>{pl ? 'Twoje zadania' : 'Your quests'}</h3>
+          <div className="qb-list">
+            {mine.map((q) => {
+              const t = QUEST_BY_ID[q.id]!;
+              const p = questProgress(me, q);
+              const here = q.town === me.position;
+              return (
+                <article key={q.uid} className={`qb-note ${t.hard ? 'hard' : ''}`}>
+                  <h4>{tx(t.title)}{t.hard && <small>{pl ? 'trudne' : 'hard'}</small>}</h4>
+                  <div className={`qb-progress ${p.ready ? 'ready' : ''}`}>{questLine(game, me, q, locale)}</div>
+                  <div className="qb-reward">{reward(q.id)}</div>
+                  <div className="qb-actions">
+                    {here && p.ready && <button className="primary" onClick={() => act({ type: 'quest', op: 'handIn', id: q.uid })}>{pl ? 'Oddaj zadanie' : 'Hand it in'}</button>}
+                    <button className="ghost small" onClick={() => act({ type: 'quest', op: 'drop', id: q.uid })}>{pl ? 'Porzuć' : 'Drop'}</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <h3>{pl ? 'Ogłoszenia' : 'Postings'}</h3>
+      {offered.length === 0 ? <p className="muted">{pl ? 'Tablica jest pusta. Nowe ogłoszenia pojawią się za kilka rund.' : 'The board is empty. New postings go up in a few rounds.'}</p> : (
+        <div className="qb-list">
+          {offered.map((o) => {
+            const t = QUEST_BY_ID[o.id]!;
+            const need = o.cells ? o.cells.length : t.need;
+            return (
+              <article key={o.id} className={`qb-note ${t.hard ? 'hard' : ''}`}>
+                <h4>{tx(t.title)}{t.hard && <small>{pl ? 'trudne' : 'hard'}</small>}</h4>
+                <p>{text(o.id, need)}</p>
+                <div className="qb-reward">{reward(o.id)}</div>
+                <div className="qb-actions">
+                  <button className="primary" disabled={full} onClick={() => act({ type: 'quest', op: 'take', id: o.id })}>
+                    {full ? (pl ? `Masz już ${MAX_QUESTS} zadania` : `You carry ${MAX_QUESTS} already`) : (pl ? 'Biorę zadanie' : 'Take the quest')}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 

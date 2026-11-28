@@ -1,4 +1,5 @@
 import { DUNGEON_CARDS } from './dungeons';
+import { BOUNTY_CARDS, TOWN_EVENTS } from './townEvents';
 import type { EventCard, EventOption, Outcome, Puzzle, RiddlePool } from './eventTypes';
 import type { Text } from './types';
 
@@ -767,5 +768,5 @@ const QUIET: EventCard = {
   steps: { start: { options: [opt(LEAVE, [])] } },
 };
 
-/** Every card by id: the event deck, the dungeon rooms, the book readings and the quiet card. */
-export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries([...EVENTS, ...DUNGEON_CARDS, ...BOOK_CARDS, QUIET].map((e) => [e.id, e]));
+/** Every card by id: the event deck, the town deck and bounties, the dungeon rooms, the book readings and the quiet card. */
+export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries([...EVENTS, ...TOWN_EVENTS, ...BOUNTY_CARDS, ...DUNGEON_CARDS, ...BOOK_CARDS, QUIET].map((e) => [e.id, e]));
