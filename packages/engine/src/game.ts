@@ -13,7 +13,7 @@ import { beginJournal, canWriteJournal, combatJournal, journalOf, noteLog, payVo
 import { Rng, seedFromString } from './rng';
 import { OUTSIDE, SIDES, type Action, type GameState, type NewPlayer, type PlayerState, type Side } from './state';
 import type { GameMap } from './mapgen';
-import { coverForgotten, deplete, DEPLETING_ACTIONS, markVisit } from './tiles';
+import { coverForgotten, deplete, DEPLETING_ACTIONS } from './tiles';
 import { availableTerrainActions, effectBonus, heroTest, isWater, runTerrainAction } from './terrain';
 import { ENDS_ROUND, startSpeed } from './cardsHigh';
 import {
@@ -667,7 +667,6 @@ function afterAction(state: GameState, player: PlayerState) {
     log(state, { type: 'roomCleared', player: player.id, room: player.delve!.room, vault: room.kind === 'vault' });
   }
   if (isOutside(player)) return;
-  markVisit(state, player.position);
   const cell = state.map.cells[player.position]!;
   if (cell.terrain === 'city') player.respawnAt = player.position;
   if (cell.terrain === 'core' && !state.players.some((p) => p.hasStone)) {
@@ -745,7 +744,6 @@ function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   state.turnIndex++;
   if (state.turnIndex >= state.turnOrder.length) {
     state.turnIndex = 0;
-    for (const p of state.players) markVisit(state, p.position);
     state.round++;
     for (const p of state.players) {
       p.effects = p.effects.filter((e) => e.untilRound >= state.round);

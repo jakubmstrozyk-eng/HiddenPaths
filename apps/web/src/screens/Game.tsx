@@ -4,7 +4,7 @@ import { ATTRIBUTES, DUNGEON_THEMES, EVENT_BY_ID, MAX_VOWS, MISSIONS, TERRAINS, 
 import {
   activeVows, applyAction, canWriteJournal, currentPlayer, depletedActions, eventOptions, entryCell, mealDue, missionGoal, missionProgress, isOutside, legalActions, newEntries, OUTSIDE, SIDES, successChance, testModifier, worldView,
   LEVEL_XP, type Action, type GameMap, type GameState, type JournalWrite, type LogEntry, type PlayerState, type Side,
-  landAt, roomSpeed, TANNERY_HIDES, tannerySlots, distance, shadowRounds, spyTargets, travelTargets,
+  landAt, neighbours, roomSpeed, TANNERY_HIDES, tannerySlots, distance, shadowRounds, spyTargets, travelTargets,
 } from '@hp/engine';
 import { Discovery } from '../Discovery';
 import { TerrainArt } from '../TerrainArt';
@@ -396,6 +396,28 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
   const terrainActs = actions.flatMap((a) => (a.type === 'terrain' ? [a.action] : []));
   const inTown = !!here && (here.terrain === 'inn' || here.terrain === 'village' || here.terrain === 'city');
   const quiet = myTurn && !me.pendingEvent && !me.combat && !game.winner;
+  /**
+   * Anything about the dungeon goes first in the list, in its own stone frame, so it is not missed
+   * (Jacob, 2026-11-28): the way down here, a way down not found yet, or a known entrance or a dream's hunch next door.
+   */
+  const dungeonNote = ((): { kind: 'entrance' | 'below' | 'hidden' | 'near'; kicker: string; title: string; text?: string } | null => {
+    const d = game.dungeon;
+    if (!d || !dungeonTheme || outside) return null;
+    const name = tx(dungeonTheme.name);
+    if (delving) return dungeonExit && quiet ? { kind: 'below', kicker: tx({ pl: 'Jesteś w lochu', en: 'You are below' }), title: name } : null;
+    if (d.plundered) return null;
+    const found = d.foundBy.includes(me.id);
+    if (me.position === d.cell) {
+      if (canGoDown && quiet && !showDungeon) return { kind: 'entrance', kicker: tx({ pl: 'Ukryte zejście do lochu', en: 'A hidden way down' }), title: name };
+      if (!found) return { kind: 'hidden', kicker: tx({ pl: 'Coś tu jest ukryte', en: 'Something is hidden here' }), title: tx({ pl: 'Czujesz chłód spod ziemi', en: 'A chill rises from below' }), text: tx({ pl: 'Nie dostrzegasz przejścia. Wróć tu później i poszukaj jeszcze raz (Int. albo Zr.).', en: 'You cannot see the way. Come back later and search again (Int or Dex).' }) };
+      return null;
+    }
+    const near = new Set(neighbours(game.map, me.position));
+    if (found && near.has(d.cell)) return { kind: 'near', kicker: tx({ pl: 'Loch w pobliżu', en: 'A dungeon nearby' }), title: name, text: tx({ pl: 'Wejście jest na sąsiednim fragmencie.', en: 'The entrance is on the next fragment.' }) };
+    const hunch = (me.hints ?? []).find((h) => h === me.position || near.has(h));
+    if (!found && hunch !== undefined) return { kind: 'near', kicker: tx({ pl: 'Przeczucie ze snu', en: 'A hunch from a dream' }), title: tx({ pl: 'Ukryty loch w pobliżu', en: 'A hidden dungeon nearby' }), text: tx({ pl: 'Fragment ze znakiem „?” kryje zejście pod ziemię.', en: 'The fragment marked “?” hides a way down.' }) };
+    return null;
+  })();
   const others = game.players.filter((p) => p.id !== me.id);
   const hoursLeft = deadline ? Math.max(0, Math.round((new Date(deadline).getTime() - Date.now()) / 3_600_000)) : null;
   const tipsFor = (): TipId[] => {
@@ -583,21 +605,29 @@ export function GameScreen({ game, onChange, onMenu, onNew, meId, submit, names 
           )}
           <small className="frag-panel-head">{tx({ pl: 'Co możesz tu zrobić', en: 'What you can do here' })}</small>
           <div className="frag-actions">
-            {canGoDown && quiet && dungeonTheme && !showDungeon && (
-              <button className="ghost act-btn dungeon-btn" onClick={() => setPeekDungeon(true)}>
-                <span className="act-title">⛬ {tx({ pl: 'Zejdź do lochu', en: 'Go down into the dungeon' })}: {tx(dungeonTheme.name)}</span>
-                <small className="act-test">{tx({ pl: 'Komnaty, pułapki i pan lochu; na końcu skarbiec z reliktem', en: 'Rooms, traps and a lord; a vault with a relic at the end' })}</small>
-                <small className="act-reward">
-                  {tx({ pl: `Każda komnata: −${roomSpeed(game)} Sz., −1 Wt.`, en: `Each room: −${roomSpeed(game)} Speed, −1 Stamina` })}
-                  {c.level < 3 ? ` · ${tx({ pl: 'Uwaga: niebezpieczne przed 3. poziomem', en: 'Careful: dangerous before level 3' })}` : ''}
-                </small>
-              </button>
-            )}
-            {delving && quiet && dungeonExit && (
-              <button className="ghost act-btn" onClick={() => act(dungeonExit)}>
-                <span className="act-title">⇡ {tx({ pl: 'Wyjdź z lochu', en: 'Climb out of the dungeon' })}</span>
-                <small className="act-reward">{tx({ pl: 'Wracasz przez przebyte komnaty · −1 Sz. · oczyszczone komnaty zostają oczyszczone', en: 'Back through the rooms you walked · −1 Speed · cleared rooms stay cleared' })}</small>
-              </button>
+            {dungeonNote && (
+              <section className={`dungeon-frame ${dungeonNote.kind}`} aria-label={tx({ pl: 'Lochy', en: 'Dungeons' })}>
+                <span className="dungeon-frame-arch" aria-hidden="true">⛬</span>
+                <small className="dungeon-frame-kicker">{dungeonNote.kicker}</small>
+                <b className="dungeon-frame-title">{dungeonNote.title}</b>
+                {dungeonNote.text && <small className="dungeon-frame-text">{dungeonNote.text}</small>}
+                {dungeonNote.kind === 'entrance' && dungeonTheme && (
+                  <button className="ghost act-btn dungeon-btn" onClick={() => setPeekDungeon(true)}>
+                    <span className="act-title">⇣ {tx({ pl: 'Zejdź do lochu', en: 'Go down into the dungeon' })}</span>
+                    <small className="act-test">{tx({ pl: 'Komnaty, pułapki i pan lochu; na końcu skarbiec z reliktem', en: 'Rooms, traps and a lord; a vault with a relic at the end' })}</small>
+                    <small className="act-reward">
+                      {tx({ pl: `Każda komnata: −${roomSpeed(game)} Sz., −1 Wt.`, en: `Each room: −${roomSpeed(game)} Speed, −1 Stamina` })}
+                      {c.level < 3 ? ` · ${tx({ pl: 'Uwaga: niebezpieczne przed 3. poziomem', en: 'Careful: dangerous before level 3' })}` : ''}
+                    </small>
+                  </button>
+                )}
+                {dungeonNote.kind === 'below' && dungeonExit && (
+                  <button className="ghost act-btn dungeon-btn" onClick={() => act(dungeonExit)}>
+                    <span className="act-title">⇡ {tx({ pl: 'Wyjdź z lochu', en: 'Climb out of the dungeon' })}</span>
+                    <small className="act-reward">{tx({ pl: 'Wracasz przez przebyte komnaty · −1 Sz. · oczyszczone komnaty zostają oczyszczone', en: 'Back through the rooms you walked · −1 Speed · cleared rooms stay cleared' })}</small>
+                  </button>
+                )}
+              </section>
             )}
             {here && TERRAIN_ACTIONS.filter((a) => terrainActs.includes(a)).map((a) => {
               const info = actionInfo(a, here.terrain as Exclude<typeof here.terrain, 'core'>);
