@@ -58,7 +58,7 @@ describe('event cards', () => {
     expect(EVENT_BY_ID[26]!.title.en).toBe('Book II');
   });
 
-  it('revealing an event fragment draws a card and blocks other actions until it is answered', () => {
+  it('a drawn card blocks other actions until it is answered', () => {
     let state = game();
     const p = currentPlayer(state);
     const target = neighbours(state.map, p.position).find((n) => {
@@ -68,6 +68,8 @@ describe('event cards', () => {
     if (target === undefined) return;
     p.speedLeft = 5;
     state = applyAction(state, 'p1', { type: 'move', to: target });
+    // The card waits for the first action there; trying to end the round draws it.
+    state = applyAction(state, 'p1', { type: 'endTurn' });
     const after = currentPlayer(state);
     expect(after.pendingEvent).not.toBeNull();
     expect(legalActions(state, 'p1').every((a) => a.type === 'event')).toBe(true);

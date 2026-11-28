@@ -43,6 +43,11 @@ export interface PlayerState {
   /** An event card waiting for the player's choice. */
   /** `puzzle`: the card's mini-game is being played, and the card waits for its answer. */
   pendingEvent: { card: number; step: string; puzzle?: PuzzleState } | null;
+  /**
+   * A newly found fragment whose event card is still to be drawn: after the hero's first action there,
+   * or when they try to leave or end the round without one (Jacob, 2026-11-28). Missing in older saves.
+   */
+  eventDue?: number | null;
   combat: CombatState | null;
   /** Carries the Stone of Beginnings back to a city. */
   hasStone: boolean;

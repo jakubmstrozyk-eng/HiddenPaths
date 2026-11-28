@@ -1,4 +1,4 @@
-import { ATTRIBUTES, ITEMS, TERRAINS, bookReading } from '@hp/content';
+import { ATTRIBUTES, ITEMS, QUIET_CARD, TERRAINS, bookReading } from '@hp/content';
 import { cardPool, createCharacter, keepCards, spendPoints } from './character';
 import { bondCompanions, CAMP_CARDS, campCard, canCampCard, canCook, canSeason, cook, eatMeal, levitating, playCard, playableCards, refreshCards, trimMeals } from './cards';
 import { combatMoves, combatTurn, drinkPotion, heroArmour, type CombatMove } from './combat';
@@ -113,7 +113,7 @@ export function entryCell(map: Pick<GameMap, 'width' | 'height'> & { cells?: Gam
 export const isOutside = (player: Pick<PlayerState, 'position'>) => player.position === OUTSIDE;
 
 /** Speed to step onto a fragment: 2 on hard terrain, except for the Explorer (Sense of Direction) or a levitating Mystic. */
-function moveCost(state: GameState, to: number, player?: PlayerState): number {
+export function moveCost(state: GameState, to: number, player?: PlayerState): number {
   const terrain = landAt(state.map, to);
   if (terrain === 'core') return 2;
   const light = !!player && (player.character.cards.includes('explorer-direction') || levitating(state, player));
@@ -261,12 +261,37 @@ function step(state: GameState, player: PlayerState, to: number, rng: Rng) {
       log(state, { type: 'card', player: player.id, card: 'explorer-traveller', ok: true, amount: 1 });
     }
   }
-  if (fresh && drawsEvent(terrain)) {
-    const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
-    if (card !== null) startEvent(state, player, card);
-  }
+  // The fragment is shown first; its event card waits for the hero's first action here (Jacob, 2026-11-28).
+  if (fresh && drawsEvent(terrain)) player.eventDue = to;
   searchForDungeon(state, player, rng);
 }
+
+/** Chance that a new fragment's card is a real event; otherwise it is the quiet card (Jacob, 2026-11-28). */
+export const EVENT_CHANCE = 0.7;
+
+/** Draws the card waiting on the hero's fragment: an event 7 times in 10, the quiet card otherwise. */
+function drawDueEvent(state: GameState, player: PlayerState, rng: Rng) {
+  const cell = player.eventDue;
+  player.eventDue = null;
+  if (cell === null || cell === undefined || cell !== player.position) return;
+  const terrain = landAt(state.map, cell);
+  if (!drawsEvent(terrain)) return;
+  const card = rng.next() < EVENT_CHANCE ? drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>) : QUIET_CARD;
+  if (card !== null) startEvent(state, player, card);
+}
+
+/** Is the hero standing on a new fragment whose card has not been drawn yet? */
+export const eventDueHere = (player: Pick<PlayerState, 'eventDue' | 'position' | 'delve'>) =>
+  player.eventDue !== null && player.eventDue !== undefined && player.eventDue === player.position && !player.delve;
+
+/** Leaving the fragment or ending the round: the waiting card is drawn instead, and the hero stays to face it. */
+function leavesFragment(action: Action): boolean {
+  if (action.type === 'scroll') return scrollOf(action.item)?.spell === 'teleport';
+  return action.type === 'move' || action.type === 'portal' || action.type === 'dungeon' || action.type === 'endTurn' || action.type === 'camp' || action.type === 'reinforce';
+}
+
+/** The first action on the fragment itself (not packing the bag): the waiting card is drawn after it. */
+const FRAGMENT_ACTIONS = new Set<Action['type']>(['terrain', 'service', 'buy', 'sell', 'cook', 'smelt', 'read', 'card', 'combat']);
 
 /**
  * The dungeon's entrance is hidden: each time a hero steps onto its fragment they test the better of
@@ -313,6 +338,12 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
   if (player.delve && MAP_ONLY.has(action.type)) throw new EngineError('dungeon.inside', 'Climb out of the dungeon first.');
   // The journal is written only at camp (Jacob, 2026-11-27): the campfire stays lit until the hero does something else.
   if (player.journal?.open && action.type !== 'camp' && action.type !== 'eat' && !anytime) player.journal.open = false;
+
+  const due = eventDueHere(player) && !player.pendingEvent && !player.combat;
+  if (due && leavesFragment(action)) {
+    drawDueEvent(state, player, rng);
+    return finish(state, player, fromSeq, rng);
+  }
 
   switch (action.type) {
     case 'dungeon':
@@ -451,6 +482,13 @@ export function applyAction(prev: GameState, playerId: string, action: Action): 
       throw new EngineError('action.unknown', 'Unknown action.');
   }
 
+  if (eventDueHere(player) && FRAGMENT_ACTIONS.has(action.type) && !player.pendingEvent && !player.combat && currentPlayer(state) === player) {
+    drawDueEvent(state, player, rng);
+  }
+  return finish(state, player, fromSeq, rng);
+}
+
+function finish(state: GameState, player: PlayerState, fromSeq: number, rng: Rng): GameState {
   afterAction(state, player);
   chronicle(state, fromSeq);
   // The state keeps a short recent log for the app; the server stores the full history.
@@ -570,12 +608,9 @@ function readScroll(state: GameState, player: PlayerState, rng: Rng, item: strin
     player.cameFrom = null;
     player.position = to;
     player.crossedRiver = false;
-    // A new fragment opens as if walked into: XP and maybe an event.
+    // A new fragment opens as if walked into: XP, and its card waits for the first action there.
     const terrain = landAt(state.map, to);
-    if (reveal(state, player, to, rng) && drawsEvent(terrain)) {
-      const card = drawEvent(state, rng, terrain as Exclude<typeof terrain, 'core'>);
-      if (card !== null) startEvent(state, player, card);
-    }
+    if (reveal(state, player, to, rng) && drawsEvent(terrain)) player.eventDue = to;
     return;
   }
   const scroll = spendScroll(player, state.round, item);
@@ -599,6 +634,8 @@ function readBook(state: GameState, player: PlayerState, rng: Rng, id: string) {
 function afterAction(state: GameState, player: PlayerState) {
   trimMeals(player);
   if (player.character.vitality <= 0) respawn(state, player);
+  // Carried off the fragment (death, a push, a portal): its card is not drawn any more.
+  if (player.eventDue !== null && player.eventDue !== undefined && (player.eventDue !== player.position || isOutside(player))) player.eventDue = null;
   if (settleRoom(state, player)) {
     const room = state.dungeon!.rooms[player.delve!.room]!;
     log(state, { type: 'roomCleared', player: player.id, room: player.delve!.room, vault: room.kind === 'vault' });
@@ -661,6 +698,7 @@ function eat(state: GameState, player: PlayerState) {
 /** End-of-turn upkeep for one player, then the turn passes on. A hero who has not eaten goes hungry. */
 function endTurn(state: GameState, player: PlayerState, rng: Rng) {
   const c = player.character;
+  player.eventDue = null;
   if (mealDue(state, player).left > 0) {
     player.roundsWithoutFood++;
     const lost = player.roundsWithoutFood === 3 ? 5 : player.roundsWithoutFood === 6 ? 10 : 0;
@@ -718,6 +756,7 @@ export function timeoutTurn(prev: GameState): GameState {
   // An unanswered mini-game counts as given up.
   if (player.pendingEvent?.puzzle) answerPuzzle(state, player, rng, {});
   player.combat = null;
+  player.eventDue = null;
   if (player.pendingEvent) {
     const free = eventOptions(state, player).filter((o) => !o.option.cost);
     // Prefer a choice that does nothing (walking on); otherwise the last free one.

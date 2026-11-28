@@ -2,6 +2,7 @@ import {
   ATTRIBUTE_LESSON, ATTRIBUTE_LESSON_MAX, ATTRIBUTES, AXIS_LIMIT, BESTIARY_NOTES, CHAPTER_ENTRIES, ENEMIES, ENTRY_EVENTS, JOURNAL_AXES, JOURNAL_PROMPTS,
   LORE_BONUS, MAX_VOWS, PERSON_OF_CARD, RETURN_BONUS, STORY_BONUS, TRAIT_AT, TRAIT_OF, TRAIT_OPTIONS, VOW_XP, VOWS,
   type Attribute, type EventOption, type JournalAxis, type LessonId, type PersonMark, type PromptTopic, type TraitId, type VowKind,
+  QUIET_CARD,
 } from '@hp/content';
 import type { CombatResult } from './combat';
 import { test } from './dice';
@@ -296,13 +297,15 @@ export function noteLog(state: GameState, entries: LogEntry[]): { player: Player
         if (e.result === 'won') vow('fights');
         break;
       case 'eventDrawn': {
+        // The quiet card is no story to tell.
+        if (e.card === QUIET_CARD) break;
         addFact(j, { k: 'event', card: e.card });
         const person = PERSON_OF_CARD[e.card];
         if (person && !j.met.includes(person)) j.met.push(person);
         break;
       }
       case 'eventEnded':
-        vow('events');
+        if (e.card !== QUIET_CARD) vow('events');
         break;
       case 'condition':
         addFact(j, e.added ? { k: 'cond', id: e.id } : { k: 'cured', id: e.id });

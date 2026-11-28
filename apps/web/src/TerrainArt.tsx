@@ -191,3 +191,12 @@ export function TerrainArt({ terrain }: { terrain: TerrainId | 'core'; seed?: nu
 
 /** The main ground colour of a terrain, for small swatches. */
 export const terrainColour = (terrain: TerrainId | 'core') => GROUND[terrain][0];
+
+/** The fragment's motif alone (the tree, the peaks, the houses), with no ground behind it. */
+export function TerrainMotif({ terrain }: { terrain: TerrainId | 'core' }) {
+  return (
+    <svg className="terrain-motif" viewBox="0 0 40 40" aria-hidden="true">
+      {art(terrain)}
+    </svg>
+  );
+}

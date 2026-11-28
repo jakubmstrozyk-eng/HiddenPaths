@@ -755,5 +755,17 @@ export function bookReading(item: string): { card: number; puzzle: Puzzle } | nu
   };
 }
 
-/** Every card by id: the event deck, the dungeon rooms and the book readings. */
-export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries([...EVENTS, ...DUNGEON_CARDS, ...BOOK_CARDS].map((e) => [e.id, e]));
+/**
+ * The quiet card: a new fragment always draws a card, but 3 draws in 10 bring no event (Jacob, 2026-11-28).
+ * It is never in the deck: the engine picks it before the deck is drawn from.
+ */
+export const QUIET_CARD = 800;
+const QUIET: EventCard = {
+  id: QUIET_CARD, hostile: false,
+  title: t('Cisza', 'Quiet'),
+  text: t('Rozglądasz się uważnie, ale okolica jest spokojna. Tym razem nic się tu nie wydarza.', 'You look around carefully, but the land is calm. This time nothing happens here.'),
+  steps: { start: { options: [opt(LEAVE, [])] } },
+};
+
+/** Every card by id: the event deck, the dungeon rooms, the book readings and the quiet card. */
+export const EVENT_BY_ID: Record<number, EventCard> = Object.fromEntries([...EVENTS, ...DUNGEON_CARDS, ...BOOK_CARDS, QUIET].map((e) => [e.id, e]));
