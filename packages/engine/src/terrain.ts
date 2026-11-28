@@ -47,6 +47,19 @@ export interface Equipment {
   shield: boolean;
   /** A rune set on the weapon by a runic smith. */
   rune: Rune | null;
+  /** Binding: the Runemaster's second rune on the same weapon. */
+  rune2?: Rune | null;
+}
+
+/** Runes on the hero's weapon: one, or two with the Runemaster's Binding. */
+export const runesOf = (eq: Pick<Equipment, 'rune' | 'rune2'>): Rune[] => [eq.rune, eq.rune2].filter((r): r is Rune => !!r);
+
+/** Sets a rune on the weapon. It replaces the old one, unless Binding lets the weapon keep both. */
+export function setRune(character: { equipment: Equipment; cards?: string[] }, rune: Rune) {
+  const eq = character.equipment;
+  if ((character.cards ?? []).includes('runemaster-bind') && eq.rune && eq.rune !== rune) eq.rune2 = eq.rune;
+  else eq.rune2 = null;
+  eq.rune = rune;
 }
 
 /** Weapon runes from the runic smith's d10 table. */
@@ -63,6 +76,8 @@ export interface Companion {
   tame: boolean;
   /** Teacher: added to the beast's attributes. */
   bonus?: number;
+  /** Called by a card (the Trapper's dog, the Druid's wolves, the Mystic's voidling), not tamed: it does not take a companion's place. */
+  summoned?: boolean;
 }
 
 /** The parts of a player's state that terrain actions read and change. */
@@ -142,7 +157,7 @@ export function itemBonus(actor: Pick<ActorState, 'inventory'>, target: string, 
 /** Timed effects on a target this round: an attribute, Speed, Stamina or damage. */
 export function effectBonus(actor: Pick<ActorState, 'effects'>, round: number, target: EffectTarget, vs?: string): number {
   return actor.effects
-    .filter((e) => e.untilRound >= round && (e.attribute === target || (e.attribute === 'all' && target !== 'speed' && target !== 'stamina' && target !== 'damage')) && (!e.vs || e.vs === vs))
+    .filter((e) => e.untilRound >= round && (e.attribute === target || (e.attribute === 'all' && target !== 'speed' && target !== 'stamina' && target !== 'damage' && target !== 'armour')) && (!e.vs || e.vs === vs))
     .reduce((sum, e) => sum + e.amount, 0);
 }
 
@@ -193,6 +208,17 @@ export function magicBonus(world: WorldView, actor: Pick<ActorState, 'position' 
 }
 
 const WATER = new Set(['river', 'lake']);
+/** A fragment with water: a river or a lake. */
+export const isWater = (terrain: string) => WATER.has(terrain);
+
+/**
+ * Dexterity in sudden moments (initiative, fleeing, Dexterity tests in events): the Diver's Agility +10
+ * and +10 for each Rune of Reflex on the Runemaster's armour (at most 2).
+ */
+export function suddenDex(actor: Pick<ActorState, 'character' | 'counters'>): number {
+  const cards = actor.character.cards ?? [];
+  return (cards.includes('diver-agility') ? 10 : 0) + 10 * Math.min(2, actor.counters.reflexRunes ?? 0);
+}
 
 /** Always-on skill cards: Strongman (+10 to Strength tests), Water-born (+10 to all next to water) and Caver. */
 export function cardBonus(world: WorldView, actor: Pick<ActorState, 'position' | 'character'>, attribute: Attribute): number {
@@ -259,7 +285,12 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
   };
   // Herbalist: +20 to the Intelligence test when gathering herbs or fruit.
   const herbalist = (action === 'gather' || action === 'herbalism') && (actor.character.cards ?? []).includes('druid-herbalist') ? 20 : 0;
-  const roll = (attribute: Attribute, extra = 0) => heroTest(world, actor, attribute, rng, extra + herbalist + (skill[action] ?? 0));
+  // Expert's Nose: +20 to the Runemaster's tests for gathering materials.
+  const nose = action === 'mine' && (actor.character.cards ?? []).includes('runemaster-nose') ? 20 : 0;
+  // Bait: +20 to the Explorer's next hunt, then it is used up.
+  const bait = action === 'hunt' && actor.counters.bait ? 20 : 0;
+  if (bait) delete actor.counters.bait;
+  const roll = (attribute: Attribute, extra = 0) => heroTest(world, actor, attribute, rng, extra + herbalist + nose + bait + (skill[action] ?? 0));
   /** A skill card's second throw at a failed test; the result keeps the card and the first throw so the player sees both. */
   const retry = (first: TestResult, card: string | null, attribute: Attribute): TestResult =>
     first.success || !card ? first : { ...roll(attribute), rerolled: card, first: first.roll };
@@ -327,10 +358,10 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
       const result = retry(roll('dex'), vise, 'dex');
       let again = result.rerolled === vise && !!vise;
       const rareFind = (): boolean => {
-        if (heroTest(world, actor, 'int', rng, -10 + (skill.mine ?? 0)).success) return true;
+        if (heroTest(world, actor, 'int', rng, -10 + nose + (skill.mine ?? 0)).success) return true;
         if (!vise) return false;
         again = true;
-        return heroTest(world, actor, 'int', rng, -10 + (skill.mine ?? 0)).success;
+        return heroTest(world, actor, 'int', rng, -10 + nose + (skill.mine ?? 0)).success;
       };
       if (result.success) {
         for (let i = 0; i < common; i++) {
@@ -342,9 +373,12 @@ export function runTerrainAction(world: WorldView, actor: ActorState, action: Te
           actor.character.food += 1; // a mushroom
           gained.push('food:1');
         } else if (rareFind()) {
-          const rare = RARE_ORES[rng.int(RARE_ORES.length)]!;
-          add(actor.inventory.materials, rare);
-          gained.push(`material:${rare}`);
+          // Expert's Nose: two rare finds instead of one.
+          for (let i = 0; i < (nose ? 2 : 1); i++) {
+            const rare = RARE_ORES[rng.int(RARE_ORES.length)]!;
+            add(actor.inventory.materials, rare);
+            gained.push(`material:${rare}`);
+          }
         }
         add(actor.counters, 'gathered');
       }

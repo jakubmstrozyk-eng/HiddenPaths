@@ -8,6 +8,7 @@ export * from './heroes';
 export * from './terrain';
 export * from './combat';
 export * from './cards';
+export * from './cardsHigh';
 export * from './towns';
 export * from './scrolls';
 export { eventOptions, drawEvent, ALL_EVENT_IDS } from './events';

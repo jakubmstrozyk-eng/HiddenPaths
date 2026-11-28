@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ENEMIES, ITEMS, type ArmourSlot, type DiceLook } from '@hp/content';
 import {
-  attacksPerTurn, canDisarm, canMaster, canTame, combatMoves, MASTER_STEPS, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
+  attacksPerTurn, canBoost, canDisarm, canMaster, canRule, canTame, combatMoves, MASTER_STEPS, fightOdds, magicBonus, foeDamage, heroArmour, heroWeapon, strengthStep, successChance, testModifier, worldView,
   type Action, type GameState, type LogEntry, type PlayerState, type TestResult,
 } from '@hp/engine';
 import { useT, type UiKey } from '../i18n';
@@ -14,7 +14,7 @@ import { buzz, clack, ShakeToThrow, Verdict } from '../Throw';
 import { HitFx, hitKind } from '../HitFx';
 import { hurtSound } from '../Feedback';
 import { FoeArt } from '../HeroArt';
-import { cardName, combatLine, foeName, itemName } from '../logText';
+import { cardName, combatLine, foeName, itemName, statusWords } from '../logText';
 import { SkillHand } from '../SkillCards';
 import { foeStatuses, heroStatuses, StatusChips, StatusDetail, StatusFigure, type LiveFlags } from '../CombatStatus';
 
@@ -39,10 +39,21 @@ type Step = (
 ) & { fx?: Fx };
 
 const HERO = 'hero';
+const TEST_OF: Record<string, UiKey> = { str: 'testOfStr', dex: 'testOfDex', int: 'testOfInt', wil: 'testOfWil', cha: 'testOfCha', com: 'testOfCom' };
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 /** Cards that act at once in a fight, with no throw for the player to make. */
-const INSTANT = ['warrior-rations', 'wraith-leaves', 'trapper-trap', 'guardian-stance', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'warrior-strategist', 'wraith-mist', 'cavedelver-blind'];
-/** Combat penalty of the attacking cards, shown on the shield before the throw. */
-const CARD_HIT: Record<string, number> = { 'warrior-heavy-swing': -10, 'diver-fillet': -10, 'druid-fangs': -20 };
+const INSTANT = [
+  'warrior-rations', 'wraith-leaves', 'trapper-trap', 'guardian-stance', 'elder-herb', 'explorer-bandages', 'runemaster-empower', 'warrior-strategist', 'wraith-mist', 'cavedelver-blind',
+  // Levels 5 to 9: calls, buffs and moves where only the foes throw.
+  'trapper-dog', 'elder-mistral', 'elder-beast-form', 'diver-toxin', 'explorer-flashbang', 'warrior-banner', 'guardian-sign', 'guardian-field', 'guardian-shield-wall',
+  'druid-totem', 'druid-raven', 'druid-nature-force', 'druid-shapeshift', 'runemaster-honour', 'cavedelver-stone-skin', 'wraith-untouchable',
+];
+/** Combat penalty (or bonus) of the attacking cards, shown on the shield before the throw. */
+const CARD_HIT: Record<string, number> = {
+  'warrior-heavy-swing': -10, 'diver-fillet': -10, 'druid-fangs': -20,
+  'trapper-volley': -10, 'diver-water-bolt': 10, 'warrior-behead': -20, 'guardian-claw': -10, 'guardian-spear': -20, 'wraith-triple-shot': -20,
+  'wraith-headshot': -20, 'runemaster-hammer': -10, 'explorer-shrapnel': -10, 'cavedelver-flamethrower': -10,
+};
 const ROLL_MS = 1100;
 const PAUSE_MS = 650;
 /** How long each step of the foes' moves stays on screen, at normal pace; "faster" shortens it. */
@@ -173,6 +184,20 @@ function stepsOf(entries: LogEntry[], T: ReturnType<typeof useT>): Step[] {
       case 'held': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Walczy po twojej stronie!' : 'Fights on your side!' }); break;
       case 'drain': out.push({ kind: 'note', who: HERO, text: pl ? `Czar wysysa 1 Wt · zostało ${ev.left}/${ev.of}` : `The spell drains 1 Sta · ${ev.left}/${ev.of} left` }); break;
       case 'companionDown': out.push({ kind: 'note', who: ev.uid, text: pl ? 'Towarzysz pada!' : 'Your companion falls!' }); break;
+      // Level 5 to 9 cards.
+      case 'cardTest':
+        out.push({ kind: 'roll', who: HERO, test: TEST_OF[ev.attribute] ?? 'testOfCom', result: ev.result, card: ev.card });
+        if (!ev.result.success) out.push({ kind: 'note', who: HERO, text: `${cardName(ev.card, locale)}: ${t('failure')}` });
+        break;
+      case 'save':
+        out.push({ kind: 'roll', who: ev.uid, test: TEST_OF[ev.attribute] ?? 'testOfCom', result: ev.result, card: ev.card });
+        if (ev.result.success) out.push({ kind: 'note', who: ev.uid, text: pl ? 'Opiera się!' : 'Resists!' });
+        break;
+      case 'status': out.push({ kind: 'note', who: ev.uid, text: cap(statusWords(ev.what, ev.amount, locale)) }); break;
+      case 'decoy':
+        out.push({ kind: 'roll', who: ev.uid, test: 'foeAttack', result: ev.result, vs: HERO });
+        out.push({ kind: 'note', who: ev.uid, text: ev.gone ? (pl ? 'Trafia sobowtóra, który znika!' : 'It hits the double, which vanishes!') : (pl ? 'Pudłuje w sobowtóra' : 'It misses the double') });
+        break;
     }
   }
   if (lastTrap >= 0) out[lastTrap] = { ...out[lastTrap]!, fx: { ...out[lastTrap]!.fx, off: 'trap' } };
@@ -210,6 +235,8 @@ export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
   /** The buff or debuff opened in words, as "owner:key". */
   const [openFx, setOpenFx] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<'attack' | 'flee' | { card: string } | { scroll: string } | null>(null);
+  /** Taking Aim added to the throw waiting in the prompt. */
+  const [boostOn, setBoostOn] = useState(false);
 
   // Playback of the round: which step is showing and whether its die has landed.
   const steps = useMemo(() => (entries ? stepsOf(entries, T) : []), [entries]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -272,13 +299,14 @@ export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
   const scrollMoves = moves.flatMap((m) => (m.move === 'scroll' ? [m] : []));
   // Disarm and Companion work only on some foes: the chosen one if it fits, otherwise the first that does.
   const fits = (card: string, f: (typeof alive)[number]) => (card === 'explorer-disarm' ? canDisarm(f) : card === 'druid-companion' ? canTame(me, f)
-    : card === 'elder-beast-master' ? canMaster(me, f) : card === 'mystic-vines' ? !f.vined : true);
+    : card === 'elder-beast-master' ? canMaster(me, f) : card === 'mystic-vines' ? !f.vined : card === 'druid-forest-lord' ? canRule(me, f)
+    : card === 'warrior-behead' ? f.vitality <= 20 : true);
   const cardFoe = promptCard && chosen && fits(promptCard, chosen) ? chosen
     : promptCard ? alive.find((f) => f.uid === (moves.find((m) => m.move === 'card' && m.card === promptCard) as { target?: string } | undefined)?.target) ?? chosen
     : chosen;
   const hitOn = (f: typeof chosen) => (f ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + (c.equipment.rune === 'precise' ? 5 : 0), ENEMIES[f.enemy]!.kind))) : 0);
   const tameTarget = Math.round(successChance(c.attributes.cha, testModifier(world, me, 'cha', focus)) * 100);
-  const chance = (attr: 'dex' | 'int' | 'cha', extra = 0) => Math.round(successChance(c.attributes[attr], testModifier(world, me, attr, focus + extra)) * 100);
+  const chance = (attr: 'dex' | 'int' | 'cha' | 'wil' | 'str', extra = 0) => Math.round(successChance(c.attributes[attr], testModifier(world, me, attr, focus + extra)) * 100);
   const guardian = c.cards.includes('guardian-vigilance') ? 10 : 0;
   /** The throw and the number to beat for each card that tests something other than a plain blow. */
   const CARD_TEST: Record<string, [UiKey, number]> = {
@@ -288,14 +316,24 @@ export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
     'diver-camouflage': ['testDexHide', chance('dex')],
     'explorer-smoke': ['testFlee', chance('dex', guardian)],
     'mystic-vines': ['testIntVines', chance('int')],
+    'mystic-void-bolt': ['testOfInt', chance('int', magicBonus(world, me))],
+    'mystic-illusion': ['testOfInt', chance('int', magicBonus(world, me))],
+    'mystic-healing': ['testOfInt', chance('int', magicBonus(world, me))],
+    'mystic-double': ['testOfInt', chance('int', magicBonus(world, me))],
+    'mystic-chasm': ['testOfInt', chance('int', magicBonus(world, me))],
+    'warrior-intimidate': ['testOfCha', chance('cha')],
+    'druid-forest-lord': ['testOfWil', chance('wil')],
+    'runemaster-rend': ['testOfStr', chance('str', -20)],
   };
   const cardTest = promptCard ? CARD_TEST[promptCard] : undefined;
   const promptTest: UiKey = prompt === 'flee' ? 'testFlee' : promptScroll ? 'testScroll' : cardTest ? cardTest[0] : 'testCombat';
-  const promptTarget = prompt === 'flee' ? fleeTarget
+  // Taking Aim: +20 on a Combat test of the hero's own, added to the move without spending it.
+  const boostable = canBoost(me, combat) && !!prompt && prompt !== 'flee' && !cardTest && !INSTANT.includes(promptCard ?? '');
+  const promptTarget = (boostable && boostOn ? 20 : 0) + (prompt === 'flee' ? fleeTarget
     : promptScroll ? Math.max(1, Math.min(99, c.attributes.com + testModifier(world, me, 'com', focus + magicBonus(world, me), ENEMIES[(chosen ?? alive[0])?.enemy ?? 'wolf']!.kind)))
     : cardTest ? cardTest[1]
     : promptCard ? Math.max(1, hitOn(cardFoe) + (CARD_HIT[promptCard] ?? 0))
-    : hitTarget;
+    : hitTarget);
   const pets = me.companions ?? [];
   const weapon = heroWeapon(me);
   const potions = [...new Set(me.inventory.items.filter((i) => ITEMS[i]?.kind === 'potion'))];
@@ -311,13 +349,14 @@ export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
     ? hitKind('pet', pets.find((p) => p.uid === step.who)?.enemy, { weaponId: weapon.id, weaponName: weapon.name.en, ranged: !!weapon.ranged })
     : null;
 
-  const aimed = aim ? { aim } : {};
+  const aimed = { ...(aim ? { aim } : {}), ...(boostable && boostOn ? { boost: 'wraith-aim' as const } : {}) };
   const throwDie = () => {
     if (prompt === 'attack' && chosen) act({ type: 'combat', move: { move: 'attack', target: chosen.uid, ...aimed } });
     if (prompt === 'flee') act({ type: 'combat', move: { move: 'flee' } });
-    if (promptCard) act({ type: 'combat', move: { move: 'card', card: promptCard, ...(cardFoe ? { target: cardFoe.uid } : {}), ...(AIMED_CARDS.includes(promptCard) ? aimed : {}) } });
+    if (promptCard) act({ type: 'combat', move: { move: 'card', card: promptCard, ...(cardFoe ? { target: cardFoe.uid } : {}), ...(AIMED_CARDS.includes(promptCard) ? aimed : boostable && boostOn ? { boost: 'wraith-aim' as const } : {}) } });
     if (promptScroll) act({ type: 'combat', move: { move: 'scroll', item: promptScroll, target: (chosen ?? alive[0])!.uid, ...aimed } });
     setPrompt(null);
+    setBoostOn(false);
   };
   // The foe the throw waiting in the prompt goes at, for the aim picker.
   const aimFoe = prompt === 'attack' ? chosen : promptScroll ? (chosen ?? alive[0]) : promptCard && AIMED_CARDS.includes(promptCard) ? cardFoe : undefined;
@@ -465,6 +504,11 @@ export function Duel({ game, me, entries, act, onReplayDone, onClose }: {
                 <motion.div key="prompt" className="throw mine" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
                   <TestTitle test={promptTest} target={promptTarget} who={`${c.name} · ${promptCard ? cardName(promptCard, locale) : promptScroll ? itemName(promptScroll, locale) : prompt === 'attack' ? strike : t('flee')}`} />
                   <BigDie dice={c.dice} onTap={throwDie} />
+                  {boostable && (
+                    <button className={`ghost small ${boostOn ? 'on' : ''}`} aria-pressed={boostOn} onClick={() => setBoostOn(!boostOn)}>
+                      {boostOn ? '✓ ' : ''}{t('aimBoost')}
+                    </button>
+                  )}
                   {aimFoe && (
                     <div className="aim-pick">
                       <b>{locale === 'pl' ? 'Celujesz w' : 'Aiming at'}: {aim ? spotName(aim, undefined, locale) : (locale === 'pl' ? 'najsłabsze miejsce' : 'the weakest spot')}</b>
@@ -560,7 +604,10 @@ function weaponStrike(id: string, locale: string): string {
 }
 
 /** Cards whose blow can be aimed like a plain attack. */
-const AIMED_CARDS = ['warrior-heavy-swing', 'diver-blowpipe', 'explorer-disarm', 'trapper-poison-arrow'];
+const AIMED_CARDS = [
+  'warrior-heavy-swing', 'diver-blowpipe', 'explorer-disarm', 'trapper-poison-arrow',
+  'trapper-piercing-arrow', 'diver-sleep', 'diver-water-bolt', 'gourmet-venom-bone', 'mystic-void-bolt', 'guardian-claw', 'guardian-spear', 'wraith-pierce', 'runemaster-hammer',
+];
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 

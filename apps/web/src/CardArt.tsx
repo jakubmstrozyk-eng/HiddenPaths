@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, type TargetAndTransition } from 'motion/react';
 import type { ReactNode } from 'react';
+import { HIGH_ART, HIGH_FX } from './CardArtHigh';
 
 /**
  * A small picture for each skill card that shows what the card does: a trap on Set a Trap,
@@ -507,7 +508,7 @@ const ART: Record<string, ReactNode> = {
 export function CardArt({ card, size }: { card: string; size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="card-art-svg">
-      {ART[card] ?? <circle cx={32} cy={32} r={20} fill="#8f7bff" />}
+      {ART[card] ?? HIGH_ART[card] ?? <circle cx={32} cy={32} r={20} fill="#8f7bff" />}
     </svg>
   );
 }
@@ -551,7 +552,7 @@ const MOVES: Record<Fx, TargetAndTransition> = {
 
 /** The short show when a card is played: the card flips up, its picture acts out the card, and a ring of light bursts. */
 export function CardCast({ card, name }: { card: string; name: string }) {
-  const fx = FX[card] ?? 'pulse';
+  const fx = FX[card] ?? HIGH_FX[card] ?? 'pulse';
   return (
     <motion.div className="card-cast" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-hidden="true">
       <motion.div

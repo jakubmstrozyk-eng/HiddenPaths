@@ -1,14 +1,15 @@
 import {
   ENEMIES, HIT_LOCATIONS, ITEMS,
-  type ArmourSlot, type Enemy, type Outcome, type WeaponItem,
+  type ArmourSlot, type Attribute, type Enemy, type Outcome, type WeaponItem,
 } from '@hp/content';
 import { DIFFICULTIES } from './config';
 import { test, type TestResult } from './dice';
 import { EngineError } from './errors';
 import { Rng as RngCtor, type Rng } from './rng';
 import { bandage, eatRations, empower, healingHerb, isSpent, useLeaves, usesLeft, trapFoes } from './cards';
+import { allyBonus, callBeast, highBuff, HIGH_BUFFS, voidHeal } from './cardsHigh';
 import { BURN_DEATH, readableScrolls, scrollOf, selfSpell, spendScroll } from './scrolls';
-import { effectBonus, heroTest, itemBonus, magicBonus, type ActorState, type Companion, type WorldView } from './terrain';
+import { effectBonus, heroTest, isWater, itemBonus, magicBonus, runesOf, suddenDex, type ActorState, type Companion, type WorldView } from './terrain';
 
 /** One foe in a fight. */
 export interface Foe {
@@ -42,6 +43,26 @@ export interface Foe {
   blindUntil?: number;
   /** Fangs: the foe bleeds, the number of rounds so far; it stops on a passed Strength test, and the 3rd round kills. */
   bleed?: number;
+  // Level 5–9 cards.
+  /** Sleep Dart: the foe sleeps and does not attack; a blow wakes it. */
+  asleep?: boolean;
+  /** Flashbang: the combat turn the foe was dazed in (−20, then −10, then −5 to every test). */
+  dazed?: number;
+  /** Blinding Spice: −20 Combat and Dexterity up to this combat turn. */
+  spiced?: number;
+  /** Toxin: poison that adds up; the foe loses this much Vitality every round. */
+  venom?: number;
+  /** Venom Bone: rounds of the rising poison so far; each round takes one more. */
+  rising?: number;
+  /** The Wraith's Piercing Arrow: a wound right through, −1 Vitality a round and −10 Combat. */
+  gash?: boolean;
+  /** Blazing Hammer: parts of the body whose armour is smashed. */
+  shattered?: ArmourSlot[];
+  /** Flamethrower: the combat turn the foe caught fire; the next round it loses half its Vitality and tests again. */
+  inferno?: number;
+  /** How the foe left the fight without being beaten down: run off (Intimidation), swallowed by the void (Chasm),
+   *  or fallen into the split ground (Rending). Fled and void foes give half XP. */
+  gone?: 'fled' | 'void' | 'fell';
 }
 
 export interface CombatState {
@@ -80,19 +101,41 @@ export interface CombatState {
   /** Witch's drain: Stamina taken by the spell's blows this fight. The hero falls under her power once it reaches
    *  their full Stamina, not the Stamina left over from moving (Jacob, 2026-11-27: one hit must not end the fight). */
   drained?: number;
+  // Level 5–9 cards.
+  /** Cards already played in this fight, for the once-a-fight ones. */
+  once?: string[];
+  /** Toxin: the last combat turn the hero's blows and skin carry the poison. */
+  toxin?: number;
+  /** Bloodlust: the trance has begun (+10 Str, Dex and Combat and +2 damage until the fight ends). */
+  bloodlust?: boolean;
+  /** Double: the last combat turn the Mystic's double stands, unless a foe hits it first. */
+  double?: number;
+  /** Shield Wall: blows that land and the shields still stop. */
+  wall?: number;
+  /** Spear Throw: the spear lies in the foe; the next attack picks it up. */
+  unarmed?: boolean;
+  /** Water Bolt shaped away from water this fight (2 a fight). */
+  waterBolts?: number;
+  /** Flamethrower: combat turns it has burned in this fight (2 in a row). */
+  flames?: number[];
+  /** The fight is on a fragment with water (Water Bolt). */
+  wet?: boolean;
 }
 
 export type CombatMove =
   /** `aim`: the spot the hero goes for; it is hit when the Combat test passes by 20 or more. */
-  | { move: 'attack'; target: string; aim?: ArmourSlot }
+  | { move: 'attack'; target: string; aim?: ArmourSlot; boost?: Boost }
   | { move: 'parry' }
   | { move: 'focus' }
   | { move: 'flee' }
   | { move: 'potion'; item: string }
   /** A magic scroll: Fire bolt and Lightning at a foe, Healing and Renewal on the hero. */
-  | { move: 'scroll'; item: string; target?: string; aim?: ArmourSlot }
+  | { move: 'scroll'; item: string; target?: string; aim?: ArmourSlot; boost?: Boost }
   /** A skill card played as the hero's move; `target` for the attacking cards. */
-  | { move: 'card'; card: string; target?: string; aim?: ArmourSlot };
+  | { move: 'card'; card: string; target?: string; aim?: ArmourSlot; boost?: Boost };
+
+/** A card added to another move without taking the round: Taking Aim's +20 to the Combat test. */
+export type Boost = 'wraith-aim';
 
 export type CombatEvent =
   | {
@@ -159,7 +202,21 @@ export type CombatEvent =
   /** A held beast's blow at another foe (Master of Beasts). */
   | { type: 'held'; uid: string }
   /** Drain (the witch): a blow that landed takes 1 Stamina; `left` is what the hero still has against the spell. */
-  | { type: 'drain'; uid: string; left: number; of: number };
+  | { type: 'drain'; uid: string; left: number; of: number }
+  /** A test the hero throws for a skill card (an Int test to shape a void bolt, a Wil test to call the pack...). */
+  | { type: 'cardTest'; card: string; attribute: Attribute; result: TestResult }
+  /** A foe's test against a skill card (a Dex test against the gale, an Int test against the flashbang...). */
+  | { type: 'save'; uid: string; card: string; attribute: Attribute; result: TestResult }
+  /** A state a skill card puts on a foe or the hero, or takes away; `uid` is HERO for the hero. See STATUS_WORDS in the app. */
+  | { type: 'status'; uid: string; card: string; what: CardStatus; amount?: number }
+  /** A foe's blow at the Mystic's double; a hit makes it vanish. */
+  | { type: 'decoy'; uid: string; result: TestResult; gone: boolean };
+
+/** What a `status` event says happened. */
+export type CardStatus =
+  | 'asleep' | 'sleeping' | 'woke' | 'dazed' | 'spiced' | 'gash' | 'shattered' | 'burning' | 'burnedOut' | 'burnedDown'
+  | 'fled' | 'void' | 'fell' | 'stays' | 'gale' | 'venom' | 'rising' | 'bloodlust' | 'summoned' | 'wall' | 'walled'
+  | 'unarmed' | 'pickedUp' | 'double' | 'fizzle' | 'buff' | 'healed' | 'dodged' | 'hit';
 
 export type CombatResult = 'ongoing' | 'won' | 'lost' | 'fled' | 'hidden' | 'enthralled';
 
@@ -168,7 +225,7 @@ export const HERO = 'hero';
 /** Strength step "S" from the weapon table: Strength divided by 10, rounded down. */
 export const strengthStep = (str: number) => Math.floor(str / 10);
 
-export function startCombat(world: WorldView, enemies: string[], onWin: Outcome[] = []): CombatState {
+export function startCombat(world: WorldView, enemies: string[], onWin: Outcome[] = [], at?: number): CombatState {
   const factor = DIFFICULTIES[world.difficulty].enemyVitality;
   const foes = enemies.map((id, i): Foe => {
     const enemy = ENEMIES[id];
@@ -176,7 +233,8 @@ export function startCombat(world: WorldView, enemies: string[], onWin: Outcome[
     const vitality = Math.max(1, Math.round(enemy.vitality * factor));
     return { uid: `${id}-${i + 1}`, enemy: id, vitality, maxVitality: vitality, attacks: 0, stunned: false, poisoned: false, hits: 0 };
   });
-  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin, round: world.round };
+  const wet = at !== undefined && at >= 0 && isWater(world.terrainAt(at));
+  return { foes, turn: 1, focus: false, heroStunned: false, reloading: false, onWin, round: world.round, ...(wet ? { wet } : {}) };
 }
 
 export function heroWeapon(actor: ActorState): WeaponItem {
@@ -212,6 +270,10 @@ export function heroArmour(actor: ActorState): Record<ArmourSlot, number> {
     const piece = armourPiece(actor, slot);
     if (piece && actor.counters[`reinforced:${slot}:${piece}`]) out[slot] = Math.min(5, out[slot] + 1);
   }
+  // Protective Field and Stone Skin: armour on every part of the body while they last. Expired effects are
+  // dropped when the round passes, so every one still held counts now.
+  const extra = actor.effects.filter((e) => e.attribute === 'armour').reduce((sum, e) => sum + e.amount, 0);
+  if (extra) for (const slot of Object.keys(out) as ArmourSlot[]) out[slot] += extra;
   return out;
 }
 
@@ -266,8 +328,86 @@ export function combatMoves(actor: ActorState, combat: CombatState): CombatMove[
   if (cards.includes('mystic-vines') && free) moves.push({ move: 'card', card: 'mystic-vines', target: free.uid });
   if (cards.includes('wraith-mist') && !isSpent(actor, 'wraith-mist')) moves.push({ move: 'card', card: 'wraith-mist' });
   if (cards.includes('cavedelver-blind') && !combat.blindUsed && alive.length) moves.push({ move: 'card', card: 'cavedelver-blind' });
+  if (target) moves.push(...highCardMoves(actor, combat, target.target));
   return moves;
 }
+
+/** Whether a once-a-fight card is still unplayed in this fight. */
+export const freshInFight = (combat: Pick<CombatState, 'once'>, card: string) => !(combat.once ?? []).includes(card);
+
+/** Companions the hero has room for: 2, or 3 with the Druid's Lord of the Forest. Called beasts (dog, wolves, voidling) do not count. */
+export const maxCompanions = (actor: Pick<ActorState, 'character'>) => ((actor.character.cards ?? []).includes('druid-forest-lord') ? 3 : MAX_COMPANIONS);
+export const boundCompanions = (actor: Pick<ActorState, 'companions'>) => (actor.companions ?? []).filter((p) => !p.summoned).length;
+/** Lord of the Forest: a beast of at most 20 Vitality, while the Druid has room for it. */
+export const canRule = (actor: Pick<ActorState, 'companions' | 'character'>, foe: Foe) =>
+  ENEMIES[foe.enemy]!.kind === 'beast' && foe.vitality <= MASTER_MAX_VITALITY && boundCompanions(actor) < maxCompanions(actor);
+/** Beheading: a foe of at most this much Vitality dies at one blow. */
+export const BEHEAD_MAX = 20;
+/** Headshot: the Vitality the shot takes. */
+export const HEADSHOT = 20;
+/** Water Bolt: bolts a fight away from water. */
+export const DRY_BOLTS = 2;
+/** Untouchable: easy Dex tests passed before the Wraith can dodge. */
+export const DODGE_LESSONS = 3;
+/** Flashbang: the dazed foe's penalty in its first, second and third round. */
+export const DAZE = [-20, -10, -5];
+
+/** Fight moves of the level 5 to 9 cards. `target` is the first foe an attack would go at. */
+function highCardMoves(actor: ActorState, combat: CombatState, target: string): CombatMove[] {
+  const cards = actor.character.cards ?? [];
+  const out: CombatMove[] = [];
+  const alive = combat.foes.filter((f) => f.vitality > 0);
+  const ranged = !!heroWeapon(actor).ranged;
+  const has = (card: string) => cards.includes(card);
+  const once = (card: string) => has(card) && freshInFight(combat, card);
+  const camp = (card: string) => has(card) && !isSpent(actor, card);
+  const at = (card: string) => out.push({ move: 'card', card, target });
+  const self = (card: string) => out.push({ move: 'card', card });
+  // Attacks at one foe.
+  if (has('trapper-piercing-arrow') && ranged) at('trapper-piercing-arrow');
+  if (once('trapper-volley') && ranged) at('trapper-volley');
+  if (has('diver-sleep')) at('diver-sleep');
+  if (has('diver-water-bolt') && (combat.wet || (combat.waterBolts ?? 0) < DRY_BOLTS)) at('diver-water-bolt');
+  if (has('gourmet-spice')) at('gourmet-spice');
+  if (has('gourmet-venom-bone')) at('gourmet-venom-bone');
+  if (has('warrior-wide-swing')) at('warrior-wide-swing');
+  const small = alive.find((f) => f.vitality <= BEHEAD_MAX);
+  if (once('warrior-behead') && small) out.push({ move: 'card', card: 'warrior-behead', target: small.uid });
+  if (has('mystic-void-bolt')) at('mystic-void-bolt');
+  if (has('guardian-claw')) at('guardian-claw');
+  if (has('guardian-spear') && !combat.unarmed) at('guardian-spear');
+  if (once('wraith-pierce') && ranged) at('wraith-pierce');
+  if (has('wraith-triple-shot') && ranged) at('wraith-triple-shot');
+  if (once('wraith-headshot') && ranged) at('wraith-headshot');
+  if (has('runemaster-hammer')) at('runemaster-hammer');
+  const beast = alive.find((f) => canRule(actor, f));
+  if (has('druid-forest-lord') && beast) out.push({ move: 'card', card: 'druid-forest-lord', target: beast.uid });
+  // Moves at every foe, or none.
+  if (once('elder-mistral')) self('elder-mistral');
+  if (once('explorer-flashbang')) self('explorer-flashbang');
+  if (has('explorer-shrapnel') && (usesLeft(actor, 'explorer-shrapnel') ?? 0) > 0) self('explorer-shrapnel');
+  if (once('warrior-intimidate')) self('warrior-intimidate');
+  if (once('mystic-illusion')) self('mystic-illusion');
+  if (once('mystic-chasm')) self('mystic-chasm');
+  if (camp('runemaster-rend')) self('runemaster-rend');
+  if (has('cavedelver-dynamite') && (usesLeft(actor, 'cavedelver-dynamite') ?? 0) > 0) self('cavedelver-dynamite');
+  const flames = combat.flames ?? [];
+  if (has('cavedelver-flamethrower') && (flames.length === 0 ? !isSpent(actor, 'cavedelver-flamethrower') : flames.length === 1 && flames[0] === combat.turn - 1)) self('cavedelver-flamethrower');
+  // Calls, buffs and defences.
+  if (camp('trapper-dog') && !(actor.companions ?? []).some((p) => p.enemy === 'steppeDog')) self('trapper-dog');
+  if (once('diver-toxin') && actor.staminaLeft >= 1) self('diver-toxin');
+  for (const card of ['elder-beast-form', 'warrior-banner', 'mystic-healing', 'guardian-sign', 'guardian-field', 'druid-totem', 'druid-raven', 'druid-nature-force', 'druid-shapeshift', 'runemaster-honour', 'cavedelver-stone-skin']) {
+    if (camp(card)) self(card);
+  }
+  if (once('mystic-double')) self('mystic-double');
+  if (once('guardian-shield-wall')) self('guardian-shield-wall');
+  if (has('wraith-untouchable') && (actor.counters.dodgeLessons ?? 0) >= DODGE_LESSONS) self('wraith-untouchable');
+  return out;
+}
+
+/** The moves Taking Aim can be added to: a Combat test of the hero's own. */
+export const canBoost = (actor: Pick<ActorState, 'character'>, combat: Pick<CombatState, 'once'>) =>
+  (actor.character.cards ?? []).includes('wraith-aim') && freshInFight(combat, 'wraith-aim');
 
 /** Disarm only works on a foe holding a hand weapon (a blade or an axe), not on claws, teeth, bows or spells (Jacob, 2026-11-25). */
 export const canDisarm = (foe: Foe) => !foe.disarmed && !!ENEMIES[foe.enemy]!.weapon.blade;
@@ -292,6 +432,34 @@ export const WOUND_DEATH = 3;
 /** Veil of Mist: the foes' Combat penalty in its first and second turn, and their Dexterity penalty. */
 export const MIST = { first: -20, second: -10, dex: -10, own: -10 };
 export const BLIND = -30;
+/** Blinding Spice: the foe's Combat and Dexterity penalty for 3 rounds. */
+export const SPICE = -20;
+/** The Wraith's Piercing Arrow: the open wound's Combat penalty. */
+export const GASH = -10;
+/** Bloodlust: the trance's bonus to Strength, Dexterity and Combat (and +2 damage). */
+export const BLOODLUST = 10;
+/** Taking Aim: added to one Combat test. */
+export const AIM_BONUS = 20;
+/** Whetstone: damage of a sharpened hand weapon in the next fight. */
+export const WHETSTONE = 2;
+/** The Trapper's Vigilance: initiative. */
+export const TRAPPER_VIGILANCE = 15;
+/** Spear Throw: the strength of the thrown spear. */
+export const SPEAR_STRENGTH = 15;
+/** Shrapnel: the grenade's strength. */
+export const SHRAPNEL_STRENGTH = 6;
+/** Mistral: Vitality the gale takes from a foe that fails. */
+export const MISTRAL_DAMAGE = 2;
+/** Shield Wall: blows the shields stop. */
+export const SHIELD_WALL = 3;
+/** A foe's armour, with what the Blazing Hammer has smashed. */
+export const armourOf = (foe: Foe): Partial<Record<ArmourSlot, number>> => {
+  const own = ENEMIES[foe.enemy]!.armour;
+  if (!foe.shattered?.length) return own;
+  const out = { ...own };
+  for (const slot of foe.shattered) out[slot] = 0;
+  return out;
+};
 /** Bonus initiative from the Rune of Safety, and from Vigilance. */
 export const SAFETY_INITIATIVE = 20;
 export const VIGILANCE = 10;
@@ -343,6 +511,8 @@ export function combatTurn(
   const fleeing = (move.move === 'flee' || smoke) && !combat.heroStunned;
   // Defensive Stance, like a parry, is taken for the whole round.
   const stance = move.move === 'card' && move.card === 'guardian-stance' && !combat.heroStunned;
+  // So is the Wraith's dodge (Untouchable).
+  const dodging = move.move === 'card' && move.card === 'wraith-untouchable' && !combat.heroStunned;
   let fled = false;
   let hidden = false;
   let enthralled = false;
@@ -350,14 +520,26 @@ export function combatTurn(
   const acted = new Set<string>();
   const mistAge = () => (combat.mist === undefined ? -1 : combat.turn - combat.mist);
   const mistOn = () => mistAge() === 0 || mistAge() === 1;
-  /** Veil of Mist and Blinding Light on a foe's Combat or Dexterity. */
+  /** Flashbang's daze on any test of a foe: −20, then −10, then −5. */
+  const dazeMod = (foe: Foe) => (foe.dazed === undefined ? 0 : DAZE[combat.turn - foe.dazed] ?? 0);
+  /** Veil of Mist, Blinding Light, Blinding Spice, the daze and the Wraith's arrow wound on a foe's Combat or Dexterity. */
   const foeMod = (foe: Foe, what: 'com' | 'dex') => {
     let m = 0;
     if (mistOn()) m += what === 'dex' ? MIST.dex : mistAge() === 0 ? MIST.first : MIST.second;
     if ((foe.blindUntil ?? 0) >= combat.turn) m += BLIND;
-    return m;
+    if ((foe.spiced ?? 0) >= combat.turn) m += SPICE;
+    if (what === 'com' && foe.gash) m += GASH;
+    return m + dazeMod(foe);
   };
-  const vigilance = (actor.character.cards ?? []).includes('guardian-vigilance') ? VIGILANCE : 0;
+  /** A foe's test against a skill card: its own attribute with the penalties on it. */
+  const foeSave = (foe: Foe, card: string, attribute: Attribute, extra = 0): TestResult => {
+    const enemy = ENEMIES[foe.enemy]!;
+    const base = attribute === 'com' || attribute === 'dex' ? foeMod(foe, attribute) : dazeMod(foe);
+    const result = test(rng, enemy[attribute as 'dex'] ?? 0, base + extra);
+    events.push({ type: 'save', uid: foe.uid, card, attribute, result });
+    return result;
+  };
+  const vigilance = ((actor.character.cards ?? []).includes('guardian-vigilance') ? VIGILANCE : 0) + suddenDex(actor);
   /** The hero's own Combat modifiers against a foe: Scalp, Strategist's study and the mist's −10. */
   const comMod = (enemy: string) => scalpBonus(actor, enemy) + (combat.studiedKind === enemy ? 10 : 0) + (mistOn() ? MIST.own : 0);
   const alive = () => combat.foes.filter((f) => f.vitality > 0);
@@ -369,7 +551,27 @@ export function combatTurn(
     return j.lore + (attack ? j.careful : 0);
   };
   const weapon = heroWeapon(actor);
-  const rune = actor.character.equipment.rune;
+  const runes = runesOf(actor.character.equipment);
+  const hasRune = (r: string) => runes.includes(r as never);
+  /** Bloodlust: +10 Str, Dex and Combat once the trance has begun. */
+  const trance = (attribute: Attribute) => (combat.bloodlust && (attribute === 'str' || attribute === 'dex' || attribute === 'com') ? BLOODLUST : 0);
+  /** A test of the hero's in this fight, with the trance on it. */
+  const ht = (attribute: Attribute, extra = 0, vs?: string) => heroTest(world, actor, attribute, rng, extra + trance(attribute), vs);
+  const toxinOn = () => (combat.toxin ?? 0) >= combat.turn;
+  const doubleOn = () => (combat.double ?? 0) >= combat.turn;
+  /** Beast Form and the Druid's wolf: claws and teeth instead of the weapon. */
+  const clawed = actor.effects.some((e) => e.id === 'beastForm' || e.id === 'wolfForm');
+  const wolf = actor.effects.some((e) => e.id === 'wolfForm');
+  /** Rune of Honour: every Combat test is thrown twice and the better counts. */
+  const honour = actor.effects.some((e) => e.id === 'ally:honour');
+  /** Taking Aim: +20 to the first Combat test of this move (once a fight). */
+  let boost = 'boost' in move && move.boost === 'wraith-aim' && canBoost(actor, combat) ? AIM_BONUS : 0;
+  if (boost) (combat.once ??= []).push('wraith-aim');
+  const startTrance = () => {
+    if (combat.bloodlust || !cards.includes('diver-bloodlust')) return;
+    combat.bloodlust = true;
+    events.push({ type: 'status', uid: HERO, card: 'diver-bloodlust', what: 'bloodlust' });
+  };
 
   if (move.move === 'attack' && !alive().some((f) => f.uid === move.target)) {
     throw new EngineError('combat.target', 'That foe is not in the fight.');
@@ -382,10 +584,32 @@ export function combatTurn(
   /** One blow of the hero at a foe, with the skill cards that shape it. */
   const aim = 'aim' in move ? move.aim : undefined;
   if (aim !== undefined && !(['head', 'arms', 'torso', 'legs'] as const).includes(aim)) throw new EngineError('combat.aim', 'Aim at the head, arms, torso or legs.');
-  const swing = (target: Foe, opts: { mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string; wound?: boolean; tear?: boolean } = {}): boolean => {
+  const swing = (target: Foe, opts: {
+    mod?: number; bonus?: number; power?: number; poison?: boolean; card?: string; dodge?: boolean; scroll?: string; wound?: boolean; tear?: boolean;
+    /** A test already thrown for the whole move (Volley, Shrapnel...): every blow of it lands on that one throw. */
+    sure?: TestResult;
+    /** The foe's Dexterity modifier to dodge (Shrapnel's −10). */
+    dodgeMod?: number;
+    /** The blow's strength instead of S plus the weapon (Shrapnel's 6, the spear's 15). */
+    strength?: number;
+    /** Damage dealt as it is, past armour and dice (Headshot, Beheading, Dynamite). */
+    fixed?: number;
+    /** Magic that is not a scroll (Void Bolt, Water Bolt): no weapon runes or bonuses. */
+    magic?: boolean;
+    /** Armour does not stop it (Piercing Arrow). */
+    pierce?: boolean;
+    /** Blazing Hammer: the armour where it lands is smashed. */
+    shatter?: boolean;
+    /** Talon: the foe bleeds. */
+    bleed?: boolean;
+  } = {}): boolean => {
     const enemy = ENEMIES[target.enemy]!;
-    const mod = focus + (rune === 'precise' ? 5 : 0) + (opts.mod ?? 0) + comMod(target.enemy) + firstTest(true);
-    const result = heroTest(world, actor, 'com', rng, mod, enemy.kind);
+    // A sleeping foe is hit for sure, for +2, and wakes (Sleep Dart).
+    const sleeper = !!target.asleep && !opts.sure;
+    const mod = focus + (hasRune('precise') ? 5 : 0) + (opts.mod ?? 0) + comMod(target.enemy) + firstTest(true) + boost;
+    boost = 0;
+    let result = opts.sure ?? (sleeper ? { roll: 1, target: 100, success: true, margin: 0 } : ht('com', mod, enemy.kind));
+    if (!result.success && honour && !opts.sure) result = { ...ht('com', mod, enemy.kind), rerolled: 'runemaster-honour', first: result.roll };
     const base = { type: 'strike' as const, by: HERO, target: target.uid, result, ...(opts.card ? { card: opts.card } : {}), ...(opts.scroll ? { scroll: opts.scroll } : {}) };
     if (!result.success) {
       events.push(base);
@@ -393,51 +617,81 @@ export function combatTurn(
     }
     let dodge: TestResult | undefined;
     if (opts.dodge) {
-      dodge = test(rng, enemy.dex, foeMod(target, 'dex'));
+      dodge = test(rng, enemy.dex, foeMod(target, 'dex') + (opts.dodgeMod ?? 0));
       if (dodge.success) {
         events.push({ ...base, dodge, dodged: true });
         return false;
       }
     }
-    const spot = hitLocation(rng, result.margin, enemy.armour, aim);
+    const magic = !!opts.scroll || !!opts.magic;
+    // Precision: with a hand weapon the Warrior always picks where the blow lands.
+    const precision = cards.includes('warrior-precision') && !weapon.ranged && !magic && !opts.card?.startsWith('cavedelver') ? AIM_MARGIN : 0;
+    const spot = hitLocation(rng, Math.max(result.margin, precision), armourOf(target), aim);
     const { location } = spot;
-    const armour = enemy.armour[location] ?? 0;
-    // Fangs: after the bite an opposed Strength test; winning it tears the foe open for +4.
+    const armour = opts.pierce || opts.fixed !== undefined ? 0 : armourOf(target)[location] ?? 0;
+    if (sleeper) {
+      delete target.asleep;
+      events.push({ type: 'status', uid: target.uid, card: 'diver-sleep', what: 'woke' });
+    }
+    if (opts.fixed !== undefined) {
+      const damage = Math.max(0, Math.min(target.vitality, opts.fixed));
+      target.vitality -= damage;
+      target.hits++;
+      events.push({ ...base, ...spot, damage });
+      if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
+      startTrance();
+      return true;
+    }
+    // Fangs (and the Druid's wolf): after the bite an opposed Strength test; winning it tears the foe open for +4.
     let tear: CombatEvent | undefined;
-    if (opts.tear) {
-      const hero = heroTest(world, actor, 'str', rng);
+    if (opts.tear || (wolf && !magic && !opts.card)) {
+      const hero = ht('str');
       const foe = test(rng, enemy.str);
       const torn = hero.success && (!foe.success || hero.roll <= foe.roll);
       tear = { type: 'tear', uid: target.uid, hero, foe, torn };
     }
     // Critical Point: +1 damage for each 10 the roll beat the target by, at most 4.
-    const magic = !!opts.scroll;
     const critical = !magic && cards.includes('wraith-critical') ? Math.min(4, Math.floor(result.margin / 10)) : 0;
     // Precise Shot: a longbow hit that beat the target by 15 or more deals +2.
     const precise = cards.includes('trapper-precise-shot') && weapon.id === 'longBow' && result.margin >= 15 ? 2 : 0;
+    // Whetstone: a sharpened hand weapon deals +2 in this fight.
+    const whet = actor.counters.whetted && !weapon.ranged && !magic && !opts.card?.startsWith('cavedelver') ? WHETSTONE : 0;
     // A scroll's magic is not a blade: weapon runes and weapon bonuses do not add to it.
-    const damageRoll = damageDie(rng, !magic && (!!weapon.penetrating || rune === 'piercing'));
-    const strength = magic
-      ? strengthStep(attrs.str) + (opts.power ?? 0)
-      : strengthStep(attrs.str) + (opts.power ?? weapon.power)
-        + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (rune === 'sharp' && armour > 0 ? 1 : 0)
-        + critical + precise + (opts.bonus ?? 0) + (tear?.type === 'tear' && tear.torn ? 4 : 0);
+    const damageRoll = damageDie(rng, !magic && (!!weapon.penetrating || hasRune('piercing')));
+    const power = opts.power ?? (clawed ? -1 : weapon.power);
+    const strength = opts.strength !== undefined
+      ? opts.strength
+      : magic
+        ? strengthStep(attrs.str) + (opts.power ?? 0)
+        : strengthStep(attrs.str) + power
+          + itemBonus(actor, 'damage') + effectBonus(actor, world.round, 'damage') + (hasRune('sharp') && armour > 0 ? 1 : 0)
+          + critical + precise + whet + (opts.bonus ?? 0) + (tear?.type === 'tear' && tear.torn ? 4 : 0) + (combat.bloodlust ? 2 : 0);
     let damage = strength + damageRoll - armour;
     // Spirits are hurt in full only by magic or runes.
-    const halved = enemy.traits.includes('ethereal') && !rune && !magic;
+    const halved = enemy.traits.includes('ethereal') && !runes.length && !magic;
     if (halved) damage = Math.floor(damage / 2);
     damage = Math.max(0, damage);
     target.vitality -= damage;
     target.hits++;
-    if ((rune === 'venom' && !magic) || opts.poison) target.poisoned = true;
-    if (rune === 'stunning' && !magic && target.hits % 3 === 0) target.stunned = true;
+    if ((hasRune('venom') && !magic) || opts.poison) target.poisoned = true;
+    if (hasRune('stunning') && !magic && target.hits % 3 === 0) target.stunned = true;
     if (opts.scroll && scrollOf(opts.scroll)?.spell === 'fire' && target.burning === undefined) target.burning = 0;
     // Fangs: the bite makes the foe bleed (Jacob, 2026-11-26: like the venom rune, but the 3rd round kills).
-    if (opts.tear && target.bleed === undefined) target.bleed = 0;
+    if ((opts.tear || opts.bleed || (tear?.type === 'tear' && tear.torn)) && target.bleed === undefined) target.bleed = 0;
     // Filleting, and every second hit with the Shark Blade, open a deep wound.
     if (target.wound === undefined && (opts.wound || (!magic && !opts.card && cards.includes('gourmet-shark-blade') && target.hits % 2 === 0))) target.wound = 0;
     events.push({ ...base, ...spot, damage, damageRoll, armour, strength, ...(halved ? { halved } : {}), ...(dodge ? { dodge } : {}) });
     if (tear) events.push(tear);
+    // Toxin: while it lasts every hit adds to the foe's poison.
+    if (toxinOn() && target.vitality > 0) {
+      target.venom = (target.venom ?? 0) + 1;
+      events.push({ type: 'status', uid: target.uid, card: 'diver-toxin', what: 'venom', amount: target.venom });
+    }
+    if (opts.shatter && target.vitality > 0 && !(target.shattered ?? []).includes(location)) {
+      (target.shattered ??= []).push(location);
+      events.push({ type: 'status', uid: target.uid, card: 'runemaster-hammer', what: 'shattered' });
+    }
+    startTrance();
     if (target.vitality <= 0) events.push({ type: 'foeDown', uid: target.uid, enemy: target.enemy });
     // Lightning: a foe that is hit tests Strength; a failure leaves it stunned for a round.
     else if (opts.scroll && scrollOf(opts.scroll)?.spell === 'lightning') {
@@ -454,6 +708,244 @@ export function combatTurn(
   if (move.move === 'scroll' && !combatMoves(actor, combat).some((m) => m.move === 'scroll' && m.item === move.item)) {
     throw new EngineError('scroll.notNow', 'You cannot read that scroll now.');
   }
+
+  /** A test the hero throws for a card, written to the log. */
+  const cardTest = (card: string, attribute: Attribute, extra = 0): TestResult => {
+    const result = ht(attribute, focus + extra);
+    events.push({ type: 'cardTest', card, attribute, result });
+    return result;
+  };
+  const used = (card: string) => (combat.once ??= []).push(card);
+  /** The level 5 to 9 cards played as the hero's move. */
+  const highCard = (card: string, uid?: string) => {
+    const target = targetOf(uid);
+    const shots = (n: number, mod: number, what: Parameters<typeof swing>[1] = {}) => {
+      // One throw for the whole volley; then each arrow goes at the next foe standing (the target first).
+      const first = target ?? alive()[0];
+      if (!first) return;
+      const sure = ht('com', focus + mod + comMod(first.enemy) + firstTest(true) + boost, ENEMIES[first.enemy]!.kind);
+      boost = 0;
+      if (!sure.success) {
+        events.push({ type: 'strike', by: HERO, target: first.uid, result: sure, card });
+        return;
+      }
+      const pool = [first, ...alive().filter((f) => f !== first)].slice(0, what.dodge ? 3 : n);
+      for (let i = 0; i < n; i++) {
+        const standing = pool.filter((f) => f.vitality > 0);
+        if (!standing.length) break;
+        swing(standing[i % standing.length]!, { ...what, sure, card });
+      }
+    };
+    switch (card) {
+      case 'trapper-piercing-arrow':
+        if (target) swing(target, { bonus: 4, pierce: true, card });
+        break;
+      case 'trapper-volley':
+        used(card);
+        shots(5, -10);
+        break;
+      case 'diver-sleep': {
+        if (!target) break;
+        if (swing(target, { power: -2, card }) && target.vitality > 0) {
+          const save = foeSave(target, card, 'str');
+          if (!save.success) {
+            target.asleep = true;
+            events.push({ type: 'status', uid: target.uid, card, what: 'asleep' });
+          }
+        }
+        break;
+      }
+      case 'diver-water-bolt':
+        if (!combat.wet) combat.waterBolts = (combat.waterBolts ?? 0) + 1;
+        if (target) swing(target, { mod: 10, power: combat.wet ? 2 : 0, magic: true, card });
+        break;
+      case 'gourmet-spice':
+        // A handful of spice in the eyes: no wound, but −20 Combat and Dex for 3 rounds.
+        if (target && swing(target, { fixed: 0, card })) {
+          target.spiced = combat.turn + 2;
+          events.push({ type: 'status', uid: target.uid, card, what: 'spiced' });
+        }
+        break;
+      case 'gourmet-venom-bone':
+        if (target && swing(target, { power: -1, card }) && target.vitality > 0 && target.rising === undefined) {
+          target.rising = 0;
+          events.push({ type: 'status', uid: target.uid, card, what: 'rising' });
+        }
+        break;
+      case 'warrior-wide-swing':
+        for (const foe of [target, ...alive().filter((f) => f !== target)].filter((f): f is Foe => !!f).slice(0, 2)) swing(foe, { card });
+        break;
+      case 'warrior-behead':
+        used(card);
+        if (target && target.vitality <= BEHEAD_MAX) swing(target, { mod: -20, fixed: target.vitality, card });
+        break;
+      case 'mystic-void-bolt':
+        if (!target) break;
+        if (cardTest(card, 'int', magicBonus(world, actor)).success) swing(target, { power: 2, magic: true, card });
+        break;
+      case 'guardian-claw':
+        if (target) swing(target, { mod: -10, power: 0, bonus: 4, bleed: true, card });
+        break;
+      case 'guardian-spear':
+        if (!target) break;
+        swing(target, { mod: -20, strength: SPEAR_STRENGTH, card });
+        combat.unarmed = true;
+        events.push({ type: 'status', uid: HERO, card, what: 'unarmed' });
+        break;
+      case 'wraith-pierce':
+        used(card);
+        if (target && swing(target, { power: 1, card }) && target.vitality > 0) {
+          target.gash = true;
+          events.push({ type: 'status', uid: target.uid, card, what: 'gash' });
+        }
+        break;
+      case 'wraith-triple-shot':
+        shots(3, -20);
+        break;
+      case 'wraith-headshot':
+        used(card);
+        if (target) swing(target, { mod: -20, fixed: HEADSHOT, card });
+        break;
+      case 'runemaster-hammer':
+        if (target) swing(target, { mod: -10, power: 1, bonus: 4, shatter: true, card });
+        break;
+      case 'druid-forest-lord': {
+        if (!target || !canRule(actor, target)) throw new EngineError('combat.target', 'That beast cannot be tamed.');
+        if (!cardTest(card, 'wil').success) break;
+        const n = (actor.counters.tamed ?? 0) + 1;
+        actor.counters.tamed = n;
+        (actor.companions ??= []).push({ uid: `pet-${target.enemy}-${n}`, enemy: target.enemy, vitality: target.vitality, maxVitality: target.maxVitality, bond: BOND_NEEDED, tame: true });
+        target.tamed = true;
+        target.vitality = 0;
+        events.push({ type: 'tame', uid: target.uid, result: { roll: 0, target: 0, success: true, margin: 0 } });
+        break;
+      }
+      case 'elder-mistral':
+        used(card);
+        for (const foe of alive().slice(0, 3)) {
+          if (foeSave(foe, card, 'dex').success) continue;
+          foe.stunned = true;
+          foe.vitality -= MISTRAL_DAMAGE;
+          events.push({ type: 'status', uid: foe.uid, card, what: 'gale', amount: MISTRAL_DAMAGE });
+          if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+        }
+        break;
+      case 'explorer-flashbang':
+        used(card);
+        for (const foe of alive()) {
+          if (foeSave(foe, card, 'int').success) continue;
+          foe.dazed = combat.turn;
+          events.push({ type: 'status', uid: foe.uid, card, what: 'dazed' });
+        }
+        break;
+      case 'explorer-shrapnel':
+        actor.counters[`spent:${card}`] = (actor.counters[`spent:${card}`] ?? 0) + 1;
+        shots(3, -10, { dodge: true, dodgeMod: -10, strength: SHRAPNEL_STRENGTH });
+        break;
+      case 'cavedelver-dynamite': {
+        actor.counters[`spent:${card}`] = (actor.counters[`spent:${card}`] ?? 0) + 1;
+        const first = target ?? alive()[0];
+        if (!first) break;
+        const sure = ht('com', focus + comMod(first.enemy) + firstTest(true), ENEMIES[first.enemy]!.kind);
+        if (!sure.success) {
+          events.push({ type: 'strike', by: HERO, target: first.uid, result: sure, card });
+          break;
+        }
+        for (const foe of alive().slice(0, 3)) swing(foe, { sure, dodge: true, fixed: Math.ceil(foe.vitality / 2), card });
+        break;
+      }
+      case 'cavedelver-flamethrower':
+        actor.counters[`used:${card}`] = 1;
+        (combat.flames ??= []).push(combat.turn);
+        for (const foe of alive().slice(0, 3)) {
+          if (!swing(foe, { mod: -10, power: 2, card }) || foe.vitality <= 0 || foe.inferno !== undefined) continue;
+          if (foeSave(foe, card, 'int').success) continue;
+          foe.inferno = combat.turn;
+          events.push({ type: 'status', uid: foe.uid, card, what: 'burning' });
+        }
+        break;
+      case 'warrior-intimidate': {
+        used(card);
+        if (!cardTest(card, 'cha').success) break;
+        for (const foe of alive()) {
+          if (foeSave(foe, card, 'wil').success) continue;
+          foe.vitality = 0;
+          foe.gone = 'fled';
+          events.push({ type: 'status', uid: foe.uid, card, what: 'fled' });
+        }
+        break;
+      }
+      case 'mystic-illusion': {
+        used(card);
+        if (!cardTest(card, 'int', magicBonus(world, actor)).success) break;
+        const seen = alive().map((foe) => foeSave(foe, card, 'int', 10).success);
+        if (seen.every((s) => !s)) {
+          hidden = true;
+          events.push({ type: 'status', uid: HERO, card, what: 'stays' });
+        }
+        break;
+      }
+      case 'mystic-chasm':
+        used(card);
+        if (!cardTest(card, 'int', magicBonus(world, actor)).success) break;
+        for (const foe of alive().slice(0, 3)) {
+          if (foeSave(foe, card, 'dex').success) continue;
+          foe.vitality = 0;
+          foe.gone = 'void';
+          events.push({ type: 'status', uid: foe.uid, card, what: 'void' });
+        }
+        break;
+      case 'runemaster-rend':
+        actor.counters[`used:${card}`] = 1;
+        if (!cardTest(card, 'str', -20).success) break;
+        for (const foe of alive()) {
+          if (ENEMIES[foe.enemy]!.traits.includes('flying') || foeSave(foe, card, 'dex').success) continue;
+          foe.vitality = 0;
+          foe.gone = 'fell';
+          events.push({ type: 'status', uid: foe.uid, card, what: 'fell' });
+        }
+        break;
+      case 'trapper-dog':
+        actor.counters[`used:${card}`] = 1;
+        callBeast(actor, 'steppeDog');
+        events.push({ type: 'status', uid: HERO, card, what: 'summoned', amount: 1 });
+        break;
+      case 'diver-toxin':
+        used(card);
+        actor.staminaLeft -= 1;
+        combat.toxin = combat.turn + 2;
+        events.push({ type: 'status', uid: HERO, card, what: 'buff' });
+        break;
+      case 'mystic-healing': {
+        actor.counters[`used:${card}`] = 1;
+        if (!cardTest(card, 'int', magicBonus(world, actor)).success) break;
+        events.push({ type: 'status', uid: HERO, card, what: 'healed', amount: voidHeal(actor) });
+        break;
+      }
+      case 'mystic-double':
+        used(card);
+        if (!cardTest(card, 'int', magicBonus(world, actor)).success) break;
+        combat.double = combat.turn + 2;
+        events.push({ type: 'status', uid: HERO, card, what: 'double' });
+        break;
+      case 'guardian-shield-wall':
+        used(card);
+        combat.wall = SHIELD_WALL;
+        events.push({ type: 'status', uid: HERO, card, what: 'wall', amount: SHIELD_WALL });
+        break;
+      case 'druid-raven':
+        // Raven Form: the Druid flies off; nothing can follow.
+        actor.counters[`used:${card}`] = 1;
+        fled = true;
+        events.push({ type: 'flee', success: true, hero: { roll: 1, target: 100, success: true, margin: 99 }, card });
+        break;
+      case 'wraith-untouchable':
+        events.push({ type: 'status', uid: HERO, card, what: 'buff' });
+        break;
+      default:
+        if (HIGH_BUFFS.includes(card)) events.push({ type: 'card', card, amount: highBuff(world.round, actor, card) });
+    }
+  };
 
   const heroTurn = () => {
     // Everyone may already be down (a trap sprung at the start of the round, a held beast's blow): nothing left to do.
@@ -492,13 +984,25 @@ export function combatTurn(
         if (!alive().length) break;
         const fastest = alive().reduce((a, b) => (ENEMIES[b.enemy]!.dex > ENEMIES[a.enemy]!.dex ? b : a));
         const harried = alive().some((f) => ENEMIES[f.enemy]!.traits.includes('harrying')) ? -10 : 0;
-        const hero = heroTest(world, actor, 'dex', rng, focus + harried + vigilance + firstTest(false) + (combat.journal?.flee ?? 0));
+        const hero = ht('dex', focus + harried + vigilance + firstTest(false) + (combat.journal?.flee ?? 0));
+        // Sleep Dart: with every foe asleep, nobody gives chase.
+        if (alive().every((f) => f.asleep)) {
+          fled = true;
+          events.push({ type: 'flee', success: true, hero: { ...hero, success: true }, card: 'diver-sleep' });
+          break;
+        }
         const foe = test(rng, ENEMIES[fastest.enemy]!.dex, foeMod(fastest, 'dex'));
         fled = hero.success && (!foe.success || hero.roll <= foe.roll);
         events.push({ type: 'flee', success: fled, hero, foe });
         break;
       }
       case 'attack': {
+        // Spear Throw: the spear is still in the foe; this round goes on pulling it out.
+        if (combat.unarmed) {
+          combat.unarmed = false;
+          events.push({ type: 'status', uid: HERO, card: 'guardian-spear', what: 'pickedUp' });
+          break;
+        }
         if (combat.reloading) {
           combat.reloading = false;
           events.push({ type: 'reload' });
@@ -557,7 +1061,7 @@ export function combatTurn(
             // Companion: a Charisma test tames a weak beast; it leaves the fight and follows the Druid.
             const target = targetOf(move.target);
             if (!target || !canTame(actor, target)) throw new EngineError('combat.target', 'That beast cannot be tamed.');
-            const result = heroTest(world, actor, 'cha', rng, focus);
+            const result = ht('cha', focus);
             events.push({ type: 'tame', uid: target.uid, result });
             if (result.success) {
               const n = (actor.counters.tamed ?? 0) + 1;
@@ -586,7 +1090,7 @@ export function combatTurn(
             events.push({ type: 'card', card: move.card, amount: 2 });
             break;
           case 'mystic-barrier': {
-            const result = heroTest(world, actor, 'int', rng, focus + magicBonus(world, actor));
+            const result = ht('int', focus + magicBonus(world, actor));
             if (result.success) combat.barrier = true;
             events.push({ type: 'barrier', result });
             break;
@@ -619,7 +1123,7 @@ export function combatTurn(
             const target = targetOf(move.target);
             if (!target || !canMaster(actor, target)) throw new EngineError('combat.target', 'That beast cannot be mastered.');
             const step = target.controlled ?? 0;
-            const result = heroTest(world, actor, 'cha', rng, focus + MASTER_STEPS[step]!);
+            const result = ht('cha', focus + MASTER_STEPS[step]!);
             if (!result.success) {
               delete target.controlled;
               delete target.held;
@@ -642,7 +1146,7 @@ export function combatTurn(
           }
           case 'diver-camouflage': {
             // Camouflage: the Diver hides; any foe that passes an Intelligence test spots them.
-            const hero = heroTest(world, actor, 'dex', rng, focus);
+            const hero = ht('dex', focus);
             const foes = alive().map((f) => ({ uid: f.uid, result: test(rng, ENEMIES[f.enemy]!.int) }));
             hidden = hero.success && foes.every((f) => !f.result.success);
             events.push({ type: 'hide', hero, foes, hidden });
@@ -650,7 +1154,7 @@ export function combatTurn(
           }
           case 'explorer-smoke': {
             // Smoke Bomb: the flight is one plain Dexterity test, no foe rolls against it.
-            const hero = heroTest(world, actor, 'dex', rng, focus + vigilance);
+            const hero = ht('dex', focus + vigilance);
             fled = hero.success;
             events.push({ type: 'flee', success: fled, hero, card: move.card });
             break;
@@ -666,7 +1170,7 @@ export function combatTurn(
           case 'mystic-vines': {
             const target = targetOf(move.target);
             if (!target) break;
-            const result = heroTest(world, actor, 'int', rng, focus);
+            const result = ht('int', focus);
             if (result.success) target.vined = true;
             events.push({ type: 'vines', uid: target.uid, by: 'hero', result, bound: result.success });
             break;
@@ -675,6 +1179,9 @@ export function combatTurn(
             actor.counters['used:wraith-mist'] = 1;
             combat.mist = combat.turn;
             events.push({ type: 'card', card: move.card });
+            break;
+          default:
+            highCard(move.card, move.target);
             break;
           case 'cavedelver-blind': {
             // Blinding Light: every foe that fails a Dexterity test is blind until it has struck once more. Once a fight.
@@ -701,6 +1208,11 @@ export function combatTurn(
     if (foe.stunned) {
       foe.stunned = false;
       events.push({ type: 'stunned', who: foe.uid });
+      return;
+    }
+    // Sleep Dart: a sleeping foe does nothing until a blow wakes it.
+    if (foe.asleep) {
+      events.push({ type: 'status', uid: foe.uid, card: 'diver-sleep', what: 'sleeping' });
       return;
     }
     const enemy: Enemy = ENEMIES[foe.enemy]!;
@@ -730,10 +1242,18 @@ export function combatTurn(
       // Disarm: the foe spends its turn on an opposed Dexterity test to get its weapon back. Both must pass;
       // then the lower roll wins, and a tie goes to the Explorer.
       const own = test(rng, enemy.dex, foeMod(foe, 'dex'));
-      const hero = heroTest(world, actor, 'dex', rng, focus);
+      const hero = ht('dex', focus);
       const success = own.success && (!hero.success || own.roll < hero.roll);
       if (success) foe.disarmed = false;
       events.push({ type: 'rearm', uid: foe.uid, foe: own, hero, success });
+      return;
+    }
+    // Double: the foe may go for the Mystic's double instead; a blow that lands makes it vanish.
+    if (doubleOn() && rng.int(2) === 0) {
+      foe.attacks++;
+      const result = test(rng, enemy.com, foeMod(foe, 'com'));
+      if (result.success) delete combat.double;
+      events.push({ type: 'decoy', uid: foe.uid, result, gone: result.success });
       return;
     }
     // With companions in the fight, each foe picks whom to strike: the hero or one of the beasts.
@@ -759,9 +1279,24 @@ export function combatTurn(
       riposte();
       return;
     }
+    // Shield Wall: the shields stop the next blows that land.
+    if (combat.wall) {
+      combat.wall--;
+      events.push({ type: 'strike', by: foe.uid, target: HERO, result, blocked: true, card: 'guardian-shield-wall' });
+      return;
+    }
+    // Untouchable: the Wraith slips each blow of the round on a plain Dexterity test.
+    if (dodging) {
+      const dodge = ht('dex', focus + vigilance);
+      events.push({ type: 'cardTest', card: 'wraith-untouchable', attribute: 'dex', result: dodge });
+      if (dodge.success) {
+        events.push({ type: 'strike', by: foe.uid, target: HERO, result, blocked: true, card: 'wraith-untouchable' });
+        return;
+      }
+    }
     if (parrying) {
       const shield = actor.character.equipment.shield ? 15 : 0;
-      const parry = heroTest(world, actor, 'com', rng, focus + shield + comMod(foe.enemy), enemy.kind);
+      const parry = ht('com', focus + shield + comMod(foe.enemy), enemy.kind);
       if (parry.success && parry.roll <= result.roll) {
         events.push({ type: 'strike', by: foe.uid, target: HERO, result, parry, parried: true });
         return;
@@ -787,6 +1322,12 @@ export function combatTurn(
     }
     actor.character.vitality -= damage;
     events.push({ type: 'strike', by: foe.uid, target: HERO, result, ...spot, damage, damageRoll, armour: armour[location], strength, ...(barrier ? { barrier, halved: true } : {}) });
+    // Toxin: a foe that strikes the Diver's skin hand to hand takes the poison too.
+    if (toxinOn() && !enemy.weapon.ranged) {
+      foe.venom = (foe.venom ?? 0) + 1;
+      events.push({ type: 'status', uid: foe.uid, card: 'diver-toxin', what: 'venom', amount: foe.venom });
+    }
+    startTrance();
     if (enemy.traits.includes('poison') || sting) {
       addCondition(actor, 'poison', { pl: 'Zatrucie', en: 'Poisoned' }, 'str', 1);
       events.push({ type: 'poisoned', who: HERO, condition: 'poison' });
@@ -795,7 +1336,7 @@ export function combatTurn(
       addCondition(actor, 'rot', { pl: 'Zgnilizna', en: 'Rot' }, 'dex', 2);
       events.push({ type: 'poisoned', who: HERO, condition: 'rot' });
     }
-    if (enemy.traits.includes('stun') && !heroTest(world, actor, 'wil', rng, focus).success) {
+    if (enemy.traits.includes('stun') && !ht('wil', focus).success) {
       combat.heroStunned = true;
     }
     // Drain: a blow that lands takes 1 Stamina; the hero is lost to the spell only at their full Stamina.
@@ -827,16 +1368,18 @@ export function combatTurn(
 
   /** A beast on the hero's side bites a foe with its own stats (a companion's `bonus` from Teacher adds to them). */
   const beastStrike = (by: string, beast: Enemy, target: Foe, bonus = 0) => {
-    const foe = ENEMIES[target.enemy]!;
-    const result = test(rng, beast.com + bonus);
+    // Banner, Totem and Force of Nature reach the hero's companions too; so does the Rune of Honour's second throw.
+    const ally = by.startsWith('pet-') ? (attribute: string) => allyBonus(actor, attribute) : () => 0;
+    let result = test(rng, beast.com + bonus + ally('com'));
+    if (!result.success && honour && by.startsWith('pet-')) result = test(rng, beast.com + bonus + ally('com'));
     if (!result.success) {
       events.push({ type: 'strike', by, target: target.uid, result });
       return;
     }
-    const spot = hitLocation(rng, result.margin, foe.armour);
+    const spot = hitLocation(rng, result.margin, armourOf(target));
     const damageRoll = damageDie(rng, false);
-    const armour = foe.armour[spot.location] ?? 0;
-    const strength = strengthStep(beast.str + bonus) + beast.weapon.power;
+    const armour = armourOf(target)[spot.location] ?? 0;
+    const strength = strengthStep(beast.str + bonus + ally('str')) + beast.weapon.power + ally('damage');
     const damage = Math.max(0, strength + damageRoll - armour);
     target.vitality -= damage;
     events.push({ type: 'strike', by, target: target.uid, result, ...spot, damage, damageRoll, armour, strength });
@@ -851,6 +1394,11 @@ export function combatTurn(
       if (!target) return;
       beastStrike(pet.uid, ENEMIES[pet.enemy]!, target, pet.bonus ?? 0);
     }
+    // Double: the Mystic's double strikes beside them with the same skill.
+    if (doubleOn() && !fled) {
+      const target = targetOf(move.move === 'attack' || move.move === 'card' ? move.target : undefined);
+      if (target) swing(target, { card: 'mystic-double' });
+    }
   };
 
   if (combat.trap) {
@@ -859,7 +1407,7 @@ export function combatTurn(
   }
 
   // Rune of Safety: +20 initiative; Vigilance: +10 in a sudden moment such as this.
-  const heroInitiative = attrs.dex + itemBonus(actor, 'initiative') + (rune === 'safety' ? SAFETY_INITIATIVE : 0) + vigilance;
+  const heroInitiative = attrs.dex + itemBonus(actor, 'initiative') + (hasRune('safety') ? SAFETY_INITIATIVE : 0) + vigilance + (cards.includes('trapper-vigilance') ? TRAPPER_VIGILANCE : 0);
   const order = [
     { id: HERO, dex: heroInitiative + 0.5 },
     ...alive().map((f) => ({ id: f.uid, dex: ENEMIES[f.enemy]!.dex })),
@@ -928,6 +1476,30 @@ export function combatTurn(
       if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
     }
   }
+  // Toxin, Venom Bone and the Wraith's arrow wound: Vitality lost every round with no test to stop it.
+  for (const foe of alive()) {
+    let loss = 0;
+    if (foe.venom) loss += foe.venom;
+    if (foe.rising !== undefined) loss += ++foe.rising;
+    if (foe.gash) loss += 1;
+    if (!loss) continue;
+    foe.vitality -= loss;
+    events.push({ type: 'bleed', uid: foe.uid, damage: loss });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
+  // Flamethrower: the round after it caught fire the foe loses half its Vitality and tests Int again; a second failure kills.
+  for (const foe of alive()) {
+    if (foe.inferno === undefined || foe.inferno >= combat.turn) continue;
+    const loss = Math.ceil(foe.vitality / 2);
+    foe.vitality -= loss;
+    events.push({ type: 'bleed', uid: foe.uid, damage: loss });
+    const save = test(rng, ENEMIES[foe.enemy]!.int, dazeMod(foe));
+    events.push({ type: 'save', uid: foe.uid, card: 'cavedelver-flamethrower', attribute: 'int', result: save });
+    delete foe.inferno;
+    if (!save.success) foe.vitality = 0;
+    events.push({ type: 'status', uid: foe.uid, card: 'cavedelver-flamethrower', what: save.success ? 'burnedOut' : 'burnedDown' });
+    if (foe.vitality <= 0) events.push({ type: 'foeDown', uid: foe.uid, enemy: foe.enemy });
+  }
   combat.turn++;
 
   if (actor.character.vitality <= 0) return { events, result: 'lost' };
@@ -940,7 +1512,8 @@ export function combatTurn(
 
 /** XP for a won fight: the sum of the foes' bestiary XP, scaled by difficulty. */
 export function combatXp(world: WorldView, combat: CombatState): number {
-  return combat.foes.reduce((sum, f) => sum + ENEMIES[f.enemy]!.xp, 0) * DIFFICULTIES[world.difficulty].xp;
+  // Foes run off by Intimidation or swallowed by the Chasm give half their XP.
+  return combat.foes.reduce((sum, f) => sum + (f.gone === 'fled' || f.gone === 'void' ? Math.floor(ENEMIES[f.enemy]!.xp / 2) : ENEMIES[f.enemy]!.xp), 0) * DIFFICULTIES[world.difficulty].xp;
 }
 
 /** Drinks a potion: heals, or adds its timed effect. */
@@ -956,6 +1529,11 @@ export function drinkPotion(world: WorldView, actor: ActorState, id: string) {
   }
   // Clears poison too: the rules end poison "until healed".
   if (item.heal) actor.conditions = actor.conditions.filter((cnd) => cnd.id !== 'poison' && cnd.id !== 'rot' && cnd.id !== 'foulAir');
+  // The Elder's Potion of Life ends every ill and every curse on the hero.
+  if (item.cureAll) {
+    actor.conditions = [];
+    actor.effects = actor.effects.filter((e) => e.amount >= 0);
+  }
 }
 
 /**
