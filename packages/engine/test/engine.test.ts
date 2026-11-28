@@ -129,9 +129,11 @@ describe('characters', () => {
 
   it('follows the level table', () => {
     expect(levelForXp(0)).toBe(1);
-    expect(levelForXp(10)).toBe(2);
-    expect(levelForXp(99)).toBe(4);
-    expect(levelForXp(1000)).toBe(9);
+    expect(levelForXp(99)).toBe(1);
+    expect(levelForXp(100)).toBe(2);
+    expect(levelForXp(449)).toBe(3);
+    expect(levelForXp(1400)).toBe(7);
+    expect(levelForXp(5000)).toBe(9);
   });
 });
 

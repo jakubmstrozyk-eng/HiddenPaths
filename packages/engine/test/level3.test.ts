@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROFESSIONS, TERRAINS, type ProfessionId, type RaceId } from '@hp/content';
+import { LEVEL_XP } from '../src/character';
 import {
   applyAction, combatMoves, combatTurn, createGame, heroArmour, keepCards, legalActions, levelUp, MAX_CARDS, Rng, runTerrainAction, startCombat,
   testModifier, worldView, type GameState,
@@ -27,7 +28,7 @@ describe('new skill cards with the level (Jacob, 2026-11-25)', () => {
   it('level 3 adds its 2 cards to the hand of 3; level 5 asks which 5 to keep', () => {
     const g = make('humans', 'warrior', false);
     const p = g.players[0]!;
-    gainXp(g, p, 30);
+    gainXp(g, p, LEVEL_XP[3]!);
     expect(p.character.level).toBe(3);
     expect(p.character.cards).toHaveLength(5);
     expect(p.character.newCards).toBeUndefined();

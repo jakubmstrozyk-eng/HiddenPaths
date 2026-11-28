@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROFESSIONS } from '@hp/content';
+import { LEVEL_XP } from '../src/character';
 import {
   applyAction, createGame, growthOf, heroCharacter, legalActions, withGrowth, type Hero, type HeroGrowth,
 } from '../src/index';
@@ -16,7 +17,7 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
   it('a new game starts where the last one left the hero', () => {
     const first = start(hero);
     const p = first.players[0]!;
-    gainXp(first, p, 35);
+    gainXp(first, p, LEVEL_XP[3]! + 5);
     p.character.attributes.str += 5;
     p.character.gold = 23;
     p.character.equipment.weapon = 'longBow';
@@ -26,7 +27,7 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
     expect(growth.level).toBe(3);
     const next = start({ ...hero, growth }, 'g2').players[0]!.character;
     expect(next.level).toBe(3);
-    expect(next.xp).toBe(35);
+    expect(next.xp).toBe(LEVEL_XP[3]! + 5);
     expect(next.attributes.str).toBe(p.character.attributes.str);
     expect(next.maxVitality).toBe(p.character.maxVitality);
     expect(next.vitality).toBe(next.maxVitality);
@@ -43,7 +44,7 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
   it('a hero with more than 5 cards picks the 5 to play with before the game', () => {
     const all = PROFESSIONS.warrior.cards.filter((c) => c.level <= 3).map((c) => c.id);
     const growth: HeroGrowth = {
-      level: 3, xp: 30, attributes: { dex: 40, cha: 40, str: 40, wil: 40, int: 40, com: 50 }, maxVitality: 18, stamina: 3, unspentPoints: 0, skills: {},
+      level: 3, xp: LEVEL_XP[3]!, attributes: { dex: 40, cha: 40, str: 40, wil: 40, int: 40, com: 50 }, maxVitality: 18, stamina: 3, unspentPoints: 0, skills: {},
       cards: [...all, 'warrior-veteran'].filter((c, i, a) => a.indexOf(c) === i),
     };
     // Only 5 cards up to level 3, so pretend the hero owned a 6th: a record with an unknown card is refused.
@@ -62,7 +63,7 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
 
   it('the hero keeps the game that took it furthest', () => {
     const a = growthOf(start(hero).players[0]!.character);
-    const b = { ...a, xp: 40, level: 3 };
+    const b = { ...a, xp: LEVEL_XP[3]! + 10, level: 3 };
     expect(withGrowth(undefined, a)).toBe(a);
     expect(withGrowth(b, a)).toBe(b);
     expect(withGrowth(a, b)).toBe(b);
@@ -74,5 +75,18 @@ describe('a hero keeps its level between games (Jacob, 2026-11-26)', () => {
     expect(() => start({ ...hero, growth: { ...g, cards: ['warrior-strategist'] } })).toThrow();
     expect(() => start({ ...hero, growth: { ...g, gold: -1 } })).toThrow(/gold/);
     expect(() => start({ ...hero, growth: { ...g, inventory: { items: ['excalibur'], materials: {}, herbs: {} } } })).toThrow(/items/);
+  });
+});
+
+describe('slower levels (Jacob, 2026-11-27)', () => {
+  it('each level asks for more XP than the last', () => {
+    for (let l = 3; l < LEVEL_XP.length; l++) expect(LEVEL_XP[l]! - LEVEL_XP[l - 1]!).toBeGreaterThan(LEVEL_XP[l - 1]! - LEVEL_XP[l - 2]!);
+  });
+
+  it('a hero levelled under the old thresholds keeps its level and starts that level afresh', () => {
+    const g = growthOf(start(hero).players[0]!.character);
+    const old = start({ ...hero, growth: { ...g, level: 4, xp: 70 } }).players[0]!.character;
+    expect(old.level).toBe(4);
+    expect(old.xp).toBe(LEVEL_XP[4]);
   });
 });

@@ -177,8 +177,25 @@ export function createCharacter(input: CharacterInput, startFood: number, offere
   };
 }
 
-/** XP needed for each level (index = level). Level 9 is the maximum. */
-export const LEVEL_XP = [0, 0, 10, 30, 60, 100, 150, 200, 250, 300];
+/**
+ * XP needed for each level (index = level). Level 9 is the maximum.
+ * Each level asks for more than the last (Jacob, 2026-11-27: level 4 after one game was too fast):
+ * +100, +150, +200, +250, +300, +400, +500, +600. A full game gives roughly 100-200 XP, so level 2-3
+ * comes after the first game, level 4 after about three, and level 7 (picking 5 cards) after about ten.
+ */
+export const LEVEL_XP = [0, 0, 100, 250, 450, 700, 1000, 1400, 1900, 2500];
+
+/** The thresholds before 2026-11-27, kept only to recognise heroes that levelled up under them. */
+const OLD_LEVEL_XP = [0, 0, 10, 30, 60, 100, 150, 200, 250, 300];
+
+/**
+ * A hero carried over from before the thresholds rose keeps the level it earned: its XP is lifted to
+ * that level's floor, so its way to the next level starts fresh instead of from below zero.
+ * A record whose XP did not earn its level even under the old thresholds stays as it is (and is refused).
+ */
+export function carriedXp(level: number, xp: number): number {
+  return levelForXp(xp) < level && xp >= (OLD_LEVEL_XP[level] ?? Infinity) ? Math.max(xp, LEVEL_XP[level] ?? xp) : xp;
+}
 
 export function levelForXp(xp: number): number {
   let level = 1;
@@ -254,7 +271,8 @@ export function validateGrowth(input: CharacterInput): void {
   const g = input.growth!;
   const bad = (why: string) => new EngineError('character.growth', why);
   if (!Number.isInteger(g.level) || g.level < 1 || g.level > LEVEL_XP.length - 1) throw bad('Unknown level.');
-  if (!(g.xp >= LEVEL_XP[g.level]!) || levelForXp(g.xp) !== g.level) throw bad('The XP does not match the level.');
+  const xp = carriedXp(g.level, g.xp);
+  if (!(g.xp >= 0) || !(xp >= LEVEL_XP[g.level]!) || levelForXp(xp) !== g.level) throw bad('The XP does not match the level.');
   const own = PROFESSIONS[input.profession]?.cards ?? [];
   if (!Array.isArray(g.cards) || new Set(g.cards).size !== g.cards.length) throw bad('Unknown cards.');
   for (const id of g.cards) {
@@ -286,7 +304,7 @@ function grown(input: CharacterInput): Partial<Character> {
   // Cards of the levels reached that the record lacks (new ones in the game data) come along too.
   for (const card of PROFESSIONS[input.profession]?.cards ?? []) if (card.level <= g.level && !all.includes(card.id)) all.push(card.id);
   const out: Partial<Character> = {
-    level: g.level, xp: g.xp, attributes: { ...g.attributes }, maxVitality: g.maxVitality, vitality: g.maxVitality,
+    level: g.level, xp: carriedXp(g.level, g.xp), attributes: { ...g.attributes }, maxVitality: g.maxVitality, vitality: g.maxVitality,
     stamina: g.stamina, unspentPoints: g.unspentPoints, skills: { ...g.skills }, cards: all.slice(0, MAX_CARDS),
     ...(g.gold !== undefined ? { gold: g.gold } : {}),
     ...(g.equipment ? { equipment: structuredClone(g.equipment) } : {}),
