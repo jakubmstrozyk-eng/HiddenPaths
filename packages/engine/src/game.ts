@@ -16,7 +16,7 @@ import type { GameMap } from './mapgen';
 import { coverForgotten, deplete, DEPLETING_ACTIONS, markVisit } from './tiles';
 import { availableTerrainActions, effectBonus, heroTest, runTerrainAction } from './terrain';
 import {
-  availableServices, buy, buyPrice, canSmelt, mysticStock, isSettlement, placeOf, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
+  availableServices, buy, buyPrice, canSmelt, mysticStock, portalTargets, reinforce, reinforceSlots, sell, sellPrice, shopStock, smelt, useService, usePortal,
 } from './towns';
 
 export type { Action, GameState, LogEntry, NewPlayer, PlayerState } from './state';
@@ -613,7 +613,7 @@ function afterAction(state: GameState, player: PlayerState) {
   }
   if (state.winner || player.combat || player.pendingEvent) return;
   const won =
-    (state.config.winMode === 'stone' && player.hasStone && isSettlement(state, player.position) && placeOf(state, player) === 'city')
+    (state.config.winMode === 'stone' && player.hasStone && !!player.counters.stoneDelivered)
     || (state.config.winMode === 'exploration' && player.revealed.length === state.map.cells.filter(insideMap).length);
   if (won) {
     const xp = WIN_XP[state.config.winMode];

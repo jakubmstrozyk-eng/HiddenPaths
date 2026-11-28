@@ -164,7 +164,8 @@ export interface GameState {
 }
 
 /** Town services that cost gold or Stamina. */
-export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen' | 'story';
+/** 'deliver': handing the Stone of Beginnings to the city's castle, which wins a Stone game. */
+export type Service = 'meal' | 'stay' | 'gossip' | 'train' | 'sharpen' | 'story' | 'deliver';
 
 /** A side of the map, where a hero stands before stepping onto it. */
 export type Side = 'N' | 'E' | 'S' | 'W';

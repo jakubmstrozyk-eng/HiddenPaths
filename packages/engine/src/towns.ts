@@ -43,6 +43,8 @@ export function availableServices(state: GameState, player: PlayerState): Servic
     if (player.staminaLeft >= TOWN.train.stamina && (player.counters.trained ?? 0) < TOWN.train.max[place]) out.push('train');
     if (c.gold >= TOWN.sharpen) out.push('sharpen');
   }
+  // Reaching a city does not end a Stone game: the hero hands the Stone over at the castle when ready (Jacob, 2026-11-27).
+  if (place === 'city' && player.hasStone && state.config.winMode === 'stone') out.push('deliver');
   return out;
 }
 
@@ -109,6 +111,10 @@ export function useService(state: GameState, player: PlayerState, rng: Rng, serv
       player.counters.trained = (player.counters.trained ?? 0) + 1;
       log(state, { type: 'service', player: player.id, service, cost: 0 });
       runOutcomes(state, player, rng, [{ do: 'permanent', target: 'com', amount: 1 }]);
+      break;
+    case 'deliver':
+      player.counters.stoneDelivered = 1;
+      log(state, { type: 'service', player: player.id, service, cost: 0 });
       break;
     case 'sharpen':
       c.gold -= TOWN.sharpen;
